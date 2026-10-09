@@ -1,5 +1,93 @@
 import { test, expect } from '@playwright/test';
 import { fileURLToPath, URL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+
+test('Language dropdown translates pages and errors, preserves form input and survives reload', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/login');
+  await expect(page.getByLabel('Language', { exact: true })).toHaveValue('en');
+  await page.getByLabel('Username or email').fill('missing_language_player');
+  await page.getByLabel('Password', { exact: true }).fill('incorrect-password');
+  await page.getByLabel('Language', { exact: true }).selectOption('zh-CN');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(page.getByLabel('用户名或邮箱')).toHaveValue('missing_language_player');
+  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('incorrect-password');
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('用户名或密码错误');
+  await page.getByLabel('语言', { exact: true }).selectOption('en');
+  await expect(page.getByRole('alert')).toContainText('Invalid username or password');
+  await page.getByLabel('Language', { exact: true }).selectOption('zh-CN');
+  await page.reload();
+  await expect(page.getByLabel('语言', { exact: true })).toHaveValue('zh-CN');
+  expect(await page.evaluate(() => localStorage.getItem('lazerrave.language'))).toBe('zh-CN');
+  for (const [path, heading] of [['/', '找到你的节奏。 挑战更高的目标。'], ['/packs', '发现下一首心仪的曲目'], ['/rankings', '同一张谱面，更高的目标。'], ['/tables', '发现新的挑战'], ['/multiplayer', '共同挑战'], ['/account/password', null], ['/register', '创建账号']] as const) {
+    await page.goto(path);
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible();
+    if (heading) await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    else await expect(page.getByText('登录后即可参与社区。')).toBeVisible();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByLabel('语言', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByLabel('语言', { exact: true }).selectOption('en');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Find your rhythm. Raise the bar.' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('Language synchronizes across tabs and remains usable when storage is blocked', async ({ page, context, browser }) => {
+  await page.goto('/');
+  const second = await context.newPage(); await second.goto('/packs');
+  await page.getByLabel('Language', { exact: true }).selectOption('zh-CN');
+  await expect(second.getByLabel('语言', { exact: true })).toHaveValue('zh-CN');
+  await expect(second.getByRole('heading', { name: '发现下一首心仪的曲目' })).toBeVisible();
+  await second.getByLabel('语言', { exact: true }).selectOption('en');
+  await expect(page.getByLabel('Language', { exact: true })).toHaveValue('en');
+  const restricted = await browser.newContext();
+  try {
+    await restricted.addInitScript(() => { Storage.prototype.getItem = () => { throw new DOMException('Blocked', 'SecurityError'); }; Storage.prototype.setItem = () => { throw new DOMException('Blocked', 'SecurityError'); }; });
+    const blocked = await restricted.newPage(); await blocked.goto(new URL('/', page.url()).toString());
+    await blocked.getByLabel('Language', { exact: true }).selectOption('zh-CN');
+    await expect(blocked.getByRole('heading', { name: '找到你的节奏。 挑战更高的目标。' })).toBeVisible();
+  } finally { await restricted.close(); }
+});
+
+test('Chinese account and administration retain user content, form fields and sessions', async ({ page }) => {
+  const username = 'lang_' + Date.now();
+  const response = await page.request.post('/api/auth/register', { headers: { 'X-LazerRave': '1' }, data: { username, email: username + '@example.com', password: 'language-test-password' } });
+  expect(response.ok()).toBeTruthy();
+  const dotnet = process.env.LAZERRAVE_CLOUD_TEST_DOTNET; const server = process.env.LAZERRAVE_CLOUD_TEST_SERVER;
+  if (!dotnet || !server || !process.env.ConnectionStrings__Postgres?.includes('lazerrave_test')) throw new Error('Use the isolated cloud test CLI and database.');
+  execFileSync(dotnet, [server, '--grant-admin', username], { windowsHide: true, stdio: 'pipe' });
+  const profile = await page.request.put('/api/me', { headers: { 'X-LazerRave': '1' }, data: { displayName: 'Welcome back.', signature: 'Original signature', bio: 'Original biography' } });
+  expect(profile.ok()).toBeTruthy();
+  await page.goto('/players/' + username);
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await page.getByLabel('Signature', { exact: true }).fill('Unsaved signature');
+  await page.getByLabel('Language', { exact: true }).selectOption('zh-CN');
+  await expect(page.getByRole('heading', { name: 'Welcome back.', exact: true })).toBeVisible();
+  await expect(page.getByLabel('签名', { exact: true })).toHaveValue('Unsaved signature');
+  await expect(page.locator('input[name="avatar"]')).toBeVisible();
+  await page.getByRole('button', { name: '保存修改' }).click();
+  await expect(page.getByText('Unsaved signature')).toBeVisible();
+  await page.getByRole('link', { name: '修改密码', exact: true }).click();
+  await expect(page.getByLabel('当前密码', { exact: true })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: '管理后台', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '社区管理' })).toBeVisible();
+  await page.getByRole('tab', { name: '难度表', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '导入难度表' })).toBeVisible();
+  await page.getByRole('tab', { name: '玩家', exact: true }).click();
+  await expect(page.getByRole('columnheader', { name: '权限', exact: true })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: '多人游戏', exact: true }).click();
+  await expect(page.getByText('已连接', { exact: true }).first()).toBeVisible();
+  await page.getByLabel('语言', { exact: true }).selectOption('en');
+  await expect(page.getByText('Connected', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.reload();
+  await expect(page.getByLabel('Language', { exact: true })).toHaveValue('en');
+});
 
 test('Public website, history fallback, sign-in and mobile navigation', async ({ page }) => {
   const errors: string[] = [];
@@ -23,6 +111,68 @@ test('Public website, history fallback, sign-in and mobile navigation', async ({
   await expect(page.getByRole('heading', { name: 'Find your next favorite' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test('UID profile and administrator difficulty-table import, publication and levels', async ({ page }) => {
+  const username = 'table_' + Date.now();
+  const tableName = 'Browser difficulty table ' + username;
+  const response = await page.request.post('/api/auth/register', { headers: { 'X-LazerRave': '1' }, data: { username, email: username + '@example.com', password: 'browser-table-test-password' } });
+  expect(response.ok()).toBeTruthy();
+  const user = await response.json();
+  const dotnet = process.env.LAZERRAVE_CLOUD_TEST_DOTNET;
+  const server = process.env.LAZERRAVE_CLOUD_TEST_SERVER;
+  if (!dotnet || !server || !process.env.ConnectionStrings__Postgres?.includes('lazerrave_test')) throw new Error('Provide the isolated cloud test CLI and database.');
+  execFileSync(dotnet, [server, '--grant-admin', username], { windowsHide: true, stdio: 'pipe' });
+  await page.goto('/players/id/' + user.uid);
+  await expect(page.getByRole('heading', { name: username })).toBeVisible();
+  await expect(page.getByText('UID', { exact: false }).first()).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Admin', exact: true }).click();
+  await page.getByRole('tab', { name: 'Difficulty tables' }).click();
+  await page.getByLabel('Name', { exact: true }).fill(tableName);
+  await page.getByLabel('Symbol', { exact: true }).fill('★');
+  await page.getByLabel('Chart data').setInputFiles({ name: 'data.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify([{ md5: 'b'.repeat(32), level: 1, title: 'Browser table chart', artist: 'Fixture' }])) });
+  await page.getByRole('button', { name: 'Save table', exact: true }).click();
+  const savedRow = page.locator('.admin-list > div').filter({ hasText: tableName });
+  await expect(savedRow.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
+  await savedRow.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(savedRow.getByRole('button', { name: 'Unpublish', exact: true })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Difficulty tables', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: tableName }).click();
+  await page.locator('aside').getByRole('link', { name: /★1/ }).click();
+  await expect(page.getByRole('heading', { name: '★1', exact: true })).toBeVisible();
+  await expect(page.getByText('Browser table chart', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Browser table chart', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('Change password, cookie revocation and direct password login', async ({ page }) => {
+  const username = 'password_' + Date.now();
+  const oldPassword = 'browser-password-original'; const newPassword = 'browser-password-replacement';
+  const registered = await page.request.post('/api/auth/register', { headers: { 'X-LazerRave': '1' }, data: { username, email: username + '@example.com', password: oldPassword } });
+  expect(registered.ok()).toBeTruthy();
+  await page.goto('/players/' + username);
+  await page.getByRole('link', { name: 'Change password', exact: true }).click();
+  await page.getByLabel('Current password', { exact: true }).fill('wrong-password');
+  await page.getByLabel('New password', { exact: true }).fill(newPassword);
+  await page.getByLabel('Confirm new password', { exact: true }).fill(oldPassword);
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByRole('alert')).toContainText('do not match');
+  await page.getByLabel('Confirm new password', { exact: true }).fill(newPassword);
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByRole('alert')).toContainText('Current password is incorrect');
+  await page.getByLabel('Current password', { exact: true }).fill(oldPassword);
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByRole('heading', { name: 'Password changed' })).toBeVisible();
+  const session = await page.request.get('/api/me');
+  expect(session.status()).toBe(200); expect(await session.text()).toBe('');
+  expect((await page.context().cookies()).some(cookie => cookie.name === 'lr_session')).toBe(false);
+  await page.getByRole('link', { name: 'Sign in with your new password' }).click();
+  await page.getByLabel('Username or email').fill(username);
+  await page.getByLabel('Password', { exact: true }).fill(newPassword);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: username })).toBeVisible();
 });
 
 test('Browser registration, profile save, cookie authentication and room controls', async ({ page }) => {

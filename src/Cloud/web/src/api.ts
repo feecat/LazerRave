@@ -13,4 +13,4 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 export const send = <T>(path: string, method: string, body: unknown) => api<T>(path, { method, body: JSON.stringify(body) });
 export const size = (bytes: number) => bytes < 1048576 ? `${(bytes / 1024).toFixed(0)} KiB` : `${(bytes / 1048576).toFixed(1)} MiB`;
-export const date = (value: string) => new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+export const date = (value: string, locale = 'en') => new Date(value).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });

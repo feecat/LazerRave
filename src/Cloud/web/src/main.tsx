@@ -1,33 +1,46 @@
+import { LanguageSelect, LocaleProvider, useI18n } from './i18n';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { AuthProvider, LiveProvider, useAuth, useLive } from './state';
 import { Avatar, Empty } from './components';
 import { api } from './api';
-import { Home, Authentication, Profile, Packs, PackDetail, Rankings, Admin, Multiplayer } from './pages';
+import { Home, Authentication, ChangePassword, Profile, Packs, PackDetail, Rankings, Admin, Multiplayer } from './pages';
+import { Tables, TableDetail } from './tables';
+import { Icon, type IconName } from './Icon';
 import './style.css';
 
+const navigation: { path: string; label: string; icon: IconName }[] = [
+  { path: '/rankings', label: 'Rankings', icon: 'ranking' },
+  { path: '/packs', label: 'Song packs', icon: 'pack' },
+  { path: '/tables', label: 'Difficulty tables', icon: 'table' },
+  { path: '/multiplayer', label: 'Multiplayer', icon: 'players' },
+  { path: '/admin', label: 'Admin', icon: 'admin' },
+];
+
 function Shell() {
+  const { t } = useI18n();
   const { user, loaded, setUser } = useAuth();
   const { connected } = useLive();
   const navigate = useNavigate();
   async function logout() {
     try { await api('/auth/logout', { method: 'POST' }); setUser(null); navigate('/'); }
-    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign out failed.'); }
+    catch (error) { window.alert(t(error instanceof Error ? error.message : 'Sign out failed.')); }
   }
   return <>
     <div className="top-accent" />
-    <nav className="navigation" aria-label="Main navigation">
-      <Link className="brand" to="/"><img src="/logo.svg" alt="" /><span>Lazer<span>Rave</span><small>BMS COMMUNITY</small></span></Link>
-      <div className="nav-links"><NavLink to="/rankings">Rankings</NavLink><NavLink to="/packs">Song packs</NavLink><NavLink to="/multiplayer">Multiplayer</NavLink>{user?.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}</div>
-      <div className="account-nav">{user ? <><Link to={'/players/' + user.username} className="player-link"><Avatar user={user} /><span>{user.displayName}</span></Link><button className="text-button" onClick={logout}>Sign out</button></> : <><Link to="/login" className="text-button">Sign in</Link><Link to="/register" className="button small primary">Join</Link></>}</div>
+    <nav className="navigation" aria-label={t("Main navigation")}>
+      <Link className="brand" to="/"><img src="/logo.svg" alt="" /><span>Lazer<span>Rave</span><small>{t("BMS COMMUNITY")}</small></span></Link>
+      <div className="nav-links">{navigation.filter(item => item.path !== '/admin' || user?.role === 'admin').map(item => <NavLink key={item.path} to={item.path}><Icon name={item.icon} size={22} /><span>{t(item.label)}</span></NavLink>)}</div>
+      <div className="account-nav"><LanguageSelect />{user ? <><Link to={'/players/' + user.username} className="player-link"><Avatar user={user} /><span>{user.displayName}</span></Link><button className="text-button" onClick={logout}>{t("Sign out")}</button></> : <><Link to="/login" className="text-button">{t("Sign in")}</Link><Link to="/register" className="button small primary">{t("Join")}</Link></>}</div>
     </nav>
-    <main id="main">{!loaded ? <Empty>Connecting to LazerRave…</Empty> : <Routes>
+    <main id="main">{!loaded ? <Empty>{t("Connecting to LazerRave…")}</Empty> : <Routes>
       <Route path="/" element={<Home />} /><Route path="/login" element={<Authentication />} /><Route path="/register" element={<Authentication register />} />
-      <Route path="/players/:username" element={<Profile />} /><Route path="/packs" element={<Packs />} /><Route path="/packs/:id" element={<PackDetail />} />
+      <Route path="/account/password" element={<ChangePassword />} />
+      <Route path="/players/:username" element={<Profile />} /><Route path="/players/id/:uid" element={<Profile />} /><Route path="/tables" element={<Tables />} /><Route path="/tables/:tableId" element={<TableDetail />} /><Route path="/tables/:tableId/:level" element={<TableDetail />} /><Route path="/packs" element={<Packs />} /><Route path="/packs/:id" element={<PackDetail />} />
       <Route path="/rankings" element={<Rankings />} /><Route path="/rankings/:chartId" element={<Rankings />} /><Route path="/admin" element={<Admin />} /><Route path="/multiplayer" element={<Multiplayer />} />
-      <Route path="*" element={<Empty>Page not found. <Link to="/">Return home</Link></Empty>} />
+      <Route path="*" element={<Empty>{t("Page not found. ")}<Link to="/">{t("Return home")}</Link></Empty>} />
     </Routes>}</main>
-    <footer className="footer"><Link className="footer-brand" to="/">LazerRave</Link><span>BMS. One chart, many possibilities.</span><span className="connection-label"><i className={connected ? 'online-dot' : ''} />{user ? connected ? 'Community connected' : 'Community offline' : 'LazerRave.com'}</span></footer>
+    <footer className="footer"><Link className="footer-brand" to="/">LazerRave</Link><span>{t("BMS. One chart, many possibilities.")}</span><span className="connection-label"><i className={connected ? 'online-dot' : ''} />{user ? connected ? t('Community connected') : t('Community offline') : 'LazerRave.com'}</span></footer>
   </>;
 }
-createRoot(document.getElementById('root')!).render(<BrowserRouter><AuthProvider><LiveProvider><Shell /></LiveProvider></AuthProvider></BrowserRouter>);
+createRoot(document.getElementById('root')!).render(<LocaleProvider><BrowserRouter><AuthProvider><LiveProvider><Shell /></LiveProvider></AuthProvider></BrowserRouter></LocaleProvider>);

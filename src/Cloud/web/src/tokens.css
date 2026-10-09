@@ -1,10 +1,12 @@
 :root {
   color-scheme: dark;
-  --background: #121827;
-  --surface: #1b2335;
-  --input: #141d2e;
-  --border: #2d384f;
-  --text: #eef2fa;
-  --muted: #9aa9c0;
-  --cyan: #65d6f3;
+  --background: #25374b;
+  --surface: #30465e;
+  --input: #293f55;
+  --border: #4a617b;
+  --text: #f4f7fc;
+  --muted: #b6c8da;
+  --cyan: #99e2ee;
+  --lavender: #c5baf1;
+  --rose: #efb7a9;
 }
