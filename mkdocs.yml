@@ -25,6 +25,7 @@ nav:
       - 仓库结构: development/project-layout.md
       - 客户端与设置: development/client.md
       - 前端资源包: development/resource-pack.md
+      - 版本与发布包: development/versioning-and-release.md
       - 引擎桥接: development/engine-bridge.md
       - 云端网站与服务: development/cloud.md
       - BGA 与帧时间: development/bga-diagnostics.md

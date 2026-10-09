@@ -1,10 +1,10 @@
 # Internet Ranking 与难度表
 
-数据模型参照 [LR2IR 数据集的实体结构](https://github.com/zkldi/lr2ir-dataset/blob/2cabd8972ebe072bcd7c420af1c9b653e8628e08/archive_parser/migrations/0001_schema.sql) 中的用户、谱面、个人最佳和课程关系，并保留本项目的原始成绩与内容身份。数据库迁移版本为 3。未导入 LR2IR 历史数据库，也未将历史玩家自动注册为本站账户。
+数据模型参照 [LR2IR 数据集的实体结构](https://github.com/zkldi/lr2ir-dataset/blob/2cabd8972ebe072bcd7c420af1c9b653e8628e08/archive_parser/migrations/0001_schema.sql) 中的用户、谱面、个人最佳和课程关系，并保留本项目的原始成绩与内容身份。数据库迁移版本为 4。未导入 LR2IR 历史数据库，也未将历史玩家自动注册为本站账户。
 
 ## 用户身份
 
-`users.id` 为内部 UUID，继续用于会话、曲包、房间和成绩外键。`users.uid` 为对外展示的正整数，不随用户名变化；现有用户按创建时间和 UUID 排序分配，后续注册使用数据库序列。序列可能跳号，删除账户不回收编号。
+`users.id` 为内部 UUID，继续用于会话、曲包、房间和成绩外键。`users.uid` 为对外展示的正整数，不随用户名变化；初始用户按创建时间和 UUID 排序分配。迁移 4 将序列替换为事务计数器，保留既有 UID，并从当前最大 UID 继续取号。注册的 UID 分配、用户插入和登录会话创建在同一事务中完成，失败会回滚计数器；计数器行锁使并发注册串行取号。删除账户不回收编号。
 
 个人资料、管理员用户列表、排名表和桌面联机面板显示 UID。公开资料可通过 `/players/id/{uid}` 页面及 `/api/players/{uid}` 接口访问，原有用户名链接继续有效。本站 UID 与原 LR2IR 的 player_id 属于不同命名空间，不用于证明历史账户归属。
 

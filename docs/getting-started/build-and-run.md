@@ -33,7 +33,7 @@ NuGet 会缓存警告的翻译文本。检测到旧中文警告时，客户端�
 
 默认前端配置为 Release，引擎为 x64 RelWithDebInfo。`-CompileOnly` 只编译；普通构建将 .NET 自包含前端、最新引擎、FMOD 和运行资源复制至 `out/app/`。前端采用托管单文件发布，不启用程序集裁剪；无需另行安装 .NET。引擎源码较新时自动增量构建，`-BuildEngine` 显式调用引擎构建，`-Jobs` 控制 C++ 并行任务数。根目录仅保留 `build.cmd` 作为构建入口；`scripts/` 内的 PowerShell 文件负责调度、前端编译、引擎编译和打包，无需分别执行。
 
-默认资源来源是 `res/runtime/`，本机曲库位于 `res/library/BMS/`。资源复制补齐目标缺失的文件，保留目标已有配置、皮肤、成绩和回放。目标目录正在运行时停止构建，须退出程序后更新；不自动创建额外运行副本。
+默认资源来源是 `res/runtime/`。首次配置的曲库目录为 EXE 同级的 `BMS/`；设置中可添加多个绝对或相对目录，相对路径以 EXE 所在目录为基准。资源复制补齐目标缺失的文件，保留目标已有配置、皮肤、成绩和回放。目标目录正在运行时停止构建，须退出程序后更新；不自动创建额外运行副本。
 
 运行 `out/app/LazerRave.exe`。移动或分发时保留整个产物目录，不能只复制 EXE。`OpenLR2_x64.exe` 保留经典独立入口。前端设置位于 EXE 同级的 `userdata/settings.toml`，客户端数据库、界面设置及日志也保存在 `userdata/`；可重建缓存位于 `cache/`。运行目录固定为 EXE 所在目录，目录可写时无需管理员权限。详细功能见 [桌面前端](../development/client.md)。
 
@@ -88,6 +88,12 @@ NuGet 会缓存警告的翻译文本。检测到旧中文警告时，客户端�
 ```
 
 窗口工具保留 CP932 配置编码并创建首次修改备份。窗口尺寸与皮肤内部绘制尺寸分别处理，扩大窗口不会增加原始素材细节。FMOD 必须与 EXE 架构匹配，旧 `fmodex.dll` 不能替代 `fmod.dll`。ExampleIR 是开发示例，仅保留源码与开发编译输出，不随完整客户端打包。
+
+## ZIP 发布包
+
+执行 `.\build.cmd -PackageZip` 完成 Release 编译，并在 `out/releases/` 生成带版本号的 Windows x64 ZIP 和 SHA-256 校验文件。版本由根目录 `version.props` 维护；当前为 Beta 测试阶段。ZIP 包含客户端、引擎、依赖、语言和默认资源，排除个人数据和私人曲库，使用独立默认配置及清洁的本地 Player 档案。打包需要 Python 3.11 或更高版本。
+
+解压整个目录后运行 `LazerRave.exe`，把自己的曲目放入包内的 `BMS/` 或配置其他曲库目录。完整规则见[版本与发布包](../development/versioning-and-release.md)。
 
 ## 调试与故障定位
 

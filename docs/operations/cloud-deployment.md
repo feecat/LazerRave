@@ -62,6 +62,10 @@ docker compose exec api dotnet Cloud.dll --grant-admin YOUR_USERNAME
 
 网站静态文件由 API 容器提供，更新时保留整套发布包。生产镜像目前固定主要版本，部署时在服务器的 `deployment-record.txt` 记录所用镜像摘要和数据库迁移版本。Docker 安装、服务启动和证书签发已在购买的服务器验证；空闲时 API、PostgreSQL 与 Caddy 容器合计约占 74 MiB 内存，上传和多人场景峰值仍须测量。未来实际自动续期尚未到触发时间，当前已配置自动管理与持久化证书存储。
 
+## 代理配置
+
+客户端下载页通过 GitHub Releases API 获取公开版本，CSP 只额外允许 `https://api.github.com`。更新 `Caddyfile` 时先在代理容器验证配置，再应用。单文件绑定挂载可能在 SCP 替换宿主文件后继续指向旧文件；此时执行 `docker compose up -d --no-deps --force-recreate proxy` 重新挂载配置。该操作保留证书数据卷和 API、数据库容器，但现有代理连接需要重新连接。
+
 ## 备份
 
 数据库和内容卷需要成对备份。以下为数据库导出示例，备份目录应放在容器之外并限制访问：

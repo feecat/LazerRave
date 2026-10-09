@@ -1,124 +1,81 @@
 # LazerRave
 
-LazerRave is a BMS rhythm game project combining a desktop client adapted from [osu!lazer](https://github.com/ppy/osu) with the [OpenLR2](https://github.com/GOMazk/OpenLR2) gameplay engine. It brings BMS library management and game settings into the lazer interface while retaining classic LR2 gameplay and skin compatibility.
+LazerRave is a BMS rhythm game combining a desktop client adapted from [osu!lazer](https://github.com/ppy/osu) with the [OpenLR2](https://github.com/GOMazk/OpenLR2) gameplay engine. It retains classic LR2 gameplay and skin compatibility within the lazer interface.
 
-The project is under active development and currently targets **Windows 10/11 x64**. The C# client manages selection and configuration; a separate native C++ process runs gameplay, either within the client window or in its own window. This client-and-engine architecture is the basis for continued development, with embedded gameplay as the primary integration path.
+The project is in **Beta** and targets **Windows 10/11 x64**. The desktop release version is maintained in [version.props](version.props).
+
+[Website](https://lazerrave.com) · [Download](https://lazerrave.com/download) · [GitHub Releases](https://github.com/feecat/LazerRave/releases) · [Documentation](docs/index.md)
 
 ## Features
 
-- **BMS library browsing:** navigate folder hierarchies, search songs, filter by key mode and difficulty, preview media, and view existing EX SCORE records.
-- **Direct gameplay launch:** send the selected chart, speed, timing offset, and arrangement settings to OpenLR2 without going through its song selection menu.
-- **Shared library configuration:** use the same library roots in the desktop client and classic OpenLR2 mode.
-- **Multiple gameplay windows:** choose embedded or separate-window gameplay, configure preset or custom window dimensions, and retain the classic OpenLR2 entry point.
-- **Persistent gameplay settings:** save window, BGA, rendering, and gameplay options between sessions.
-- **Reused lazer interface:** retain its menu, song carousel, animations, and settings components. New primary interface text is available in English, Simplified Chinese, and Japanese; complete localization and display-scaling validation remain in progress.
-- **Unified Windows build:** compile the client and engine and assemble their dependencies into one runtime directory through a single build entry point.
+- Browse BMS folder hierarchies, search songs, switch difficulties, and filter by key mode.
+- Launch the selected chart directly with speed, timing, gauge, and arrangement settings.
+- Choose embedded or separate-window gameplay, with classic OpenLR2 mode available.
+- Share library roots and retain existing LR2 scores and skins.
+- Access accounts, Internet Ranking, difficulty tables, song packs, rooms, and chat through the cloud service.
+- Share host-selected songs with download progress; install them under `Shared/`. Temporary server copies expire after two hours.
 
-Current BMS gameplay runs through OpenLR2, rather than the retained Mania ruleset. The client does not import `.osu` charts or osu! replay files. Editor components are retained as a foundation for future BMS editing. The cloud website and service provide accounts, submitted-score rankings, administrator-managed ZIP packs, rooms and chat. Desktop room access and temporary song sharing are implemented; replay verification and synchronized desktop gameplay remain future work.
+Synchronized multiplayer gameplay and replay verification are still in development. BMS gameplay uses OpenLR2; `.osu` charts and osu! replay imports are not supported. See the [roadmap](docs/roadmap.md) for planned work.
 
-## Cloud website and service
+## Download and run
 
-The cloud module uses React and TypeScript with an ASP.NET Core 10 API, SignalR rooms/chat, and PostgreSQL. Build it independently with `build.cmd -Cloud`; the deployment bundle is written to `out/cloud/`. It includes Docker Compose and Caddy configuration for **LazerRave.com**, with limits suited to an initial 1 vCPU / 1 GiB Ubuntu host.
+Download the Windows ZIP from the [download page](https://lazerrave.com/download), extract the complete folder to a writable location, and run `LazerRave.exe`. Keep all extracted files together; no separate .NET installation is required.
 
-The desktop Multiplayer panel supports login, room creation and joining, and host selection of a local chart. Hosts can package the song with maximum ZIP compression and upload it; missing players explicitly start downloads with progress and cancellation support. Verified songs are installed under `Shared/` beside the executable and imported into the common BMS library. Temporary server copies expire two hours after upload validation; installed local songs remain available.
+Add your songs to `BMS/` or select another library folder in Settings. Settings and client data are stored in `userdata/` beside the executable. Preserve `userdata/`, `Shared/`, and your LR2 configuration, scores, and replays when updating. Release packages exclude personal data and private songs.
 
-Accounts have stable numeric UIDs alongside internal UUIDs. Internet Ranking displays LR2IR-style judgement and option fields, with independent best-score, clear-lamp and minimum-BP records. Administrators can import and publish BMS difficulty tables; visitors browse levels and follow matching charts into their rankings. Course score storage is prepared for future gameplay integration.
-
-The initial cloud service is available at [lazerrave.com](https://lazerrave.com), with automatically renewed Let's Encrypt HTTPS certificates. See [Cloud implementation](docs/development/cloud.md) and [Deployment](docs/operations/cloud-deployment.md) for setup and current boundaries. New scores are client submissions, not replay-verified rankings. Synchronized gameplay launch and live gameplay statistics are not yet connected to the desktop engine.
-
-## Roadmap
-
-Development proceeds in stages while keeping local BMS gameplay usable.
-
-| Stage | Planned work |
-| --- | --- |
-| Desktop foundation | Improve scanning and indexing, settings, localization, high-DPI support, themes, and gameplay presentation. Complete reproducible-build and compatibility baselines. |
-| Accounts and content | Add accounts, avatars, signatures, news, changelogs, an online song catalog, and individual song downloads. |
-| Replay and courses | Introduce versioned input-event replays, cloud replay storage, course and grade certification, and a two-player prototype. |
-| Multiplayer | Support rooms of up to 16 players, an in-game live leaderboard, and host-selected song packaging, upload, and server distribution. |
-| Compatibility and audio | Expand BMS and LR2 skin coverage, add loudness analysis and optional audio processing, and improve performance diagnostics. |
-| Chart and replay compatibility | Extend the existing OpenLR2 backend with BMSON support and versioned replay validation. |
-| Independent distribution | Package the existing client and engine with default resources so an existing LR2 installation is no longer required. |
-| Further extensions | Develop BMS editing tools and evaluate optional Steam identity integration. |
-
-These are development goals, not released features or delivery commitments. See the [detailed roadmap](docs/roadmap.md) for dependencies and acceptance criteria.
-
-## Developer
+## Development
 
 ### Requirements
 
-- Windows 10/11 x64.
-- Visual Studio 2022 with **Desktop development with C++**, MSVC v143, and a Windows SDK.
-- .NET SDK **10.0.401**, installed locally by the build script when absent.
-- CMake **3.29 or newer**, Ninja, NASM, Git, and Python.
-- Windows PowerShell 5.1; PowerShell 7 is required for dependency builds.
-- Network access for initial tool and dependency downloads.
+- Windows 10/11 x64 and Visual Studio 2022 with Desktop development with C++, MSVC v143, and a Windows SDK.
+- .NET SDK 10.0.401; the build script prepares a local SDK when needed.
+- CMake 3.29+, Ninja, NASM, Git, and Python 3.11+.
+- Windows PowerShell 5.1; PowerShell 7 for dependency builds.
 
-### Build and run
+Initial builds require network access. Full desktop packaging requires LR2 resources under `res/runtime/`, including `LR2files/Config/config.xml` and `LR2files/Theme/`. These private resources and songs are not included in the repository.
 
-Run commands from the repository root. **`build.cmd` is the only public build entry point.**
+### Build
+
+Run commands from the repository root. **`build.cmd` is the single public build entry point.**
 
 ```powershell
-# Compile and assemble the complete desktop package.
+# Build the complete desktop application into out/app/.
 .\build.cmd
 
-# Compile without packaging or requiring private runtime resources.
+# Compile without assembling the runtime package.
 .\build.cmd -CompileOnly
 
-# Build only the native OpenLR2 engine.
+# Build and create a versioned ZIP under out/releases/.
+.\build.cmd -PackageZip
+
+# Build the native engine only.
 .\build.cmd -EngineOnly
+
+# Build the website and server into out/cloud/.
+.\build.cmd -Cloud
 ```
 
-Complete packaging requires LR2 runtime resources under `res/runtime/`, including `LR2files/Config/config.xml` and `LR2files/Theme/`. Local songs can be placed under `res/library/BMS/`. Private songs, skins, and player data are not supplied by the source repository. An external runtime can also be provided:
+Use `-RuntimeSource 'D:\LR2beta3'` to supply an external LR2 runtime. After a complete desktop build, run `out/app/LazerRave.exe`. Package updates close running game processes in the destination directory; compile-only builds leave them open. Build commands do not launch the game or run tests.
 
-```powershell
-.\build.cmd -RuntimeSource 'D:\LR2beta3'
-```
+The cloud module uses React, TypeScript, ASP.NET Core 10, SignalR, and PostgreSQL. Deployment configuration includes Docker Compose and Caddy.
 
-After packaging, launch `out/app/LazerRave.exe`. Application assemblies and the managed .NET runtime are bundled into the executable, without trimming. The reduced osu! resource assembly is stored at `Resources/osu.Game.Resources.dll`; translations are stored under `Localization/<culture>/`. Native libraries, `OpenLR2_x64.exe`, and LR2 resources remain external, so keep the entire output directory together. No separate .NET installation is required. Build scripts do not launch the application or run tests.
-
-### Source and documentation
-
-The client stores its settings and database in `userdata/` beside the executable, with logs under `userdata/logs/` and rebuildable caches under `cache/`. Downloaded shared songs are stored in `Shared/`; incomplete transfers under `Shared/.incoming/` are excluded from library scans. On the first normal launch, existing settings and client data are copied from the previous AppData locations without replacing portable files or deleting the originals. Keep `userdata/`, `Shared/`, and `LR2files/` when updating or moving the application. Normal operation does not require administrator privileges when the application directory is writable.
+### Source layout
 
 | Path | Purpose |
 | --- | --- |
-| `src/LazerRave/` | Application entry point, BMS integration, and engine bridge |
-| `src/osu-lazer/` | Reduced and adapted osu!lazer source snapshot |
-| `src/OpenLR2/` | Native gameplay engine and its dependencies |
-| `src/Cloud/` | Web portal, API, shared song protocol, and server tests |
-| `res/` | Runtime resources, local library, and third-party notices |
-| `res/branding/` | LazerRave logo, Windows icon, and generated branding assets |
-| `scripts/` | Internal build, packaging, and maintenance tools |
-| `docs/` | Architecture, compatibility, development, and operations documentation |
-| `out/build/` | Project build trees, intermediate files, and development binaries |
-| `out/deps/` | Third-party dependency build and installation caches |
-| `out/app/` | Complete runnable application and local player data |
-| `out/logs/`, `out/reports/` | Build logs, diagnostics, and migration records |
+| `src/LazerRave/` | Desktop client and engine bridge |
+| `src/osu-lazer/` | Adapted osu!lazer source |
+| `src/OpenLR2/` | Native gameplay engine |
+| `src/Cloud/` | Website, API, and multiplayer services |
+| `res/` | Resources, branding, and third-party notices |
+| `scripts/` | Build and maintenance tools |
+| `docs/` | Development and deployment documentation |
+| `out/` | Application, release packages, and build outputs |
 
-Open `LazerRave.slnx` for C# development. See [Build and run](docs/getting-started/build-and-run.md), [Engine bridge](docs/development/engine-bridge.md), and the [documentation index](docs/index.md) for further details. The detailed documentation is currently in Chinese and uses the MkDocs Read the Docs theme.
+Open `LazerRave.slnx` for C# development. Further details: [Build and run](docs/getting-started/build-and-run.md), [Versioning and releases](docs/development/versioning-and-release.md), [Cloud service](docs/development/cloud.md), and [Deployment](docs/operations/cloud-deployment.md).
 
-Full builds publish directly into `out/app/`; there is no separate publish staging copy. Before updating the package, the build script automatically closes LazerRave and OpenLR2 instances running from the destination directory, terminating them if they do not exit within three seconds. Save any active work before rebuilding. Compile-only builds leave running applications open. When clearing project build caches, remove only `out/build/` and retain dependency caches and player data.
+## Credits
 
-The build entry point requests English .NET and MSVC diagnostics and uses UTF-8 for native console communication, including under Windows PowerShell 5.1. The original process environment and console encodings are restored when the script exits.
+Thanks to [ppy and osu! contributors](https://github.com/ppy/osu), [GOMazk and OpenLR2 contributors](https://github.com/GOMazk/OpenLR2), and the BMS and LR2 communities.
 
-Desktop packaging sets the local .NET host, destination directory and its files to Windows Medium integrity, preventing inherited Low integrity labels from affecting local builds. Publication ignores persistent build servers so previously launched Low-integrity workers cannot write the runtime package. Other access permissions remain unchanged. This does not provide a digital signature or SmartScreen reputation for downloaded releases.
-
-Debug symbols, link libraries, generated API documentation, and the ExampleIR sample remain in development build outputs and are omitted from the runtime package. After successful publication, the build script removes previous loose copies of bundled files and relocated translations using an MSBuild-generated manifest. Player data is retained.
-
-Publication builds the reduced resource pack from the pinned upstream NuGet assembly using `src/LazerRave/resource-pack/`. Its removal policy targets assets for retired modes and screens while retaining fonts, localization, common UI, editor resources, and ordinary multiplayer-room assets. The upstream package cache and development assemblies remain unchanged. An inventory and size summary are generated under `out/build/client/obj/<configuration>/net10.0-windows/win-x64/resource-pack/`. See [Resource packaging](docs/development/resource-pack.md) for the policy and loading details.
-
-## Thanks
-
-- [ppy and osu! contributors](https://github.com/ppy/osu) for osu!lazer and the interface components adapted by this project.
-- [GOMazk and OpenLR2 contributors](https://github.com/GOMazk/OpenLR2) for the native BMS gameplay engine.
-- The BMS and LR2 communities for their work on charts, skins, tools, and compatibility knowledge.
-
-LazerRave is an independent project and is not an official osu! or LR2 release. Project contributions are covered by the root [MIT license](LICENSE); upstream code, libraries, fonts, and other assets retain their respective licenses. See the upstream license files and [third-party notices](res/licenses/) for their terms. Songs and skins retain their respective authors' rights.
-
-Two bundled components need attention before any public distribution, and both are recorded under [third-party notices](res/licenses/):
-
-- **FMOD Engine** is commercial, closed-source middleware vendored under `src/OpenLR2/dep/FMOD/`. Firelight Technologies permits storing the headers and libraries in a repository, but shipping a build that contains them requires an FMOD licence.
-- **OpenLR2** does not state a licence upstream, so the terms for redistributing `src/OpenLR2/` are not established. This is unresolved and should be settled before the repository is made public.
-
-DX Library (DxLib), also vendored under `src/OpenLR2/dep/`, is free to use but requires the copyright notices reproduced in its notice file to be included with distributed documentation.
+LazerRave is an independent project. See [LICENSE](LICENSE) and [third-party notices](res/licenses/) for license information.
