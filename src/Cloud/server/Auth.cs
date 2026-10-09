@@ -6,12 +6,14 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Cloud;
 
-public sealed record PublicUser(Guid Id, string Username, string DisplayName, string Signature, string Bio, string? AvatarUrl, string Role, DateTime CreatedAt);
+public sealed record PublicUser(Guid Id, string Username, string DisplayName, string Signature, string Bio, string? AvatarUrl, string Role, DateTime CreatedAt, long Uid = 0);
 public sealed record RegisterInput(string Username, string Email, string Password);
 public sealed record LoginInput(string Username, string Password);
+public sealed record PasswordInput(string CurrentPassword, string NewPassword);
 public sealed record ProfileInput(string DisplayName, string Signature, string Bio);
 
 public sealed class Auth(Pg db, CloudOptions options)
@@ -24,7 +26,7 @@ public sealed class Auth(Pg db, CloudOptions options)
         ? header[7..] : request.Cookies["lr_session"];
     public static PublicUser Public(Dictionary<string, object?> row) => new((Guid)row["id"]!, (string)row["username"]!,
         (string)row["displayName"]!, (string)row["signature"]!, (string)row["bio"]!, row["avatarKey"] is null ? null : $"/api/users/{row["id"]}/avatar?v={row["avatarKey"]}",
-        (string)row["role"]!, (DateTime)row["createdAt"]!);
+        (string)row["role"]!, (DateTime)row["createdAt"]!, (long)row["uid"]!);
 
     public async Task<PublicUser> Register(RegisterInput input)
     {
@@ -56,6 +58,24 @@ public sealed class Auth(Pg db, CloudOptions options)
         await db.Query("DELETE FROM sessions WHERE user_id=@id AND (expires_at < now() OR created_at < now()-interval '30 days'); INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(@hash,@id,@expiry)",
             ("id", userId), ("hash", Digest(token)), ("expiry", DateTime.UtcNow.AddDays(options.SessionDays)));
         return token;
+    }
+
+    public async Task ChangePassword(Guid userId, PasswordInput input)
+    {
+        if (input.CurrentPassword?.Length is not (>= 1 and <= 128) || input.NewPassword?.Length is not (>= 12 and <= 128))
+            throw new ApiError(400, "Enter your current password and a new password of 12–128 characters.");
+        await using var connection = await db.Open();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using var lookup = new NpgsqlCommand("SELECT username,password_hash FROM users WHERE id=@id AND NOT disabled FOR UPDATE", connection, transaction);
+        Pg.Add(lookup, ("id", userId));
+        var row = (await Pg.Read(lookup)).FirstOrDefault();
+        if (row is null || hasher.VerifyHashedPassword((string)row["username"]!, (string)row["passwordHash"]!, input.CurrentPassword) == PasswordVerificationResult.Failed)
+            throw new ApiError(400, "Current password is incorrect.");
+        if (input.CurrentPassword == input.NewPassword) throw new ApiError(400, "Choose a password different from your current password.");
+        await using var update = new NpgsqlCommand("UPDATE users SET password_hash=@hash WHERE id=@id; DELETE FROM sessions WHERE user_id=@id", connection, transaction);
+        Pg.Add(update, ("id", userId), ("hash", hasher.HashPassword((string)row["username"]!, input.NewPassword)));
+        await update.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
     }
 
     public async Task<PublicUser?> Session(string? token)

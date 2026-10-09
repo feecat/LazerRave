@@ -24,7 +24,7 @@ int InitBMSMETA(BMSMETA * meta);
 int ParseBMSMETA(BMSMETA * meta, CSTR filepath, char flag);
 
 int SearchSongsFromPath(CSTR root, sqlite3 * sql, CSTR path); //into DB
-void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jukebox, bool refreshMetadata = false);
+void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jukebox, bool refreshMetadata = false, const char* importedRoot = nullptr);
 int ReloadSongsByQuery(CSTR query, sqlite3 * sql, CONFIG_JUKEBOX * jb, ReloadProgress progress = ReloadProgress::None); //check reload condition and run
 int GetFolderDataFromPath(CSTR path, sqlite3 * sql);
 int LoadLR2CustomFolder(sqlite3 * sql, CONFIG_JUKEBOX * jb, CSTR scoreDBpath, char flag_starter, char flag_direct, CUSTOMIR_MANAGER& customIR); //not coustomfolder only, but init DB and manage it

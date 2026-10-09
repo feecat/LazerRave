@@ -861,6 +861,8 @@ namespace osu.Game
 
         protected virtual SettingsOverlay CreateSettingsOverlay() => new SettingsOverlay();
 
+        protected virtual LoginOverlay CreateLoginOverlay() => new LoginOverlay { Anchor = Anchor.TopRight, Origin = Anchor.TopRight };
+
         protected virtual UpdateManager CreateUpdateManager() => new UpdateManager();
 
         /// <summary>
@@ -1155,11 +1157,7 @@ namespace osu.Game
             loadComponentSingleFile(beatmapSetOverlay = new BeatmapSetOverlay(), overlayContent.Add, true);
             loadComponentSingleFile(wikiOverlay = new WikiOverlay(), overlayContent.Add, true);
 
-            loadComponentSingleFile(loginOverlay = new LoginOverlay
-            {
-                Anchor = Anchor.TopRight,
-                Origin = Anchor.TopRight,
-            }, rightFloatingOverlayContent.Add, true);
+            loadComponentSingleFile(loginOverlay = CreateLoginOverlay(), rightFloatingOverlayContent.Add, true);
 
             loadComponentSingleFile(nowPlayingOverlay = new NowPlayingOverlay
             {

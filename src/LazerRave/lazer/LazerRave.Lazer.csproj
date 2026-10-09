@@ -21,6 +21,7 @@
     <ProjectReference Include="../../osu-lazer/osu.Game.Rulesets.Mania/osu.Game.Rulesets.Mania.csproj" />
     <ProjectReference Include="../resource-pack/LazerRave.ResourcePack.csproj" ReferenceOutputAssembly="false" OutputItemType="_ResourcePackBuilder" Private="false" PrivateAssets="all" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir" />
     <Compile Include="../engine-bridge/*.cs" Link="Bridge/%(Filename)%(Extension)" />
+    <Compile Include="../../Cloud/protocol/*.cs" Link="CloudProtocol/%(Filename)%(Extension)" />
     <PackageReference Include="Tomlyn" Version="0.19.0" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
   </ItemGroup>

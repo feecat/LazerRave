@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using LazerRave.Content;
 
 namespace Cloud;
 
@@ -82,6 +83,26 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
         var room = rooms.Ready(UserId, ready, sha256, version);
         await Broadcast(room); return room;
     }
+    public async Task<RoomView> SelectLocalChart(LocalChartInput input, long version)
+    {
+        if (!SongContent.IsHash(input.Sha256) || !SongContent.IsHash(input.ContentSha256) ||
+            input.Title?.Length is not (>= 1 and <= 200) || input.Artist?.Length > 200 || input.Keys is not (5 or 7 or 9 or 10 or 14) || input.Level is < 0 or > 999)
+            throw new ApiError(400, "Invalid local chart identity.");
+        var current = rooms.Current(UserId) ?? throw new ApiError(404, "Join a room first.");
+        if (current.HostId != UserId) throw new ApiError(403, "Only the host may select a chart.");
+        if (current.Version != version || current.State is not ("lobby" or "results")) throw new ApiError(409, "Room changed.");
+        var rows = await db.Query("""
+            INSERT INTO charts(id,sha256,md5,title,artist,difficulty,keys,level) VALUES(@id,@sha,@md5,@title,@artist,'',@keys,@level)
+            ON CONFLICT(sha256) DO UPDATE SET sha256=EXCLUDED.sha256 RETURNING id
+            """, ("id", Guid.NewGuid()), ("sha", input.Sha256), ("md5", ""), ("title", input.Title), ("artist", input.Artist ?? ""), ("keys", input.Keys), ("level", input.Level));
+        var room = rooms.Select(UserId, new((Guid)rows[0]["id"]!, input.Title, input.Sha256, input.Keys, null, input.ContentSha256), version);
+        await Broadcast(room); return room;
+    }
+    public async Task<RoomView> ReportContent(Guid selectionId, string contentSha256, string state)
+    {
+        var room = rooms.ContentPresence(UserId, selectionId, contentSha256, state);
+        await Broadcast(room); return room;
+    }
     public async Task<RoomView> StartRound(long version)
     {
         var pending = rooms.Start(UserId, version);
@@ -125,6 +146,8 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
         await Clients.Group("lobby").SendAsync("RoomsChanged", rooms.List());
     }
 }
+
+public sealed record LocalChartInput(string Sha256, string ContentSha256, string Title, string? Artist, int Keys, int Level);
 
 public sealed class RoomTicker(Rooms rooms, IHubContext<RealtimeHub> hub, Pg db, ILogger<RoomTicker> logger) : BackgroundService
 {

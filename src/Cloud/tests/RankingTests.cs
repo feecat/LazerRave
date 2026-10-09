@@ -19,4 +19,11 @@ public sealed class RankingTests
         foreach (var score in new[] { Valid with { Perfect = -1 }, Valid with { MaxCombo = 100 }, Valid with { Arrangement = "invalid" }, Valid with { Ruleset = "other" } })
             Assert.Throws<ApiError>(() => Ranking.Validate(score));
     }
+    [Fact]
+    public void RejectsInconsistentMaximumAndInvalidInputMetadata()
+    {
+        Ranking.Validate(Valid with { ScoreMax = 50, InputType = "keyboard" });
+        foreach (var score in new[] { Valid with { ScoreMax = 10 }, Valid with { InputType = "invalid" }, Valid with { Comment = new string('x', 201) } })
+            Assert.Throws<ApiError>(() => Ranking.Validate(score));
+    }
 }

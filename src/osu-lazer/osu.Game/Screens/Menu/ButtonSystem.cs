@@ -45,6 +45,7 @@ namespace osu.Game.Screens.Menu
         public Action? OnSolo;
         public Action? OnSettings;
         public Action? OnMultiplayer;
+        public Action? OnCustomMultiplayer;
 
         private readonly IBindable<bool> isIdle = new BindableBool();
 
@@ -189,6 +190,7 @@ namespace osu.Game.Screens.Menu
 
         private void onMultiplayer(MainMenuButton mainMenuButton, UIEvent uiEvent)
         {
+            if (OnCustomMultiplayer != null) { OnCustomMultiplayer.Invoke(); return; }
             if (api.State.Value != APIState.Online)
             {
                 loginOverlay?.Show();

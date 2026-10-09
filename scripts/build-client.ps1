@@ -14,6 +14,18 @@ $sdkVersion = '10.0.401'
 $project = Join-Path $workspace 'src/LazerRave/lazer/LazerRave.Lazer.csproj'
 $savedRoot = $env:DOTNET_ROOT
 $savedTelemetry = $env:DOTNET_CLI_TELEMETRY_OPTOUT
+function Set-PackageIntegrity([string]$Directory, [switch]$Recurse) {
+    $directoryPath = [IO.Path]::GetFullPath($Directory)
+    if (!(Test-Path -LiteralPath $directoryPath)) { [IO.Directory]::CreateDirectory($directoryPath) | Out-Null }
+    $level = if (Test-Path -LiteralPath $directoryPath -PathType Container) { '(OI)(CI)M' } else { 'M' }
+    $integrityArguments = @($directoryPath, '/setintegritylevel', $level, '/L', '/Q')
+    if ($Recurse) { $integrityArguments += @('/T', '/C') }
+    $integrityOutput = & "$env:SystemRoot\System32\icacls.exe" @integrityArguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot set package integrity to Medium: $directoryPath. $($integrityOutput -join ' ')"
+    }
+    Write-Host "Package integrity set to Medium: $directoryPath"
+}
 function Remove-RetiredRulesetArtifacts([string]$Directory) {
     foreach ($ruleset in @('Osu', 'Taiko', 'Catch')) {
         foreach ($extension in @('dll', 'pdb', 'xml', 'deps.json')) {
@@ -32,7 +44,7 @@ function Remove-PreviousPackageFiles([string]$Directory, [string]$Manifest) {
         $file = [IO.Path]::GetFullPath((Join-Path $root $relativePath))
         if (!$file.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or
             [IO.Path]::GetFileName($file) -eq 'LazerRave.exe' -or
-            $relativePath -match '^(Resources|Localization|LR2files|BMS|userdata|cache)[\\/]') {
+            $relativePath -match '^(Resources|Localization|LR2files|BMS|Shared|userdata|cache)[\\/]') {
             throw "Unsafe package cleanup entry: $relativePath"
         }
         if (Test-Path -LiteralPath $file -PathType Leaf) {
@@ -63,6 +75,7 @@ try {
     }
     $env:DOTNET_ROOT = Split-Path $dotnet -Parent
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+    Set-PackageIntegrity $dotnet
     if (!((& $dotnet --list-sdks) | Where-Object { $_ -like "$sdkVersion *" })) { throw "Local SDK $sdkVersion is required." }
     if ($env:DOTNET_CLI_UI_LANGUAGE -eq 'en-US') {
         # NuGet persists translated warning messages and replays them even after changing the UI language.
@@ -123,9 +136,10 @@ try {
             if (!$process.WaitForExit(5000)) { throw "Application did not exit: $($process.ProcessName)" }
         }
     }
+    Set-PackageIntegrity $Destination
     & (Join-Path $PSScriptRoot 'package-client.ps1') -EnginePackage $enginePackage -RuntimeSource $RuntimeSource -Destination $Destination -PrepareOnly
     if ($LASTEXITCODE -ne 0) { throw 'Runtime preparation failed.' }
-    & $dotnet publish $project -c $Configuration -r win-x64 --self-contained true -p:RunAnalyzers=false -o $Destination
+    & $dotnet publish $project -c $Configuration -r win-x64 --self-contained true --disable-build-servers -p:RunAnalyzers=false -o $Destination
     if ($LASTEXITCODE -ne 0) { throw 'LazerRave lazer publish failed.' }
     $cleanupManifest = Join-Path $workspace "out/build/client/obj/$Configuration/net10.0-windows/win-x64/package-cleanup.txt"
     Remove-PreviousPackageFiles $Destination $cleanupManifest
@@ -149,6 +163,7 @@ try {
     Copy-Item -LiteralPath 'res/licenses/osu-framework-LICENSE.txt' -Destination $licenses -Force
     Copy-Item -LiteralPath 'res/licenses/osu-resources-LICENCE.txt' -Destination $licenses -Force
     Get-ChildItem -LiteralPath 'res/licenses' -Filter 'osu-font-*' -File | Copy-Item -Destination $licenses -Force
+    Set-PackageIntegrity $Destination -Recurse
     Write-Host 'Build and packaging completed. No application or tests were launched.'
     Write-Host "LazerRave executable: $Destination\LazerRave.exe"
     $global:LASTEXITCODE = 0

@@ -9,11 +9,14 @@ using Microsoft.AspNetCore.DataProtection;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = AppContext.BaseDirectory });
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 var cloud = builder.Configuration.GetSection("Cloud").Get<CloudOptions>() ?? new();
 if (!Uri.TryCreate(cloud.PublicOrigin, UriKind.Absolute, out var origin) || origin.Scheme is not ("http" or "https") ||
     origin.AbsolutePath != "/" || cloud.MaxRooms is < 1 or > 32 || cloud.MaxUploadBytes is < 1048576 or > 536870912 ||
     cloud.MaxExpandedBytes < cloud.MaxUploadBytes || cloud.MaxStorageBytes < cloud.MaxUploadBytes || cloud.SessionDays is < 1 or > 30 ||
+    cloud.MaxTemporaryBytes < cloud.MaxUploadBytes || cloud.MaxTemporaryBytes > cloud.MaxStorageBytes ||
     (!builder.Environment.IsDevelopment() && (origin.Scheme != "https" || !cloud.SecureCookies)))
     throw new InvalidOperationException("Invalid Cloud configuration. Production requires HTTPS and secure cookies.");
 builder.Services.AddSingleton(cloud);
@@ -21,6 +24,8 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres") ?? 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Pg>(); builder.Services.AddSingleton<Auth>(); builder.Services.AddSingleton<ContentStore>();
 builder.Services.AddSingleton<Ranking>(); builder.Services.AddSingleton<Rooms>(); builder.Services.AddSingleton<HubGuard>();
+builder.Services.AddSingleton<RoomContentStore>();
+builder.Services.AddSingleton<DifficultyTables>();
 builder.Services.AddAuthentication("session").AddScheme<AuthenticationSchemeOptions, SessionHandler>("session", _ => { });
 builder.Services.AddAuthorization(options => options.AddPolicy("admin", policy => policy.RequireRole("admin")));
 builder.Services.AddSignalR(options =>
@@ -31,6 +36,7 @@ builder.Services.AddSignalR(options =>
     options.AddFilter<HubGuard>();
 });
 builder.Services.AddHostedService<RoomTicker>();
+builder.Services.AddHostedService<RoomContentCleanup>();
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = cloud.MaxUploadBytes + 65536;
@@ -68,7 +74,8 @@ if (args is ["--grant-admin", var username])
     return;
 }
 if (args is ["--migrate"]) { Console.WriteLine("Database migration complete."); return; }
-if (args.Length > 0) throw new InvalidOperationException("Use --migrate or --grant-admin username, or no arguments to serve.");
+if (args is ["--cleanup-content"]) { await app.Services.GetRequiredService<RoomContentStore>().Cleanup(CancellationToken.None); Console.WriteLine("Expired room content removed."); return; }
+if (args.Length > 0) throw new InvalidOperationException("Use --migrate, --cleanup-content or --grant-admin username, or no arguments to serve.");
 await db.Query("UPDATE matches SET state='interrupted',finished_at=now() WHERE state IN ('countdown','playing')");
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>
@@ -81,7 +88,9 @@ app.Use(async (context, next) =>
         var requestOrigin = context.Request.Headers.Origin.ToString();
         var sizeLimit = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
         if (sizeLimit is { IsReadOnly: false }) sizeLimit.MaxRequestBodySize = context.Request.Path == "/api/admin/packs"
-            ? cloud.MaxUploadBytes + 131072 : context.Request.Path == "/api/me/avatar" ? 2097152 : 65536;
+            ? cloud.MaxUploadBytes + 131072 : context.Request.Path.StartsWithSegments("/api/room-content") && context.Request.Method == "PUT" ? LazerRave.Content.SongContent.ChunkBytes
+            : context.Request.Path.StartsWithSegments("/api/admin/tables") && context.Request.Method is "POST" or "PUT" ? 4194304
+            : context.Request.Path.StartsWithSegments("/api/rooms") && context.Request.Method == "POST" ? 2097152 : context.Request.Path == "/api/me/avatar" ? 2097152 : 65536;
         if (requestOrigin.Length > 0 && !string.Equals(requestOrigin.TrimEnd('/'), origin.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase)) throw new ApiError(403, "Cross-origin requests are not accepted.");
         if (context.Request.Path.StartsWithSegments("/api") && context.Request.Method is not ("GET" or "HEAD" or "OPTIONS") &&
             context.Request.Headers["X-LazerRave"] != "1" && !context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.Ordinal))
@@ -131,13 +140,29 @@ app.MapPost("/api/auth/logout", async (HttpContext context, Pg pg, Auth auth) =>
     context.Response.Cookies.Delete("lr_session", auth.Cookie());
     return Results.NoContent();
 }).RequireAuthorization();
-app.MapGet("/api/users/{username}", async (string username, Pg pg) =>
+app.MapPost("/api/auth/password", async (PasswordInput input, HttpContext context, Auth auth) =>
 {
-    var rows = await pg.Query("SELECT * FROM users WHERE lower(username)=lower(@name) AND NOT disabled", ("name", username));
+    await auth.ChangePassword(Auth.Id(context.User), input);
+    context.Response.Cookies.Delete("lr_session", auth.Cookie());
+    return Results.NoContent();
+}).RequireAuthorization().RequireRateLimiting("auth");
+static async Task<IResult> PlayerProfile(Pg pg, string? username, long? uid)
+{
+    var rows = await pg.Query("SELECT * FROM users WHERE (lower(username)=lower(@name) OR uid=@uid) AND NOT disabled", ("name", username ?? ""), ("uid", uid ?? 0));
     if (rows.Count == 0) throw new ApiError(404, "Player not found.");
     var user = Auth.Public(rows[0]);
     var scores = await pg.Query("SELECT s.id,s.ex_score,s.clear,s.verified,s.created_at,c.id AS chart_id,c.title FROM scores s JOIN charts c ON c.id=s.chart_id WHERE s.user_id=@id ORDER BY s.created_at DESC LIMIT 20", ("id", user.Id));
     return Results.Ok(new { user, scores });
+}
+app.MapGet("/api/users/{username}", (string username, Pg pg) => PlayerProfile(pg, username, null));
+app.MapGet("/api/players/{uid:long}", (long uid, Pg pg) => PlayerProfile(pg, null, uid));
+app.MapGet("/api/players/{uid:long}/records", async (long uid, int? page, Pg pg) =>
+{
+    if ((page ?? 1) is < 1 or > 10000) throw new ApiError(400, "Invalid records page.");
+    return Results.Ok(await pg.Query("""
+        SELECT pb.*,c.title,c.md5,c.keys,c.level FROM personal_bests pb JOIN users u ON u.id=pb.user_id JOIN charts c ON c.id=pb.chart_id
+        WHERE u.uid=@uid AND NOT u.disabled ORDER BY pb.created_at DESC,pb.id LIMIT 50 OFFSET @offset
+        """, ("uid", uid), ("offset", ((page ?? 1)-1)*50)));
 });
 app.MapPut("/api/me", async (ProfileInput input, HttpContext context, Pg pg) =>
 {
@@ -212,7 +237,7 @@ admin.MapPut("/packs/{id:guid}/publication", async (Guid id, PublicationInput in
     await pg.Query("INSERT INTO audit_log(user_id,action,target) VALUES(@user,@action,@target)", ("user", Auth.Id(context.User)), ("action", input.Published ? "pack.publish" : "pack.unpublish"), ("target", id.ToString()));
     return Results.NoContent();
 });
-admin.MapGet("/users", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,username,display_name,role,disabled,created_at FROM users ORDER BY created_at DESC LIMIT 200")));
+admin.MapGet("/users", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,uid,username,display_name,role,disabled,created_at FROM users ORDER BY uid DESC LIMIT 200")));
 admin.MapPut("/users/{id:guid}/disabled", async (Guid id, DisableInput input, HttpContext context, Pg pg) =>
 {
     if (id == Auth.Id(context.User)) throw new ApiError(400, "You cannot disable your own account.");
@@ -223,7 +248,13 @@ admin.MapPut("/users/{id:guid}/disabled", async (Guid id, DisableInput input, Ht
     return Results.NoContent();
 });
 admin.MapGet("/audit", async (Pg pg) => Results.Ok(await pg.Query("SELECT a.*,u.username FROM audit_log a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 100")));
+app.MapDifficultyTables();
 app.MapHub<RealtimeHub>("/hubs/realtime", options => { options.ApplicationMaxBufferSize = 65536; options.TransportMaxBufferSize = 65536; });
+app.MapPost("/api/rooms/{id:guid}/content", async (Guid id, UploadSongInput input, HttpContext context, RoomContentStore content) => Results.Ok(await content.Begin(Auth.Id(context.User), id, input, context.RequestAborted))).RequireAuthorization();
+app.MapGet("/api/room-content/{id:guid}", async (Guid id, HttpContext context, RoomContentStore content) => Results.Ok(await content.Status(Auth.Id(context.User), id))).RequireAuthorization();
+app.MapPut("/api/room-content/{id:guid}", async (Guid id, long offset, HttpContext context, RoomContentStore content) => Results.Ok(await content.Append(Auth.Id(context.User), id, offset, context.Request, context.RequestAborted))).RequireAuthorization();
+app.MapPost("/api/room-content/{id:guid}/complete", async (Guid id, HttpContext context, RoomContentStore content) => Results.Ok(await content.Complete(Auth.Id(context.User), id, context.RequestAborted))).RequireAuthorization();
+app.MapGet("/api/room-content/{id:guid}/download", async (Guid id, HttpContext context, RoomContentStore content) => await content.Download(Auth.Id(context.User), id)).RequireAuthorization();
 app.MapFallback(async context =>
 {
     if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/hubs")) { context.Response.StatusCode = 404; return; }

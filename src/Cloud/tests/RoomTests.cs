@@ -81,13 +81,43 @@ public sealed class RoomTests
         Assert.Equal("cancelled", rooms.PeekCompleted()!.State);
     }
     [Fact]
-    public void DuplicateConnectionsAndMultipleRoomsAreRejected()
+    public void ConnectionAndRoomLimitsAreEnforced()
     {
         var rooms = new Rooms(new() { MaxRooms = 1 }); var host = Player(); rooms.Connect(host.Id, "host");
-        Assert.Throws<ApiError>(() => rooms.Connect(host.Id, "other"));
+        for (int i = 0; i < 3; i++) rooms.Connect(host.Id, "other" + i);
+        Assert.Equal(409, Assert.Throws<ApiError>(() => rooms.Connect(host.Id, "extra")).Status);
+        rooms.Disconnect(host.Id, "unknown");
+        Assert.Throws<ApiError>(() => rooms.Connect(host.Id, "extra"));
+        rooms.Disconnect(host.Id, "other0"); rooms.Connect(host.Id, "extra");
         rooms.Create(host, "host", "Room");
         Assert.Throws<ApiError>(() => rooms.Create(host, "host", "Another"));
         Assert.Throws<ApiError>(() => rooms.Create(Player(), "guest", "Another"));
+    }
+
+    [Fact]
+    public void WebsiteDisconnectDoesNotRemoveDesktopRoomMembership()
+    {
+        var rooms = new Rooms(new()); var player = Player();
+        rooms.Connect(player.Id, "website"); rooms.Connect(player.Id, "desktop");
+        var room = rooms.Create(player, "desktop", "Room");
+        rooms.Join(room.Id, player, "website");
+        Assert.Single(rooms.Current(player.Id)!.Members);
+        rooms.Disconnect(player.Id, "website");
+        Assert.Equal(room.Id, rooms.Current(player.Id)!.Id);
+        rooms.Connect(player.Id, "website2");
+        rooms.Disconnect(player.Id, "desktop");
+        Assert.Null(rooms.Current(player.Id)); Assert.Empty(rooms.List());
+    }
+
+    [Fact]
+    public void GlobalConnectionLimitCountsAllTabsAndFreesDisconnectedSlots()
+    {
+        var rooms = new Rooms(new()); var users = Enumerable.Range(0, 20).Select(_ => Player()).ToArray();
+        foreach (var user in users) for (int i = 0; i < 4; i++) rooms.Connect(user.Id, i.ToString());
+        var extra = Player();
+        Assert.Equal(429, Assert.Throws<ApiError>(() => rooms.Connect(extra.Id, "extra")).Status);
+        rooms.Disconnect(users[0].Id, "0"); rooms.Connect(extra.Id, "extra");
+        Assert.Throws<ApiError>(() => rooms.Connect(extra.Id, "extra2"));
     }
 
     [Fact]
@@ -105,5 +135,25 @@ public sealed class RoomTests
         Assert.Equal(2, results.Count);
         Assert.True(results.Single(member => member.Id == guest.Id).Disconnected);
         Assert.Equal(10, results.Single(member => member.Id == guest.Id).ExScore);
+    }
+    [Fact]
+    public void LocalSongRequiresMatchingResourcePresenceAndStableSelection()
+    {
+        var rooms = new Rooms(new()); var host = Player(); var guest = Player();
+        var current = rooms.Create(host, "host", "Room"); current = rooms.Join(current.Id, guest, "guest");
+        var local = chart with { PackId = null, ContentSha256 = new string('b', 64) };
+        current = rooms.Select(host.Id, local, current.Version); var selection = current.SelectionId;
+        Assert.Throws<ApiError>(() => rooms.Ready(guest.Id, true, local.Sha256, current.Version));
+        Assert.Throws<ApiError>(() => rooms.RequireSelection(guest.Id, current.Id, selection, local.ContentSha256, true));
+        Assert.Throws<ApiError>(() => rooms.ContentPresence(guest.Id, selection, new string('c', 64), "available"));
+        current = rooms.ContentPresence(guest.Id, selection, local.ContentSha256!, "available");
+        Assert.Equal(selection, current.SelectionId);
+        current = rooms.Ready(guest.Id, true, local.Sha256, current.Version);
+        var share = Guid.NewGuid();
+        current = rooms.AttachContent(host.Id, current.Id, selection, local.ContentSha256!, share, DateTime.UtcNow.AddHours(2));
+        Assert.Equal(share, current.Chart!.ShareId); Assert.True(current.Members.Single(m => m.Id == guest.Id).Ready);
+        current = rooms.Select(host.Id, local, current.Version);
+        Assert.NotEqual(selection, current.SelectionId);
+        Assert.Throws<ApiError>(() => rooms.AttachContent(host.Id, current.Id, selection, local.ContentSha256!, share, DateTime.UtcNow.AddHours(2)));
     }
 }

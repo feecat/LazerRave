@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Buffers.Binary;
+using LazerRave.Content;
 
 namespace Cloud;
 
@@ -28,8 +29,11 @@ public static class ArchiveInspector
         return name;
     }
 
-    public static async Task<List<ChartMetadata>> Inspect(string path, CloudOptions limits, CancellationToken cancellation)
+    public static async Task<List<ChartMetadata>> Inspect(string path, CloudOptions limits, CancellationToken cancellation, SongManifest? manifest = null)
     {
+        if (manifest is not null) SongContent.Validate(manifest, limits.MaxExpandedBytes);
+        var expected = manifest?.Files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
+        int checkedFiles = 0;
         CheckDirectory(path);
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         using var archive = ZipFile.OpenRead(path);
@@ -52,6 +56,8 @@ public static class ArchiveInspector
             if (directory) { directories.Add(normalized); continue; }
             files.Add(normalized);
             var extension = System.IO.Path.GetExtension(name);
+            if (expected is not null && (!expected.TryGetValue(name, out var declared) || declared.Size != entry.Length))
+                throw new ApiError(400, "ZIP does not match the resource manifest.");
             if (!extensions.Contains(extension)) throw new ApiError(400, $"Unsupported file type: {extension}");
             bool chart = new[] { ".bms", ".bme", ".bml", ".pms" }.Contains(extension.ToLowerInvariant());
             if (entry.Length > limits.MaxExpandedBytes || (chart && entry.Length > 5 * 1024 * 1024)) throw new ApiError(400, "ZIP entry exceeds the size limit.");
@@ -59,22 +65,29 @@ public static class ArchiveInspector
             if (expanded > limits.MaxExpandedBytes) throw new ApiError(400, "Expanded ZIP exceeds the size limit.");
             await using var input = entry.Open();
             using var metadata = chart ? new MemoryStream() : null;
+            using var resourceHash = manifest is not null ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
             long read = 0;
             uint crc = uint.MaxValue;
             int count;
             while ((count = await input.ReadAsync(buffer, cancellation)) > 0)
             {
                 read += count;
+                resourceHash?.AppendData(buffer, 0, count);
                 for (int i = 0; i < count; i++) crc = crcTable[(crc ^ buffer[i]) & 255] ^ (crc >> 8);
                 if (read > entry.Length) throw new ApiError(400, "ZIP entry size is inconsistent.");
                 if (metadata is not null) await metadata.WriteAsync(buffer.AsMemory(0, count), cancellation);
             }
             if (read != entry.Length) throw new ApiError(400, "ZIP entry is truncated.");
             if (~crc != entry.Crc32) throw new ApiError(400, "ZIP entry checksum is invalid.");
+            if (expected is not null && Convert.ToHexString(resourceHash!.GetHashAndReset()).ToLowerInvariant() != expected[name].Sha256)
+                throw new ApiError(400, "ZIP resource checksum does not match the manifest.");
+            checkedFiles++;
             if (metadata is not null) charts.Add(Parse(name, metadata.ToArray()));
         }
         if (files.Overlaps(directories)) throw new ApiError(400, "ZIP contains conflicting file and directory paths.");
         if (charts.Count == 0) throw new ApiError(400, "ZIP contains no supported BMS charts.");
+        if (manifest is not null && (checkedFiles != manifest.Files.Length || !charts.Any(c => c.Path == manifest.ChartPath && c.Sha256 == manifest.ChartSha256)))
+            throw new ApiError(400, "ZIP is missing a declared resource or the selected chart.");
         return charts;
     }
 

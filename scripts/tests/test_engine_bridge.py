@@ -95,6 +95,28 @@ class EngineBridgeTests(unittest.TestCase):
         self.call("sync", [("root", self.music / "missing")], success=False)
         self.assertFalse((self.directory / "LR2files/Database/song.db").exists())
 
+    def test_shared_import_keeps_other_roots_and_excludes_pending_downloads(self):
+        shared = self.directory / "Shared"
+        incoming = shared / ".incoming" / "unfinished"
+        incoming.mkdir(parents=True)
+        self.chart(incoming / "pending.bms", "Pending", 1)
+        roots = [("root", self.music.parent), ("root", shared)]
+        response = self.call("sync", roots)
+        self.assertEqual(len(response.findall("chart")), 2)
+        song = shared / "content-hash"
+        song.mkdir()
+        self.chart(song / "normal.bms", "Shared Normal", 3)
+        self.chart(song / "another.bms", "Shared Another", 8)
+        response = self.call("import", roots + [("chart", song / "another.bms")])
+        self.assertEqual(len(response.findall("chart")), 4)
+        self.assertEqual({Path(row.text) for row in response.findall("root")}, {self.music.parent, shared})
+        self.assertEqual(len(self.call("catalog").findall("chart")), 4)
+        with sqlite3.connect(self.directory / "LR2files/Database/song.db") as database:
+            rows = database.execute("SELECT path FROM song").fetchall()
+            self.assertEqual(len(rows), 4)
+            self.assertFalse(any(".incoming" in row[0] for row in rows))
+        database.close()
+
     def test_invalid_gameplay_options_fail_without_data_changes(self):
         before = self.config.read_bytes()
         for options in [

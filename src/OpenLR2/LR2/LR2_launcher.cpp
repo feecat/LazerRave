@@ -169,7 +169,7 @@ Request ReadRequest(int argc, char** argv) {
             throw std::runtime_error("Unsupported launcher request: LAZERRAVE_BRIDGE_V1");
         auto mode = root->Attribute("mode");
         request.mode = mode ? mode : "";
-        if (request.mode != "play" && request.mode != "validate" && request.mode != "sync" && request.mode != "catalog" && request.mode != "refresh" && request.mode != "embed-probe")
+        if (request.mode != "play" && request.mode != "validate" && request.mode != "sync" && request.mode != "catalog" && request.mode != "refresh" && request.mode != "import" && request.mode != "embed-probe")
             throw std::runtime_error("Invalid launcher mode");
         for (auto element = root->FirstChildElement(); element; element = element->NextSiblingElement()) {
             const std::string name = element->Value();
@@ -305,7 +305,7 @@ void ApplyPlay(const Request& request, game& state) {
 
 int RunHeadless(const Request& request, game& state) {
     try {
-        const bool sync = request.mode == "sync" || request.mode == "refresh";
+        const bool sync = request.mode == "sync" || request.mode == "refresh" || request.mode == "import";
         SetBmsTextCodepage(EncodingCodepage(request.encoding));
         if (request.mode == "validate") {
             ApplyPlay(request, state);
@@ -353,7 +353,11 @@ int RunHeadless(const Request& request, game& state) {
             }
             CheckSql(sqlite3_exec(raw, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr), raw);
             try {
-                SyncSongCatalog(raw, &state.config.jukebox, request.mode == "refresh");
+                if (request.mode == "import" && (request.chart.empty() || !InLibrary(request.chart, state.config.jukebox) ||
+                    !std::filesystem::is_regular_file(std::filesystem::u8path(request.chart)) || !IsBmsFile(request.chart.c_str())))
+                    throw std::runtime_error("Imported chart is missing or outside the library");
+                const auto imported = request.mode == "import" ? Utf8Path(std::filesystem::u8path(request.chart).parent_path()) : "";
+                SyncSongCatalog(raw, &state.config.jukebox, request.mode == "refresh", imported.empty() ? nullptr : imported.c_str());
                 CheckSql(sqlite3_exec(raw, "COMMIT", nullptr, nullptr, nullptr), raw);
             } catch (...) {
                 sqlite3_exec(raw, "ROLLBACK", nullptr, nullptr, nullptr);

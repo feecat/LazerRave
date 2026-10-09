@@ -32,10 +32,10 @@ namespace osu.Game.Graphics
         private readonly RealmFileStore fileStore;
         private readonly LargeTextureStore largeTextureStore;
 
-        public OnlineAssetCachingStore(GameHost host, RealmAccess realmAccess)
+        public OnlineAssetCachingStore(GameHost host, RealmAccess realmAccess, OnlineStore? resourceStore = null)
         {
             this.realmAccess = realmAccess;
-            onlineStore = new TrustedDomainOnlineStore();
+            onlineStore = resourceStore ?? new TrustedDomainOnlineStore();
             fileStore = new RealmFileStore(realmAccess, host.Storage);
             // largeTextureStore = new LargeTextureStore(host.Renderer, host.CreateTextureLoaderStore(new StorageBackedResourceStore(fileStore.Storage)));
             largeTextureStore = new LargeTextureStore(host.Renderer, host.CreateTextureLoaderStore(onlineStore));

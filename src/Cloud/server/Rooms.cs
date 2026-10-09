@@ -1,9 +1,9 @@
 namespace Cloud;
 
-public sealed record RoomChart(Guid Id, string Title, string Sha256, int Keys, Guid PackId);
+public sealed record RoomChart(Guid Id, string Title, string Sha256, int Keys, Guid? PackId, string? ContentSha256 = null, Guid? ShareId = null, DateTime? ExpiresAt = null);
 public sealed record ProgressInput(Guid MatchId, long Sequence, int ExScore, int Combo, int Misses, double Progress);
-public sealed record MemberView(Guid Id, string Username, string DisplayName, string? AvatarUrl, bool Ready, int ExScore, int Combo, int Misses, double Progress, bool Finished, bool Disconnected = false);
-public sealed record RoomView(Guid Id, string Name, Guid HostId, string State, long Version, RoomChart? Chart, Guid? MatchId, DateTime? StartAt, IReadOnlyList<MemberView> Members);
+public sealed record MemberView(Guid Id, string Username, string DisplayName, string? AvatarUrl, bool Ready, int ExScore, int Combo, int Misses, double Progress, bool Finished, bool Disconnected = false, string ContentState = "unknown");
+public sealed record RoomView(Guid Id, string Name, Guid HostId, string State, long Version, RoomChart? Chart, Guid? MatchId, DateTime? StartAt, IReadOnlyList<MemberView> Members, Guid SelectionId = default);
 public sealed record CompletedMatch(Guid Id, Guid RoomId, Guid ChartId, string State, DateTime StartedAt, IReadOnlyList<MemberView> Results);
 
 public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
@@ -13,11 +13,12 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
         public PublicUser User { get; } = user;
         public string Connection { get; } = connection;
         public bool Ready, Finished, Disconnected;
+        public string ContentState = "unknown";
         public int ExScore, Combo, Misses;
         public double Progress;
         public long Sequence = -1;
         public DateTime LastProgress;
-        public MemberView View() => new(User.Id, User.Username, User.DisplayName, User.AvatarUrl, Ready, ExScore, Combo, Misses, Progress, Finished, Disconnected);
+        public MemberView View() => new(User.Id, User.Username, User.DisplayName, User.AvatarUrl, Ready, ExScore, Combo, Misses, Progress, Finished, Disconnected, ContentState);
     }
     private sealed class Room(Guid id, string name, Guid host)
     {
@@ -25,6 +26,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
         public string Name = name, State = "lobby";
         public long Version;
         public RoomChart? Chart;
+        public Guid Selection;
         public Guid? Match;
         public DateTime? StartAt;
         public bool Persisted, Dirty = true;
@@ -35,7 +37,8 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
     private readonly object gate = new();
     private readonly Dictionary<Guid, Room> rooms = [];
-    private readonly Dictionary<Guid, string> online = [];
+    private readonly Dictionary<Guid, HashSet<string>> online = [];
+    private int connectionCount;
     private readonly Dictionary<Guid, Guid> membership = [];
     private readonly Queue<CompletedMatch> completed = [];
 
@@ -43,17 +46,23 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
     {
         lock (gate)
         {
-            if (online.Count >= 80 || online.ContainsKey(user)) throw new ApiError(409, "An account may have one realtime connection. Server connection limit is 80.");
-            online[user] = connection;
+            if (online.TryGetValue(user, out var connections) && connections.Contains(connection)) return;
+            if (connectionCount >= 80) throw new ApiError(429, "Server realtime connection limit is 80.");
+            if (connections?.Count >= 4) throw new ApiError(409, "Close another website tab or client before reconnecting. An account may have four realtime connections.");
+            if (connections is null) online[user] = connections = [];
+            connections.Add(connection);
+            connectionCount++;
         }
     }
     public void Disconnect(Guid user, string connection)
     {
         lock (gate)
         {
-            if (online.GetValueOrDefault(user) != connection) return;
-            LeaveCore(user);
-            online.Remove(user);
+            if (!online.TryGetValue(user, out var connections) || !connections.Remove(connection)) return;
+            connectionCount--;
+            if (connections.Count == 0) online.Remove(user);
+            if (membership.TryGetValue(user, out var roomId) && rooms[roomId].Members[user].Connection == connection)
+                LeaveCore(user);
         }
     }
     public RoomView[] List() { lock (gate) return rooms.Values.Select(View).ToArray(); }
@@ -125,6 +134,8 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             Host(room, user, version);
             if (room.State is not ("lobby" or "results")) throw new ApiError(409, "A round is in progress.");
             room.Chart = chart;
+            room.Selection = Guid.NewGuid();
+            foreach (var member in room.Members.Values) member.ContentState = "unknown";
             room.Match = null;
             room.StartAt = null;
             room.State = "lobby";
@@ -140,7 +151,47 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             var room = Get(user);
             if (room.Version != version || room.State != "lobby" || room.Chart is null || room.Chart.Sha256 != sha256)
                 throw new ApiError(409, "Room changed, or downloaded chart identity does not match.");
+            if (ready && room.Chart.ContentSha256 is not null && room.Members[user].ContentState != "available")
+                throw new ApiError(409, "Verify the selected song resources before becoming ready.");
             room.Members[user].Ready = ready;
+            Changed(room);
+            return View(room);
+        }
+    }
+    public RoomView RequireSelection(Guid user, Guid roomId, Guid selection, string? content = null, bool host = false)
+    {
+        lock (gate)
+        {
+            var room = Get(user);
+            if (room.Id != roomId || room.Selection != selection || room.Chart is null || content is not null && room.Chart.ContentSha256 != content)
+                throw new ApiError(409, "The selected song has changed.");
+            if (host && room.Host != user) throw new ApiError(403, "Only the room host may upload this song.");
+            if (host && room.State is not ("lobby" or "results")) throw new ApiError(409, "Wait until the round finishes.");
+            return View(room);
+        }
+    }
+    public RoomView AttachContent(Guid user, Guid roomId, Guid selection, string content, Guid share, DateTime expires)
+    {
+        lock (gate)
+        {
+            RequireSelection(user, roomId, selection, content, true);
+            var room = Get(user);
+            room.Chart = room.Chart! with { ShareId = share, ExpiresAt = expires };
+            Changed(room);
+            return View(room);
+        }
+    }
+    public RoomView ContentPresence(Guid user, Guid selection, string sha256, string state)
+    {
+        lock (gate)
+        {
+            var room = Get(user);
+            if (room.Selection != selection || room.Chart?.ContentSha256 != sha256 || state is not ("missing" or "downloading" or "available"))
+                throw new ApiError(409, "Content report does not match the selected song.");
+            var member = room.Members[user];
+            if (member.ContentState == state) return View(room);
+            member.ContentState = state;
+            if (state != "available") member.Ready = false;
             Changed(room);
             return View(room);
         }
@@ -245,5 +296,5 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
         Changed(room);
     }
     private static RoomView View(Room room) => new(room.Id, room.Name, room.Host, room.State, room.Version, room.Chart, room.Match, room.StartAt,
-        room.Members.Values.Select(m => m.View()).OrderByDescending(m => m.ExScore).ThenBy(m => m.Misses).ThenByDescending(m => m.Combo).ThenBy(m => m.Id).ToArray());
+        room.Members.Values.Select(m => m.View()).OrderByDescending(m => m.ExScore).ThenBy(m => m.Misses).ThenByDescending(m => m.Combo).ThenBy(m => m.Id).ToArray(), room.Selection);
 }

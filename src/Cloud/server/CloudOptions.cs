@@ -9,6 +9,7 @@ public sealed class CloudOptions
     public long MaxUploadBytes { get; init; } = 128L * 1024 * 1024;
     public long MaxExpandedBytes { get; init; } = 512L * 1024 * 1024;
     public long MaxStorageBytes { get; init; } = 8L * 1024 * 1024 * 1024;
+    public long MaxTemporaryBytes { get; init; } = 2L * 1024 * 1024 * 1024;
     public int SessionDays { get; init; } = 7;
 }
 

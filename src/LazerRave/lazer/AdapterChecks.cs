@@ -32,6 +32,8 @@ internal static class AdapterChecks
         }
         CheckNestedFolders(directory);
         CheckClientCapabilities();
+        CheckCloudPanelDrawing();
+        CheckCloudIdentity();
         CheckPlaySettings(directory);
 
         var path = Path.Combine(directory, "settings.toml");
@@ -73,6 +75,56 @@ internal static class AdapterChecks
         bool rejected = false;
         try { preferences.Save(); } catch (ArgumentException) { rejected = true; }
         Require(rejected && File.ReadAllText(path) == original, "Invalid settings must not replace the saved configuration.");
+    }
+
+    private static void CheckCloudPanelDrawing()
+    {
+        var client = new CloudClient(() => [], () => "auto", _ => Task.CompletedTask);
+        try
+        {
+            using var panel = new CloudPanelDrawingCheck(client);
+            panel.CheckDrawing();
+        }
+        finally { client.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+    }
+
+    private static void CheckCloudIdentity()
+    {
+        var server = new Uri("https://lazerrave.com");
+        var id = Guid.NewGuid();
+        var user = new CloudUser(id, "account", "Display name", 1, $"/api/users/{id}/avatar?v=hash");
+        var avatar = CloudClient.ResolveAvatar(server, user)?.AbsoluteUri;
+        var identity = CloudIdentity.Create(user, avatar, "Player");
+        if (identity.Id != 1 || identity.Username != "Display name" || identity.AvatarUrl != $"https://lazerrave.com/api/users/{id}/avatar?v=hash")
+            throw new InvalidDataException("Cloud UID 1, display name or avatar did not reach the client identity.");
+        if (CloudClient.ResolveAvatar(server, user with { AvatarUrl = "https://a.ppy.sh/1" }) is not null ||
+            CloudClient.ResolveAvatar(server, user with { AvatarUrl = $"/api/users/{Guid.NewGuid()}/avatar" }) is not null)
+            throw new InvalidDataException("Cloud avatar resolution accepted an unrelated server or user.");
+        var local = CloudIdentity.Create(null, null, "Local player");
+        if (local.Username != "Local player" || local.AvatarUrl is not null)
+            throw new InvalidDataException("Signing out did not restore the local profile.");
+        var bound = new osu.Framework.Bindables.Bindable<osu.Game.Online.API.Requests.Responses.APIUser>(local);
+        var toolbar = bound.GetBoundCopy();
+        CloudIdentity.Apply(bound, identity, "Local player");
+        if (toolbar.Value.Username != user.DisplayName || toolbar.Value.AvatarUrl != avatar)
+            throw new InvalidDataException("Logging in did not notify the bound toolbar profile.");
+        var changed = CloudIdentity.Create(user with { DisplayName = "New display name" }, avatar + "2", "Local player");
+        CloudIdentity.Apply(bound, changed, "Local player");
+        if (toolbar.Value.Username != "New display name" || toolbar.Value.AvatarUrl != avatar + "2")
+            throw new InvalidDataException("Same-UID profile changes were discarded by user equality.");
+        CloudIdentity.Apply(bound, local, "Local player");
+        if (toolbar.Value.Username != "Local player" || toolbar.Value.AvatarUrl is not null)
+            throw new InvalidDataException("Signing out did not update the bound toolbar profile.");
+    }
+
+    private partial class CloudPanelDrawingCheck(CloudClient client) : LazerRaveCloudPanel(null!, client)
+    {
+        public void CheckDrawing()
+        {
+            LoadContent();
+            using var node = CreateDrawNode();
+            node.ApplyState();
+        }
     }
 
     private static void CheckPlaySettings(string directory)

@@ -27,6 +27,7 @@ src/Cloud/server/data/
 /userdata/
 /cache/
 /LR2files/
+/Shared/
 *.db
 *.db-shm
 *.db-wal

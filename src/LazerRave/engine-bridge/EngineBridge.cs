@@ -12,15 +12,16 @@ internal sealed class EngineBridge(string runtime)
     public static XDocument Request(string mode, FrontendSettings settings, Chart? chart = null, EmbedTarget? embedding = null)
     {
         var root = new XElement("lazerrave", new XAttribute("version", "1"), new XAttribute("mode", mode), new XElement("encoding", settings.Encoding));
-        if (mode is "sync" or "catalog")
+        if (mode is "sync" or "catalog" or "import")
         {
             root.Add(new XElement("library-source", "settings"));
-            foreach (var directory in settings.Roots)
+            foreach (var directory in ApplicationPaths.LibraryRoots(settings.Roots))
             {
                 if (!System.IO.Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);
                 root.Add(new XElement("root", Path.GetFullPath(directory)));
             }
         }
+        if (mode == "import") root.Add(new XElement("chart", chart?.Path ?? throw new ArgumentException("Select an installed chart.")));
         if (mode is "play" or "validate")
         {
             if (chart is null || !File.Exists(chart.Path) || !new[] { ".bms", ".bme", ".bml", ".pms" }.Contains(Path.GetExtension(chart.Path).ToLowerInvariant()))
@@ -86,7 +87,9 @@ internal sealed class EngineBridge(string runtime)
         finally { System.IO.Directory.Delete(directory, true); }
     }
     public async Task<SongLibrary> Catalog(FrontendSettings settings, bool sync, CancellationToken cancellation = default) =>
-        SongLibrary.Parse(await Exchange(sync ? "sync" : "catalog", settings, cancellation: cancellation), Runtime, settings.Roots);
+        SongLibrary.Parse(await Exchange(sync ? "sync" : "catalog", settings, cancellation: cancellation), Runtime, ApplicationPaths.LibraryRoots(settings.Roots));
+    public async Task<SongLibrary> Import(FrontendSettings settings, string path, CancellationToken cancellation) =>
+        SongLibrary.Parse(await Exchange("import", settings, new Chart(path, "", "", 7, 0, 0, 120, 0, null), cancellation), Runtime, ApplicationPaths.LibraryRoots(settings.Roots));
     private static XDocument ReadReply(string path)
     {
         using var reader = XmlReader.Create(path, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, MaxCharactersInDocument = 64 * 1024 * 1024 });

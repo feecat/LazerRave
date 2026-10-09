@@ -5,13 +5,13 @@ namespace Cloud;
 
 public sealed class ContentStore(Pg db, CloudOptions options)
 {
-    private readonly SemaphoreSlim uploadGate = new(1);
+    internal readonly SemaphoreSlim UploadGate = new(1);
     public string Root { get; } = Path.GetFullPath(options.StoragePath);
     public string FilePath(string key) => Path.Combine(Root, Path.GetFileName(key));
 
     public async Task<Guid> UploadPack(HttpRequest request, Guid uploader, CancellationToken cancellation)
     {
-        if (!await uploadGate.WaitAsync(0, cancellation)) throw new ApiError(429, "Another upload is being validated. Try again shortly.");
+        if (!await UploadGate.WaitAsync(0, cancellation)) throw new ApiError(429, "Another upload is being validated. Try again shortly.");
         var key = Guid.NewGuid() + ".zip";
         var temporary = FilePath(key + ".pending");
         var destination = FilePath(key);
@@ -19,7 +19,8 @@ public sealed class ContentStore(Pg db, CloudOptions options)
         try
         {
             Directory.CreateDirectory(Root);
-            if (Directory.EnumerateFiles(Root).Sum(f => new FileInfo(f).Length) + options.MaxUploadBytes > options.MaxStorageBytes)
+            var reserved = (long)(await db.Query("SELECT COALESCE(sum(size_bytes-received_bytes),0)::bigint AS pending FROM room_content WHERE state='uploading' AND deleted_at IS NULL"))[0]["pending"]!;
+            if (Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) + reserved + options.MaxUploadBytes > options.MaxStorageBytes)
                 throw new ApiError(507, "Content storage quota is exhausted.");
             if (!request.HasFormContentType) throw new ApiError(400, "Use a multipart ZIP upload.");
             var form = await request.ReadFormAsync(cancellation);
@@ -73,7 +74,7 @@ public sealed class ContentStore(Pg db, CloudOptions options)
                 if (File.Exists(temporary)) File.Delete(temporary);
                 if (!committed && File.Exists(destination)) File.Delete(destination);
             }
-            finally { uploadGate.Release(); }
+            finally { UploadGate.Release(); }
         }
     }
 

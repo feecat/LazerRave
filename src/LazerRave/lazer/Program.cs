@@ -37,7 +37,7 @@ internal static class Program
                 temporary = Path.Combine(ApplicationPaths.Cache, "checks", Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(temporary);
                 AdapterChecks.Run(settings, library, temporary);
-                File.WriteAllText(report, "PASS: BMS adapter, gameplay option persistence and engine mappings, six lane arrangements, ruleset discovery, retired client modules, unsupported osu! beatmap decoders and removed input policies.\nFull client UI and gameplay were not launched.\n");
+                File.WriteAllText(report, "PASS: BMS adapter, gameplay option persistence and engine mappings, six lane arrangements, ruleset discovery, retired client modules, unsupported osu! beatmap decoders, removed input policies, cloud account identity and login overlay draw state.\nFull client UI and gameplay were not launched.\n");
                 return 0;
             }
             using GameHost host = Host.GetSuitableDesktopHost(benchmarking ? "LazerRave-benchmark" : "LazerRave-lazer",

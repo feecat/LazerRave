@@ -41,6 +41,11 @@ namespace osu.Game.Overlays
         [BackgroundDependencyLoader]
         private void load()
         {
+            LoadContent();
+        }
+
+        protected virtual void LoadContent()
+        {
             Children = new Drawable[]
             {
                 new OsuContextMenuContainer

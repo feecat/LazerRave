@@ -1363,6 +1363,10 @@ int SearchSongsFromPath(CSTR root, sqlite3 *sql, CSTR path) {
 	}
 	now = GetNowUnixtime();
 	while (1) {
+		if ((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _stricmp(findFileData.cFileName, ".incoming") == 0) {
+			if (FindNextFileA(hFindFile, &findFileData) == 0) { FindClose(hFindFile); ErrorLogTabSub(); return count; }
+			continue;
+		}
 		if ( ((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) || !(strcmp("..", findFileData.cFileName) && strcmp(".", findFileData.cFileName)) || (g_reloadHeadless && (findFileData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) ) { // not directory
 			if (((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) && IsBmsFile(findFileData.cFileName)) {
 				searchPath = root;
@@ -2725,7 +2729,7 @@ static void RefreshSongCatalogMetadata(sqlite3* sql) {
 	}
 }
 
-void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jb, bool refreshMetadata) {
+void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jb, bool refreshMetadata, const char* importedRoot) {
 	auto execute = [sql](const char* text) {
 		if (sqlite3_exec(sql, text, nullptr, nullptr, nullptr) != SQLITE_OK)
 			throw std::runtime_error(sqlite3_errmsg(sql));
@@ -2748,12 +2752,18 @@ void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jb, bool refreshMetadata) {
 	g_reloadHeadless = true;
 	try {
 		BuildSongReloadSnapshot(sql);
-		for (int i = 0; i < jb->numOfPath; ++i) GetFolderDataFromPath(jb->path[i], sql);
-		// Folder timestamps have one-second precision; enumerate even when unchanged.
-		for (int i = 0; i < jb->numOfPath; ++i)
-			if (!IsLR2Folder(jb->path[i])) SearchSongsFromPath(jb->path[i], sql, jb->path[i]);
-		ReloadSongsByQuery("SELECT path,date FROM folder", sql, jb);
-		ReloadSongsByQuery("SELECT path,date FROM song", sql, jb);
+		if (importedRoot) {
+			const CSTR path(importedRoot);
+			GetFolderDataFromPath(path, sql);
+			SearchSongsFromPath(path, sql, path);
+		} else {
+			for (int i = 0; i < jb->numOfPath; ++i) GetFolderDataFromPath(jb->path[i], sql);
+			// Folder timestamps have one-second precision; enumerate even when unchanged.
+			for (int i = 0; i < jb->numOfPath; ++i)
+				if (!IsLR2Folder(jb->path[i])) SearchSongsFromPath(jb->path[i], sql, jb->path[i]);
+			ReloadSongsByQuery("SELECT path,date FROM folder", sql, jb);
+			ReloadSongsByQuery("SELECT path,date FROM song", sql, jb);
+		}
 		RepairSongHierarchy(sql);
 		if (refreshMetadata) RefreshSongCatalogMetadata(sql);
 		SetUndefinedDifficulty(sql);
