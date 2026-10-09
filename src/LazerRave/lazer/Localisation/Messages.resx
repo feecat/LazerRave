@@ -383,4 +383,16 @@
   <data name="Finished" xml:space="preserve"><value>Finished</value></data>
   <data name="This chart is not in the published ranking catalog." xml:space="preserve"><value>This chart is not in the published ranking catalog.</value></data>
   <data name="Highest SCORE" xml:space="preserve"><value>Highest SCORE</value></data>
+  <data name="Score details" xml:space="preserve"><value>Score details</value></data>
+  <data name="Force start" xml:space="preserve"><value>Force start</value></data>
+  <data name="Kick player" xml:space="preserve"><value>Kick player</value></data>
+  <data name="Transfer host" xml:space="preserve"><value>Transfer host</value></data>
+  <data name="Total notes" xml:space="preserve"><value>Total notes</value></data>
+  <data name="Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Played at" xml:space="preserve"><value>Played at</value></data>
+  <data name="Record" xml:space="preserve"><value>Record</value></data>
+  <data name="Ranked" xml:space="preserve"><value>Ranked</value></data>
+  <data name="Offset" xml:space="preserve"><value>Offset</value></data>
+  <data name="Best clear" xml:space="preserve"><value>Best clear</value></data>
+  <data name="Minimum BP" xml:space="preserve"><value>Minimum BP</value></data>
 </root>

@@ -69,7 +69,7 @@ internal partial class CloudLeaderboard(CloudClient client, Guid match, bool com
         for (int index = 0; index < DisplayedMembers.Length; index++)
         {
             var member = DisplayedMembers[index];
-            if (index == 0 || member.ExScore != DisplayedMembers[index - 1].ExScore || member.Misses != DisplayedMembers[index - 1].Misses || member.MaxCombo != DisplayedMembers[index - 1].MaxCombo) rank = index + 1;
+            if (index == 0 || member.ExScore != DisplayedMembers[index - 1].ExScore) rank = index + 1;
             if (!rows.TryGetValue(member.Id, out var row)) { rows[member.Id] = row = new CloudScoreRow(compact); list.Add(row); }
             row.Set(member, users.User(member, client), rank, member.Id == client.User?.Id, completed);
             list.SetLayoutPosition(row, index);

@@ -3,7 +3,7 @@ namespace Cloud;
 public sealed record RoomChart(Guid Id, string Title, string Sha256, int Keys, Guid? PackId, string? ContentSha256 = null, Guid? ShareId = null, DateTime? ExpiresAt = null);
 public sealed record ProgressInput(Guid MatchId, long Sequence, int ExScore, int Combo, int Misses, double Progress, int MaxCombo = 0, int ClearType = 0, bool Aborted = false);
 public sealed record MemberView(Guid Id, string Username, string DisplayName, string? AvatarUrl, bool Ready, int ExScore, int Combo, int Misses, double Progress, bool Finished, bool Disconnected = false, string ContentState = "unknown", long Uid = 0, int MaxCombo = 0, int ClearType = 0, bool Aborted = false);
-public sealed record RoomView(Guid Id, string Name, Guid HostId, string State, long Version, RoomChart? Chart, Guid? MatchId, DateTime? StartAt, IReadOnlyList<MemberView> Members, Guid SelectionId = default, IReadOnlyList<MemberView>? Results = null);
+public sealed record RoomView(Guid Id, string Name, Guid HostId, string State, long Version, RoomChart? Chart, Guid? MatchId, DateTime? StartAt, IReadOnlyList<MemberView> Members, Guid SelectionId = default, IReadOnlyList<MemberView>? Results = null, Guid[]? ParticipantIds = null);
 public sealed record CompletedMatch(Guid Id, Guid RoomId, Guid ChartId, string State, DateTime StartedAt, IReadOnlyList<MemberView> Results);
 
 public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
@@ -121,7 +121,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
         }
         if (room.Host == user) room.Host = room.Members.Keys.First();
         if (room.State == "countdown") End(room, "cancelled");
-        else if (room.State == "playing" && room.Members.Values.All(m => m.Finished)) End(room, "finished");
+        else if (room.State == "playing" && room.RoundMembers.All(m => m.Finished || m.Disconnected)) End(room, "finished");
         else if (room.State == "lobby") InvalidateReady(room);
         Changed(room);
         return id;
@@ -140,6 +140,19 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             return View(room);
         }
     }
+    public (RoomView Room, string[] Connections) Kick(Guid user, Guid target, long version)
+    {
+        lock (gate)
+        {
+            var room = Get(user);
+            Host(room, user, version);
+            if (room.State is not ("lobby" or "results")) throw new ApiError(409, "Wait until the round finishes before removing a player.");
+            if (target == user || !room.Members.TryGetValue(target, out var member)) throw new ApiError(400, "Choose another room participant.");
+            LeaveCore(target);
+            var connections = online.TryGetValue(target, out var active) ? active.Append(member.Connection).Distinct().ToArray() : [member.Connection];
+            return (View(room), connections);
+        }
+    }
     public RoomView Select(Guid user, RoomChart chart, long version)
     {
         lock (gate)
@@ -151,6 +164,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             room.Selection = Guid.NewGuid();
             foreach (var member in room.Members.Values) member.ContentState = "unknown";
             room.Results = [];
+            room.RoundMembers = [];
             room.Match = null;
             room.StartAt = null;
             room.State = "lobby";
@@ -166,7 +180,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             var room = Get(user);
             if (room.Version != version || room.State is not ("lobby" or "results") || room.Chart is null || room.Chart.Sha256 != sha256)
                 throw new ApiError(409, "Room changed, or downloaded chart identity does not match.");
-            if (ready && (room.Chart.PackId is null || room.Chart.ContentSha256 is not null) && room.Members[user].ContentState != "available")
+            if (ready && room.Members[user].ContentState != "available")
                 throw new ApiError(409, "Match the selected BMS chart before becoming ready.");
             if (room.State == "results") room.State = "lobby";
             room.Members[user].Ready = ready;
@@ -212,19 +226,20 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             return View(room);
         }
     }
-    public RoomView Start(Guid user, long version)
+    public RoomView Start(Guid user, long version, bool force = false)
     {
         lock (gate)
         {
             if (completed.Count >= 256) throw new ApiError(503, "Match persistence is temporarily unavailable.");
             var room = Get(user);
             Host(room, user, version);
-            if (room.State != "lobby" || room.Chart is null || !room.Members.Values.All(m => m.Ready)) throw new ApiError(409, "All players must confirm the chart and be ready.");
+            if (room.State != "lobby" || room.Chart is null || room.Members[user].ContentState != "available") throw new ApiError(409, "The host must have the selected BMS chart.");
+            if (!force && !room.Members.Values.All(m => m.Ready && m.ContentState == "available")) throw new ApiError(409, "All players must confirm the chart and be ready.");
             room.Match = Guid.NewGuid();
             room.State = "countdown";
             room.StartAt = null;
             room.Persisted = false;
-            room.RoundMembers = room.Members.Values.ToArray();
+            room.RoundMembers = room.Members.Values.Where(m => m.ContentState == "available").ToArray();
             room.Results = [];
             foreach (var member in room.Members.Values)
             {
@@ -259,6 +274,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             var room = Get(user);
             Tick(room);
             var member = room.Members[user];
+            if (!room.RoundMembers.Contains(member)) throw new ApiError(403, "You are not participating in this round.");
             if (room.State != "playing" || input.MatchId != room.Match || member.Finished) throw new ApiError(409, "Round is not accepting scores.");
             if (input.Sequence <= member.Sequence || input.Sequence < 0 || input.ExScore < member.ExScore || input.ExScore > 3000000 ||
                 input.Combo is < 0 or > 1000000 || input.Misses < member.Misses || input.Misses > 1000000 ||
@@ -269,7 +285,7 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
             member.MaxCombo = Math.Max(member.MaxCombo, Math.Max(input.MaxCombo, input.Combo)); member.ClearType = input.ClearType; member.Aborted = input.Aborted;
             member.Progress = input.Progress; member.Finished = finish; member.LastProgress = Now;
             Changed(room);
-            if (room.Members.Values.All(m => m.Finished)) End(room, "finished");
+            if (room.RoundMembers.All(m => m.Finished || m.Disconnected)) End(room, "finished");
             return View(room);
         }
     }
@@ -316,5 +332,6 @@ public sealed class Rooms(CloudOptions options, TimeProvider? clock = null)
         Changed(room);
     }
     private static RoomView View(Room room) => new(room.Id, room.Name, room.Host, room.State, room.Version, room.Chart, room.Match, room.StartAt,
-        room.Members.Values.Select(m => m.View()).OrderByDescending(m => m.ExScore).ThenBy(m => m.Misses).ThenByDescending(m => m.MaxCombo).ThenBy(m => m.Id).ToArray(), room.Selection, room.State is "countdown" or "playing" ? room.RoundMembers.Select(member => member.View()).ToArray() : room.Results);
+        room.Members.Values.Select(m => m.View()).OrderByDescending(m => m.ExScore).ThenBy(m => m.Misses).ThenByDescending(m => m.MaxCombo).ThenBy(m => m.Id).ToArray(), room.Selection, room.State is "countdown" or "playing" ? room.RoundMembers.Select(member => member.View()).ToArray() : room.Results,
+        room.RoundMembers.Select(member => member.User.Id).ToArray());
 }

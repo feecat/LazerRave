@@ -218,7 +218,7 @@ app.MapGet("/api/charts/{id:guid}", async (Guid id, Pg pg) =>
     return Results.Ok(rows[0]);
 });
 app.MapGet("/api/rankings/{chart:guid}", async (Guid chart, string? arrangement, string? gauge, bool? verified, int? page, Ranking rankings) =>
-    Results.Ok(await rankings.Board(chart, arrangement ?? "off", gauge ?? "normal", verified ?? false, page ?? 1)));
+    Results.Ok(await rankings.Board(chart, arrangement ?? "all", gauge ?? "all", verified ?? false, page ?? 1)));
 app.MapPost("/api/scores", async (ScoreInput score, HttpContext context, Ranking rankings) => Results.Ok(await rankings.Submit(Auth.Id(context.User), score))).RequireAuthorization();
 app.MapGet("/api/rooms", (Rooms rooms) => Results.Ok(rooms.List()));
 app.MapGet("/api/chat/{channel}", async (string channel, HttpContext context, Rooms rooms, Pg pg) =>

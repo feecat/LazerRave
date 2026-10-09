@@ -5,7 +5,9 @@ namespace LazerRave.Lazer;
 
 internal sealed record RankingChart(Guid Id, string Title, string Sha256, string? Md5);
 internal sealed record ChartRank(long Rank, string Username, string DisplayName, int ExScore, int? ScoreMax, int Misses,
-    int MaxCombo, string Clear, DateTimeOffset CreatedAt, bool Verified);
+    int MaxCombo, string Clear, DateTimeOffset CreatedAt, bool Verified, Guid Id = default, Guid ClientRunId = default,
+    int Perfect = 0, int Great = 0, int Good = 0, int Bad = 0, int Poor = 0, int? NormalScore = null,
+    string Arrangement = "off", string Gauge = "normal", string? BestClear = null, int? MinMisses = null);
 
 internal sealed partial class CloudClient
 {
@@ -42,7 +44,7 @@ internal sealed partial class CloudClient
         using var response = await http.PostAsJsonAsync("api/scores", new
         {
             ChartId = target.Id, ClientRunId = record.Id, Ruleset = "openlr2-v1", record.Arrangement, record.Gauge,
-            score.Perfect, score.Great, score.Good, score.Bad, score.Poor, score.MaxCombo,
+            score.Perfect, score.Great, score.Good, score.Bad, score.Poor, score.MaxCombo, score.NormalScore,
             Clear = score.ClearType switch { 2 => "easy", 3 => "normal", 4 => "hard", 5 => "full-combo", _ => "failed" },
             ScoreMax = score.TotalNotes * 2, InputType = "keyboard",
         }, json, cancellation);

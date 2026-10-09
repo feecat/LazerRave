@@ -62,7 +62,7 @@ export const chinese: Record<string, string> = {
   'SONG PACK': '曲包', 'charts': '首谱面', 'Download ZIP ↓': '下载 ZIP ↓', 'Included charts': '包含的谱面',
   'Unspecified difficulty': '未标注难度', 'Ranking →': '查看排名 →', 'Archive checksum': '压缩包校验值',
   'INTERNET RANKING': '网络排名', 'One chart. A higher standard.': '同一张谱面，更高的目标。',
-  'Compare EX SCORE records for the same chart, arrangement and gauge.': '比较相同谱面、排列和血槽模式下的 EX SCORE 成绩。',
+  'All arrangements': '全部排列', 'All gauges': '全部血条', 'Compare each player’s best EX SCORE for the same chart.': '比较同一谱面各玩家的最高 EX SCORE。', 'Compare EX SCORE records for the same chart, arrangement and gauge.': '比较相同谱面、排列和血槽模式下的 EX SCORE 成绩。',
   'Search charts': '搜索谱面', 'Search title or artist…': '搜索曲名或作者…', 'Key mode': '键型', 'All key modes': '全部键型',
   'No matching charts.': '没有匹配的谱面。', 'Select a chart': '选择谱面', 'Arrangement': '排列', 'Gauge': '血槽',
   'Records': '成绩范围', 'All submissions': '全部提交', 'Verified only': '仅已验证成绩',

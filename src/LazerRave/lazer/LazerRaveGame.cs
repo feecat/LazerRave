@@ -338,8 +338,15 @@ internal partial class LazerRaveGame : OsuGame
         if (available.Length > 0) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(available[Random.Shared.Next(available.Length)]);
     }
     public void StartGame(BeatmapInfo info) => StartChart(info, null);
-    public void WatchReplay(string path) => StartChart(Beatmap.Value.BeatmapInfo, path);
-    private void StartChart(BeatmapInfo info, string? replay)
+    public void WatchReplay(string path, PlayRecord? record = null) => StartChart(Beatmap.Value.BeatmapInfo, path, record);
+    public void QueueReplay(string path, PlayRecord? record) => Scheduler.Add(() => WatchReplay(path, record));
+    public void ShowScoreDetails(osu.Game.Scoring.ScoreInfo score, BmsScoreDetails details, Chart chart, PlayRecord[] history)
+    {
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || !Equals(SelectedChart, chart)) return;
+        chrome.Hide(); CloseAllOverlays();
+        ScreenStack.Push(new LazerRaveScoreDetailsScreen(score, details, chart, history, () => chrome.Show()));
+    }
+    private void StartChart(BeatmapInfo info, string? replay, PlayRecord? record = null)
     {
         if (ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
         if (preferences.PlayOptions["battle"].Value == 4)
@@ -352,7 +359,7 @@ internal partial class LazerRaveGame : OsuGame
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned)
-        { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, ReplaySource = replay });
+        { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, ReplaySource = replay, ReplayRecord = record });
     }
     public void SetLibraryMessage(osu.Framework.Localisation.LocalisableString text) => Notifications.Post(new osu.Game.Overlays.Notifications.SimpleNotification { Text = text });
     private void UpdateMultiplayerStart()
@@ -362,7 +369,8 @@ internal partial class LazerRaveGame : OsuGame
             || room.State is not ("countdown" or "playing") || cloud.ServerNow < start || viewport is null) return;
         if (ScreenStack.CurrentScreen is GamePlayScreen) return;
         var member = room.Members.FirstOrDefault(member => member.Id == cloud.User?.Id);
-        if (member is not { Ready: true, ContentState: "available" } || cloud.AvailableChart is not { } path) return;
+        bool participating = room.ParticipantIds?.Contains(cloud.User?.Id ?? Guid.Empty) ?? member?.Ready == true;
+        if (!participating || member is not { ContentState: "available" } || cloud.AvailableChart is not { } path) return;
         var chart = catalog.Library.Songs.SelectMany(song => song.Charts).FirstOrDefault(chart => chart.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
         if (chart is null) { launchedCloudMatch = match; cloud.SetGameStatus("The room chart is not in the library. Rescan before starting another round."); return; }
         if (ScreenStack.CurrentScreen is LazerRaveSongSelect selection) { selection.Exit(); return; }
@@ -378,9 +386,8 @@ internal partial class LazerRaveGame : OsuGame
         {
             menuTrackVolume.Value = 1;
             cloud.SetGameStatus(error ?? "Returned to room.");
-            _ = RefreshAsync(false, error);
             ScreenStack.Push(new LazerRaveRoundResults(cloud, match, chart.Title, error) { RelativeSizeAxes = Axes.Both });
-        }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player });
+        }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match, ExpectedChartHash = room.Chart?.Sha256, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player });
     }
     private void OnGameReturned(string? error)
     {
@@ -393,7 +400,7 @@ internal partial class LazerRaveGame : OsuGame
         }
         menuTrackVolume.Value = 1;
         chrome.Show(); if (error is not null) SetLibraryMessage(error);
-        _ = RefreshAsync(false, error);
+        StartPreview(Beatmap.Value);
     }
     private void ApplySettings()
     {
@@ -432,10 +439,11 @@ internal partial class LazerRaveGame : OsuGame
         }
     }
     public void Rescan() => _ = RefreshAsync(true);
-    private async Task RefreshAsync(bool sync, string? returnError = null)
+    private async Task RefreshAsync(bool sync)
     {
         if (refreshing) return;
-        refreshing = true; ++previewGeneration; preview.Stop(); SetLibraryMessage(D("Scanning…"));
+        refreshing = true; ++previewGeneration; preview.Stop();
+        if (sync) SetLibraryMessage(D("Scanning…"));
         try
         {
             var library = await bridge.Catalog(preferences.Value, sync, lifetime.Token);
@@ -444,17 +452,17 @@ internal partial class LazerRaveGame : OsuGame
                 catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); UpdateFolderBar(); songSelect?.RefreshKeyFilter();
                 var selected = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).FirstOrDefault(info => info.ID == Beatmap.Value.BeatmapInfo.ID);
                 if (selected is not null) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(selected);
-                ReportLibraryError(returnError);
             });
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { Schedule(() => SetLibraryMessage(error.Message)); }
         finally { Schedule(() => refreshing = false); }
     }
-    private async void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change)
+    private void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change) => StartPreview(change.NewValue);
+    private async void StartPreview(WorkingBeatmap working)
     {
         int generation = ++previewGeneration; preview.Stop();
-        if (catalog.ChartFor(change.NewValue.BeatmapInfo) is not { } chart) return;
+        if (catalog.ChartFor(working.BeatmapInfo) is not { } chart) return;
         if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
         try
         {

@@ -15,6 +15,47 @@ public sealed class RoomTests
     private static readonly RoomChart chart = new(Guid.NewGuid(), "Fixture", new string('a', 64), 7, Guid.NewGuid());
 
     [Fact]
+    public void ForceStartUsesAvailableParticipantsWithoutChangingReady()
+    {
+        var clock = new Clock(); var rooms = new Rooms(new(), clock); var host = Player(); var guest = Player(); var missing = Player();
+        var current = rooms.Create(host, "host", "Room");
+        current = rooms.Join(current.Id, guest, "guest"); current = rooms.Join(current.Id, missing, "missing");
+        current = rooms.Select(host.Id, chart, current.Version);
+        Assert.Throws<ApiError>(() => rooms.Start(host.Id, current.Version, true));
+        current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available");
+        current = rooms.ContentPresence(guest.Id, current.SelectionId, chart.Sha256, "available");
+        current = rooms.ContentPresence(missing.Id, current.SelectionId, chart.Sha256, "missing");
+        Assert.Equal(403, Assert.Throws<ApiError>(() => rooms.Start(guest.Id, current.Version, true)).Status);
+        Assert.Throws<ApiError>(() => rooms.Start(host.Id, current.Version));
+        current = rooms.Start(host.Id, current.Version, true);
+        Assert.Equal(2, current.ParticipantIds!.Length); Assert.DoesNotContain(missing.Id, current.ParticipantIds);
+        Assert.All(current.Members, member => Assert.False(member.Ready));
+        current = rooms.ConfirmStart(current.Id, current.MatchId!.Value); clock.Advance(4);
+        Assert.Equal(403, Assert.Throws<ApiError>(() => rooms.Progress(missing.Id, new(current.MatchId!.Value, 1, 0, 0, 0, 1), true)).Status);
+        rooms.Progress(host.Id, new(current.MatchId!.Value, 1, 20, 4, 0, 1), true);
+        current = rooms.Progress(guest.Id, new(current.MatchId.Value, 1, 20, 4, 0, 1), true);
+        Assert.Equal("results", current.State); Assert.Equal(2, current.Results!.Count);
+    }
+
+    [Fact]
+    public void KickRequiresHostAndRemovesAllTargetConnections()
+    {
+        var rooms = new Rooms(new()); var host = Player(); var guest = Player();
+        rooms.Connect(guest.Id, "guest"); rooms.Connect(guest.Id, "guest-tab");
+        var current = rooms.Create(host, "host", "Room"); current = rooms.Join(current.Id, guest, "guest");
+        Assert.Equal(403, Assert.Throws<ApiError>(() => rooms.Kick(guest.Id, host.Id, current.Version)).Status);
+        Assert.Throws<ApiError>(() => rooms.Kick(host.Id, host.Id, current.Version));
+        Assert.Throws<ApiError>(() => rooms.Kick(host.Id, guest.Id, current.Version - 1));
+        var kicked = rooms.Kick(host.Id, guest.Id, current.Version);
+        Assert.Equal(2, kicked.Connections.Length); Assert.Null(rooms.Current(guest.Id)); Assert.Single(kicked.Room.Members);
+        current = rooms.Join(current.Id, guest, "guest");
+        current = rooms.Select(host.Id, chart, current.Version);
+        current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available");
+        current = rooms.Start(host.Id, current.Version, true);
+        Assert.Equal(409, Assert.Throws<ApiError>(() => rooms.Kick(host.Id, guest.Id, current.Version)).Status);
+    }
+
+    [Fact]
     public void RoomCapacityAndHostTransfer()
     {
         var rooms = new Rooms(new()); var host = Player(); var created = rooms.Create(host, "host", "Room");
@@ -37,7 +78,7 @@ public sealed class RoomTests
         Assert.Equal(409, Assert.Throws<ApiError>(() => rooms.Select(host.Id, chart, created.Version)).Status);
         current = rooms.Select(host.Id, chart, current.Version);
         Assert.Throws<ApiError>(() => rooms.Ready(guest.Id, true, new string('b', 64), current.Version));
-        current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
+        current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
         Assert.Throws<ApiError>(() => rooms.Start(host.Id, current.Version));
         rooms.Select(host.Id, chart with { Id = Guid.NewGuid() }, current.Version);
         Assert.All(rooms.Current(host.Id)!.Members, member => Assert.False(member.Ready));
@@ -48,7 +89,7 @@ public sealed class RoomTests
     {
         var clock = new Clock(); var rooms = new Rooms(new(), clock); var host = Player();
         var current = rooms.Create(host, "host", "Room");
-        current = rooms.Select(host.Id, chart, current.Version); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
+        current = rooms.Select(host.Id, chart, current.Version); current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
         var pending = rooms.Start(host.Id, current.Version);
         Assert.Throws<ApiError>(() => rooms.Progress(host.Id, new(pending.MatchId!.Value, 1, 10, 3, 0, .1), false));
         current = rooms.ConfirmStart(current.Id, pending.MatchId!.Value);
@@ -73,8 +114,8 @@ public sealed class RoomTests
         var rooms = new Rooms(new()); var host = Player(); var guest = Player();
         rooms.Connect(host.Id, "host"); rooms.Connect(guest.Id, "guest");
         var current = rooms.Create(host, "host", "Room"); current = rooms.Join(current.Id, guest, "guest");
-        current = rooms.Select(host.Id, chart, current.Version); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
-        current = rooms.Ready(guest.Id, true, chart.Sha256, current.Version);
+        current = rooms.Select(host.Id, chart, current.Version); current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
+        current = rooms.ContentPresence(guest.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(guest.Id, true, chart.Sha256, current.Version);
         rooms.Start(host.Id, current.Version);
         rooms.Disconnect(host.Id, "host");
         Assert.Equal("results", rooms.Current(guest.Id)!.State); Assert.False(rooms.Current(guest.Id)!.Members[0].Ready);
@@ -125,8 +166,8 @@ public sealed class RoomTests
     {
         var clock = new Clock(); var rooms = new Rooms(new(), clock); var host = Player(); var guest = Player();
         var current = rooms.Create(host, "host", "Room"); current = rooms.Join(current.Id, guest, "guest");
-        current = rooms.Select(host.Id, chart, current.Version); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
-        current = rooms.Ready(guest.Id, true, chart.Sha256, current.Version); current = rooms.Start(host.Id, current.Version);
+        current = rooms.Select(host.Id, chart, current.Version); current = rooms.ContentPresence(host.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(host.Id, true, chart.Sha256, current.Version);
+        current = rooms.ContentPresence(guest.Id, current.SelectionId, chart.Sha256, "available"); current = rooms.Ready(guest.Id, true, chart.Sha256, current.Version); current = rooms.Start(host.Id, current.Version);
         current = rooms.ConfirmStart(current.Id, current.MatchId!.Value); clock.Advance(3.1);
         rooms.Progress(guest.Id, new(current.MatchId!.Value, 1, 10, 3, 0, .1), false);
         rooms.Leave(guest.Id);

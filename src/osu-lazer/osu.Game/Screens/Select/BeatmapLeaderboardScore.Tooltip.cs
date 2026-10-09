@@ -134,6 +134,16 @@ namespace osu.Game.Screens.Select
                             new StatisticRow(ModSelectOverlayStrings.ScoreMultiplier, ModUtils.FormatScoreMultiplier(multiplier)),
                         };
 
+                        if (value.CustomRankLabel != null)
+                        {
+                            statistics.ChildrenEnumerable = judgementsStatistics.Concat(new[]
+                            {
+                                Empty().With(d => d.Height = 20),
+                                new StatisticRow("MAX COMBO", value.MaxCombo.ToLocalisableString(@"0\x")),
+                                new StatisticRow("EX RATE", value.Accuracy.FormatAccuracy()),
+                            });
+                            return;
+                        }
                         statistics.ChildrenEnumerable = judgementsStatistics
                                                         .Append(Empty().With(d => d.Height = 20))
                                                         .Concat(generalStatistics);

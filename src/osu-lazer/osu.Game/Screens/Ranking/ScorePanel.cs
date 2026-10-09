@@ -93,6 +93,7 @@ namespace osu.Game.Screens.Ranking
         public Action? PostExpandAction;
 
         public readonly ScoreInfo Score;
+        public Func<ScoreInfo, Drawable>? ExpandedContentFactory { get; init; }
 
         [Resolved]
         private OsuGameBase game { get; set; } = null!;
@@ -252,7 +253,9 @@ namespace osu.Game.Screens.Ranking
 
                     bool firstLoad = topLayerContent == null;
                     topLayerContentContainer.Add(topLayerContent = new ExpandedPanelTopContent(Score.User, firstLoad) { Alpha = 0 });
-                    middleLayerContentContainer.Add(middleLayerContent = new ExpandedPanelMiddleContent(Score, displayWithFlair) { Alpha = 0 });
+                    middleLayerContent = ExpandedContentFactory?.Invoke(Score) ?? new ExpandedPanelMiddleContent(Score, displayWithFlair);
+                    middleLayerContent.Alpha = 0;
+                    middleLayerContentContainer.Add(middleLayerContent);
 
                     // only the first expanded display should happen with flair.
                     displayWithFlair = false;

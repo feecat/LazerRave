@@ -383,4 +383,16 @@
   <data name="Finished" xml:space="preserve"><value>完成</value></data>
   <data name="This chart is not in the published ranking catalog." xml:space="preserve"><value>该谱面尚未收录于网络排行曲库。</value></data>
   <data name="Highest SCORE" xml:space="preserve"><value>最高 SCORE</value></data>
+  <data name="Score details" xml:space="preserve"><value>成绩详情</value></data>
+  <data name="Force start" xml:space="preserve"><value>强制开始</value></data>
+  <data name="Kick player" xml:space="preserve"><value>踢出玩家</value></data>
+  <data name="Transfer host" xml:space="preserve"><value>转让房主</value></data>
+  <data name="Total notes" xml:space="preserve"><value>总音符数</value></data>
+  <data name="Clear" xml:space="preserve"><value>通关状态</value></data>
+  <data name="Played at" xml:space="preserve"><value>游玩时间</value></data>
+  <data name="Record" xml:space="preserve"><value>记录类型</value></data>
+  <data name="Ranked" xml:space="preserve"><value>有效成绩</value></data>
+  <data name="Offset" xml:space="preserve"><value>偏移</value></data>
+  <data name="Best clear" xml:space="preserve"><value>最佳通关</value></data>
+  <data name="Minimum BP" xml:space="preserve"><value>最低 BP</value></data>
 </root>

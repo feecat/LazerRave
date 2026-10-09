@@ -83,6 +83,17 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
         var room = rooms.TransferHost(UserId, target, version);
         await Broadcast(room); return room;
     }
+    public async Task<RoomView> KickPlayer(Guid target, long version)
+    {
+        var kicked = rooms.Kick(UserId, target, version);
+        foreach (var connection in kicked.Connections)
+        {
+            await Groups.RemoveFromGroupAsync(connection, kicked.Room.Id.ToString());
+            await Clients.Client(connection).SendAsync("RoomKicked", kicked.Room.Id);
+        }
+        await Broadcast(kicked.Room);
+        return kicked.Room;
+    }
     public async Task<RoomView> SetReady(bool ready, string sha256, long version)
     {
         var room = rooms.Ready(UserId, ready, sha256, version);
@@ -109,8 +120,12 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
         await Broadcast(room); return room;
     }
     public async Task<RoomView> StartRound(long version)
+        => await Start(version, false);
+    public async Task<RoomView> ForceStartRound(long version)
+        => await Start(version, true);
+    private async Task<RoomView> Start(long version, bool force)
     {
-        var pending = rooms.Start(UserId, version);
+        var pending = rooms.Start(UserId, version, force);
         try
         {
             await db.Query("INSERT INTO matches(id,room_id,chart_id,state,started_at) VALUES(@id,@room,@chart,'countdown',now())", ("id", pending.MatchId), ("room", pending.Id), ("chart", pending.Chart!.Id));

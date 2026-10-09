@@ -16,7 +16,7 @@ public sealed class RankingTests
     [Fact]
     public void NegativeJudgementsAndImpossibleCombosAreRejected()
     {
-        foreach (var score in new[] { Valid with { Perfect = -1 }, Valid with { MaxCombo = 100 }, Valid with { Arrangement = "invalid" }, Valid with { Ruleset = "other" } })
+        foreach (var score in new[] { Valid with { Perfect = -1 }, Valid with { MaxCombo = 100 }, Valid with { Arrangement = "invalid" }, Valid with { Ruleset = "other" }, Valid with { NormalScore = -1 } })
             Assert.Throws<ApiError>(() => Ranking.Validate(score));
     }
     [Fact]

@@ -20,14 +20,16 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
     public partial class RankText : CompositeDrawable
     {
         private readonly ScoreRank rank;
+        private readonly string? customLabel;
 
         private BufferedContainer flash = null!;
         private BufferedContainer superFlash = null!;
         private GlowingSpriteText rankText = null!;
 
-        public RankText(ScoreRank rank)
+        public RankText(ScoreRank rank, string? customLabel = null)
         {
             this.rank = rank;
+            this.customLabel = customLabel;
 
             Anchor = Anchor.Centre;
             Origin = Anchor.Centre;
@@ -47,7 +49,7 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                     Origin = Anchor.Centre,
                     GlowColour = OsuColour.ForRank(rank),
                     Spacing = new Vector2(-15, 0),
-                    Text = DrawableRank.GetRankLetter(rank),
+                    Text = customLabel ?? DrawableRank.GetRankLetter(rank),
                     Font = OsuFont.Numeric.With(size: 76),
                     UseFullGlyphHeight = false
                 },
@@ -87,7 +89,7 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                             Anchor = Anchor.Centre,
                             Origin = Anchor.Centre,
                             Spacing = new Vector2(-15, 0),
-                            Text = DrawableRank.GetRankLetter(rank),
+                            Text = customLabel ?? DrawableRank.GetRankLetter(rank),
                             Font = OsuFont.Numeric.With(size: 76),
                             UseFullGlyphHeight = false,
                             Shadow = false

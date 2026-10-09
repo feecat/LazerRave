@@ -14,7 +14,7 @@ internal sealed record CloudUser(Guid Id, string Username, string DisplayName, l
 internal sealed record CloudChart(Guid Id, string Title, string Sha256, int Keys, Guid? PackId, string? ContentSha256, Guid? ShareId, DateTime? ExpiresAt);
 internal sealed record CloudMember(Guid Id, string DisplayName, bool Ready, string ContentState, string Username = "", string? AvatarUrl = null, long Uid = 0, int ExScore = 0, int Combo = 0, int Misses = 0, double Progress = 0, bool Finished = false, bool Disconnected = false, int MaxCombo = 0, int ClearType = 0, bool Aborted = false);
 internal sealed record CloudChat(long Id, string Channel, string Text, Guid UserId, string Username, string DisplayName, DateTime CreatedAt);
-internal sealed record CloudRoom(Guid Id, string Name, Guid HostId, string State, long Version, CloudChart? Chart, Guid? MatchId, DateTime? StartAt, CloudMember[] Members, Guid SelectionId, CloudMember[]? Results = null);
+internal sealed record CloudRoom(Guid Id, string Name, Guid HostId, string State, long Version, CloudChart? Chart, Guid? MatchId, DateTime? StartAt, CloudMember[] Members, Guid SelectionId, CloudMember[]? Results = null, Guid[]? ParticipantIds = null);
 internal sealed record SharedSong(Guid Id, Guid SelectionId, string State, long SizeBytes, long ReceivedBytes, string ArchiveSha256, SongManifest Manifest, DateTime ExpiresAt);
 internal sealed record CloudLogin(CloudUser User, string Token);
 internal sealed record CloudLocalChart(string Path, string Title, string Artist, int Keys, int Level);
@@ -37,6 +37,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
     public bool HasSavedSession => sessions?.Exists == true;
     private string SharedRoot => Path.Combine(applicationRoot, "Shared");
     private Guid inspectedSelection;
+    private Guid? kickedRoom;
     private string? localChart;
     private double serverClockOffset;
     public DateTime ServerNow => DateTime.UtcNow.AddMilliseconds(serverClockOffset);
@@ -64,6 +65,8 @@ internal sealed partial class CloudClient : IAsyncDisposable
     public TransferProgress? Progress { get; private set; }
     public bool CanStartRound => Connected && !Busy && Room is { State: "lobby", Chart: not null } room && room.HostId == User?.Id
         && AvailableChart is not null && room.Members.Length > 0 && room.Members.All(member => member.Ready && member.ContentState == "available");
+    public bool CanForceStartRound => Connected && !Busy && Room is { State: "lobby", Chart: not null } room && room.HostId == User?.Id
+        && AvailableChart is not null && room.Members.Any(member => member.Id == User.Id && member.ContentState == "available");
     public CloudChat[] Messages { get; private set; } = [];
     public event Action? Changed;
     public CloudClient(Func<IEnumerable<string>> songDirectories, Func<string> encoding, Func<string, Task> installed, string? applicationRoot = null, CloudSessionStore? sessions = null)
@@ -155,6 +158,13 @@ internal sealed partial class CloudClient : IAsyncDisposable
             options.Headers["X-LazerRave"] = "1";
         }).Build();
         hub.On<CloudRoom>("RoomUpdated", UpdateRoom);
+        hub.On<Guid>("RoomKicked", id =>
+        {
+            if (Room?.Id != id) return;
+            kickedRoom = id;
+            CancelTransfer(); inspection?.Cancel(); Room = null; AvailableChart = localChart = null; inspectedSelection = Guid.Empty;
+            Status = "You were removed from the room by the host."; Notify();
+        });
         hub.On<CloudChat>("ChatMessage", message =>
         {
             lock (chatLock) Messages = Messages.Append(message).GroupBy(value => value.Id).Select(group => group.First()).OrderBy(value => value.Id).TakeLast(200).ToArray();
@@ -201,6 +211,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
     }
     private void UpdateRoom(CloudRoom value)
     {
+        if (value.Id == kickedRoom) return;
         if (!value.Members.Any(m => m.Id == User?.Id)) return;
         if (Room?.Id == value.Id && value.Version < Room.Version) return;
         bool changed = Room?.SelectionId != value.SelectionId || Room?.Id != value.Id;
@@ -242,7 +253,11 @@ internal sealed partial class CloudClient : IAsyncDisposable
         UpdateRoom(updated);
     }
     public async Task CreateRoom(string name, CancellationToken cancellation) => UpdateRoom(await hub!.InvokeAsync<CloudRoom>("CreateRoom", name, cancellation));
-    public async Task JoinRoom(Guid id, CancellationToken cancellation) => UpdateRoom(await hub!.InvokeAsync<CloudRoom>("JoinRoom", id, cancellation));
+    public async Task JoinRoom(Guid id, CancellationToken cancellation)
+    {
+        var room = await hub!.InvokeAsync<CloudRoom>("JoinRoom", id, cancellation);
+        kickedRoom = null; UpdateRoom(room);
+    }
     public async Task LeaveRoom(CancellationToken cancellation)
     {
         CancelTransfer(); inspection?.Cancel(); await hub!.InvokeAsync("LeaveRoom", cancellation);
@@ -268,6 +283,13 @@ internal sealed partial class CloudClient : IAsyncDisposable
         if (!CanStartRound) throw new InvalidOperationException("Only the host can start after every player has matched the BMS chart and is ready.");
         UpdateRoom(await hub!.InvokeAsync<CloudRoom>("StartRound", Room!.Version, cancellation));
     }
+    public async Task ForceStartRound(CancellationToken cancellation)
+    {
+        if (!CanForceStartRound) throw new InvalidOperationException("Only the host with the selected BMS chart may force start.");
+        UpdateRoom(await hub!.InvokeAsync<CloudRoom>("ForceStartRound", Room!.Version, cancellation));
+    }
+    public async Task KickPlayer(Guid target, CancellationToken cancellation) =>
+        UpdateRoom(await hub!.InvokeAsync<CloudRoom>("KickPlayer", target, Room!.Version, cancellation));
     public async Task TransferHost(Guid target, CancellationToken cancellation)
     {
         UpdateRoom(await hub!.InvokeAsync<CloudRoom>("TransferHost", target, Room!.Version, cancellation));

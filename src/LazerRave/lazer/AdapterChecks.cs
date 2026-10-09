@@ -347,7 +347,7 @@ internal static class AdapterChecks
         var score = new GameplaySnapshot(160, 0, 80, 2, 1, 4, true, false)
             { NormalScore = 170000, Perfect = 70, Great = 20, Good = 8, Bad = 1, Poor = 1, TotalNotes = 100, Eligible = true };
         var run = Guid.NewGuid(); string replay = store.ReplayPath(run); Directory.CreateDirectory(Path.GetDirectoryName(replay)!);
-        File.WriteAllBytes(replay, [1, 2, 3, 4]); store.Save(run, hash, chart, "Fixture", settings, score);
+        File.WriteAllBytes(replay, new byte[12]); store.Save(run, hash, chart, "Fixture", settings, score);
         store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ExScore = 180, NormalScore = 190000 });
         store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ExScore = 200, Eligible = false });
         store.Save(Guid.NewGuid(), hash, chart, "Other", settings, score with { ExScore = 195 });

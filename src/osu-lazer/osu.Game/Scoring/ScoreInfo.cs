@@ -252,6 +252,9 @@ namespace osu.Game.Scoring
         [Ignored]
         public string? CustomRankLabel { get; set; }
 
+        [Ignored]
+        public IReadOnlyList<HitResultDisplayStatistic>? CustomStatistics { get; set; }
+
         /// <summary>
         /// The position of this score, starting at 1.
         /// </summary>
@@ -366,6 +369,12 @@ namespace osu.Game.Scoring
 
         public IEnumerable<HitResultDisplayStatistic> GetStatisticsForDisplay()
         {
+            if (CustomStatistics != null)
+            {
+                foreach (var statistic in CustomStatistics)
+                    yield return statistic;
+                yield break;
+            }
             foreach (var r in Ruleset.CreateInstance().GetHitResultsForDisplay())
             {
                 int value = Statistics.GetValueOrDefault(r.result);

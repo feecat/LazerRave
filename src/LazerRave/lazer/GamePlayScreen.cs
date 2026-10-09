@@ -21,6 +21,8 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     public PlayRecordStore? Records { get; init; }
     public string RecordPlayer { get; init; } = "Player";
     public string? ReplaySource { get; init; }
+    public PlayRecord? ReplayRecord { get; init; }
+    public string? ExpectedChartHash { get; init; }
     public CloudClient? MultiplayerClient { get; init; }
     public Guid? MatchId { get; init; }
     public override string Title => chart.Title;
@@ -68,15 +70,19 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
         try
         {
             hash = await PlayRecordStore.HashChart(chart.Path, session.Token);
+            if ((ReplayRecord?.ChartHash ?? ExpectedChartHash) is { } expected && !string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The BMS chart has changed or does not match this replay or round.");
+            var playSettings = ReplayRecord?.PlaybackSettings(settings) ?? settings;
+            if (ReplaySource is not null) ReplayFile.Validate(ReplaySource, ReplayRecord?.ReplayHash, ReplayRecord?.ReplaySize);
             if (settings.Presentation == "standalone")
             {
                 Schedule(() => status.Text = D("Playing in a separate window…"));
-                await bridge.Play(settings, chart, session.Token, progress: report, replaySource: ReplaySource, replayDestination: ReplaySource is null ? Records?.ReplayPath(run) : null);
+                await bridge.Play(playSettings, chart, session.Token, progress: report, replaySource: ReplaySource, replayDestination: ReplaySource is null ? Records?.ReplayPath(run) : null);
             }
             else
             {
                 var target = await viewport.OpenAsync(Bounds(), settings.Width, settings.Height, session.Token);
-                await bridge.Play(settings, chart, session.Token, target, (window, process) =>
+                await bridge.Play(playSettings, chart, session.Token, target, (window, process) =>
                 {
                     viewport.BindEngine(window, process);
                     Schedule(() => status.Hide());
@@ -93,7 +99,8 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
             {
                 try
                 {
-                    Records.Save(run, hash, chart, RecordPlayer, settings, latest);
+                    var saved = Records.Save(run, hash, chart, RecordPlayer, settings, latest);
+                    if (saved?.ReplayError is { } replayError) failure ??= "Play record saved; replay unavailable: " + replayError;
                 }
                 catch (Exception error) { failure ??= "Cannot save play record: " + error.Message; }
             }

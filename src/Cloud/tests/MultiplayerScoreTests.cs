@@ -39,7 +39,7 @@ public sealed class MultiplayerScoreTests
         var clock = new Clock(); var rooms = new Rooms(new(), clock); var player = Player();
         var room = rooms.Create(player, "desktop", "Room");
         room = rooms.Select(player.Id, new(Guid.NewGuid(), "BMS", new string('a', 64), 7, Guid.NewGuid()), room.Version);
-        room = rooms.Ready(player.Id, true, room.Chart!.Sha256, room.Version);
+        room = rooms.ContentPresence(player.Id, room.SelectionId, room.Chart!.Sha256, "available"); room = rooms.Ready(player.Id, true, room.Chart!.Sha256, room.Version);
         room = rooms.Start(player.Id, room.Version); room = rooms.ConfirmStart(room.Id, room.MatchId!.Value);
         clock.Now = clock.Now.AddSeconds(4);
         room = rooms.Progress(player.Id, new(room.MatchId!.Value, 1, 125, 0, 3, .25, 45, 1, true), true);
@@ -49,7 +49,7 @@ public sealed class MultiplayerScoreTests
         Assert.Equal(125, result.ExScore); Assert.Equal(45, result.MaxCombo); Assert.Equal(.25, result.Progress);
         Assert.Equal(result, Assert.Single(rooms.PeekCompleted()!.Results));
         var previous = room.MatchId;
-        room = rooms.Ready(player.Id, true, room.Chart!.Sha256, room.Version);
+        room = rooms.ContentPresence(player.Id, room.SelectionId, room.Chart!.Sha256, "available"); room = rooms.Ready(player.Id, true, room.Chart!.Sha256, room.Version);
         room = rooms.Start(player.Id, room.Version);
         Assert.NotEqual(previous, room.MatchId); Assert.Empty(room.Results!.Where(member => member.Finished));
         Assert.All(room.Members, member => { Assert.Equal(0, member.ExScore); Assert.Equal(0, member.MaxCombo); Assert.False(member.Aborted); });

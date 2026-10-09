@@ -61,7 +61,13 @@ internal sealed class EngineBridge(string runtime)
             var request = Path.Combine(directory, "request.xml");
             var document = Request(mode, settings, chart, embedding);
             if (mode == "play" && progress is not null) document.Root!.Add(new XElement("telemetry", "LAZERRAVE_SCORE_STREAM_V1"));
-            if (replaySource is not null) document.Root!.Add(new XElement("replay", Path.GetFullPath(replaySource)));
+            if (replaySource is not null)
+            {
+                var snapshot = Path.Combine(directory, "playback.lr2rep");
+                File.Copy(replaySource, snapshot, false);
+                ReplayFile.Validate(snapshot);
+                document.Root!.Add(new XElement("replay", snapshot));
+            }
             document.Save(request);
             var start = new ProcessStartInfo(Executable) { WorkingDirectory = Runtime, UseShellExecute = false, CreateNoWindow = true };
             start.ArgumentList.Add("--lazerrave-request"); start.ArgumentList.Add(request);
@@ -104,7 +110,10 @@ internal sealed class EngineBridge(string runtime)
                 if (replayDestination is not null && File.Exists(replay))
                 {
                     System.IO.Directory.CreateDirectory(Path.GetDirectoryName(replayDestination)!);
-                    File.Copy(replay, replayDestination, false);
+                    ReplayFile.Validate(replay);
+                    string temporary = replayDestination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    try { File.Copy(replay, temporary, false); File.Move(temporary, replayDestination, false); }
+                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
                 }
             }
             finally { System.IO.Directory.Delete(directory, true); }

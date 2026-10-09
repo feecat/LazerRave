@@ -5,6 +5,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.UserInterface;
@@ -45,7 +46,7 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
     private OsuSpriteText status = null!;
     private Box progress = null!;
     private OsuScrollContainer chatScroll = null!;
-    private PurpleRoundedButton create = null!, choose = null!, upload = null!, download = null!, open = null!, cancel = null!, ready = null!, start = null!, send = null!;
+    private PurpleRoundedButton create = null!, choose = null!, upload = null!, download = null!, open = null!, cancel = null!, ready = null!, start = null!, forceStart = null!, send = null!;
     private int dirty = 1;
     private volatile bool working;
     private bool sending;
@@ -148,9 +149,10 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                     Children = new Drawable[]
                     {
                         new PurpleRoundedButton { Text = "Leave room", Size = new Vector2(150, 50), Action = RequestLeave },
-                        status = new TruncatingSpriteText { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, X = 170, RelativeSizeAxes = Axes.X, Width = .6f, Font = OsuFont.GetFont(size: 15) },
+                        status = new TruncatingSpriteText { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, X = 170, RelativeSizeAxes = Axes.X, Padding = new MarginPadding { Right = 700 }, Font = OsuFont.GetFont(size: 15) },
                         ready = new PurpleRoundedButton { Text = "Ready", Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Size = new Vector2(150, 50), Action = () => _ = Run(() => client.Ready(lifetime.Token)) },
                         start = new PurpleRoundedButton { Text = "Start game", Anchor = Anchor.TopRight, Origin = Anchor.TopRight, X = -166, Size = new Vector2(170, 50), Action = () => _ = Run(() => client.StartRound(lifetime.Token)) },
+                        forceStart = new PurpleRoundedButton { Text = LazerRaveText.D("Force start"), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, X = -352, Size = new Vector2(150, 50), Action = () => _ = Run(() => client.ForceStartRound(lifetime.Token)) },
                     },
                 },
             },
@@ -231,6 +233,8 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
         ready.Enabled.Value = available && me?.ContentState == "available" && !working && !client.Busy && room?.State is "lobby" or "results";
         start.Alpha = host ? 1 : 0;
         start.Enabled.Value = !working && client.CanStartRound;
+        forceStart.Alpha = host && !client.CanStartRound ? 1 : 0;
+        forceStart.Enabled.Value = !working && client.CanForceStartRound && !client.CanStartRound;
         send.Enabled.Value = client.Connected && !sending && message.Value.Trim().Length is > 0 and <= 500;
         status.Text = error.Length > 0 ? error : !client.Connected ? client.Status : room is null ? "New room" : room.State == "lobby" && room.Chart is not null
             ? $"{room.Members.Count(member => member.Ready)} / {room.Members.Length} ready · {client.Status}" : $"{room.State} · {client.Status}";
@@ -241,7 +245,8 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
         foreach (var member in members.OrderByDescending(member => member.Id == room!.HostId))
         {
             if (!rows.TryGetValue(member.Id, out var row)) { rows[member.Id] = row = new CloudParticipantRow(); participants.Add(row); }
-            row.Set(member, room!.HostId, rooms.User(member, client), host && member.Id != client.User?.Id && room.State is "lobby" or "results", () => _ = Run(() => client.TransferHost(member.Id, lifetime.Token)));
+            row.Set(member, room!.HostId, rooms.User(member, client), host && member.Id != client.User?.Id && !working && room.State is "lobby" or "results",
+                () => _ = Run(() => client.TransferHost(member.Id, lifetime.Token)), () => _ = Run(() => client.KickPlayer(member.Id, lifetime.Token)));
             participants.SetLayoutPosition(row, member.Id == room.HostId ? -1 : Array.FindIndex(members, value => value.Id == member.Id));
         }
         var chat = client.Messages.Where(value => value.Channel == channel).ToArray();
@@ -283,14 +288,15 @@ internal partial class CloudRoomHeader : RoomPanel
 }
 
 // Participant row keeps the crown, avatar, name and state columns from ParticipantPanel.
-internal partial class CloudParticipantRow : CompositeDrawable
+internal partial class CloudParticipantRow : CompositeDrawable, IHasContextMenu
 {
     private SpriteIcon crown = null!;
     private UpdateableAvatar avatar = null!;
     private TruncatingSpriteText name = null!;
     private OsuSpriteText state = null!;
     private CloudMember? previous;
-    private IconButton transferHost = null!;
+    private IconButton transferHost = null!, kickPlayer = null!;
+    public MenuItem[] ContextMenuItems { get; private set; } = [];
     public CloudParticipantRow() { RelativeSizeAxes = Axes.X; Height = 40; }
     [BackgroundDependencyLoader]
     private void load() => InternalChildren = new Drawable[]
@@ -299,21 +305,24 @@ internal partial class CloudParticipantRow : CompositeDrawable
         new GridContainer
         {
             RelativeSizeAxes = Axes.Both, Padding = new MarginPadding { Horizontal = 5 },
-            ColumnDimensions = [new Dimension(GridSizeMode.Absolute, 18), new Dimension(GridSizeMode.Absolute, 34), new Dimension(), new Dimension(GridSizeMode.AutoSize), new Dimension(GridSizeMode.Absolute, 30)],
+            ColumnDimensions = [new Dimension(GridSizeMode.Absolute, 18), new Dimension(GridSizeMode.Absolute, 34), new Dimension(), new Dimension(GridSizeMode.AutoSize), new Dimension(GridSizeMode.Absolute, 30), new Dimension(GridSizeMode.Absolute, 30)],
             Content = new Drawable?[][] { [
                 crown = new SpriteIcon { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, Icon = FontAwesome.Solid.Crown, Size = new Vector2(14), Colour = Color4Extensions.FromHex("f7e65d") },
                 avatar = new UpdateableAvatar(isInteractive: false) { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, RelativeSizeAxes = Axes.None, Size = new Vector2(30) },
                 name = new TruncatingSpriteText { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 16), Padding = new MarginPadding { Left = 5 } },
                 state = new OsuSpriteText { Anchor = Anchor.CentreRight, Origin = Anchor.CentreRight, Font = OsuFont.GetFont(size: 12), Padding = new MarginPadding { Horizontal = 5 } },
                 transferHost = new IconButton { Anchor = Anchor.Centre, Origin = Anchor.Centre, Icon = FontAwesome.Solid.Crown, TooltipText = "Transfer host", IconColour = Color4.LightYellow, Size = new Vector2(28) },
+                kickPlayer = new IconButton { Anchor = Anchor.Centre, Origin = Anchor.Centre, Icon = FontAwesome.Solid.UserTimes, TooltipText = LazerRaveText.D("Kick player"), IconColour = Color4.OrangeRed, Size = new Vector2(28) },
             ] },
         },
     };
-    public void Set(CloudMember member, Guid host, osu.Game.Online.API.Requests.Responses.APIUser user, bool canTransfer, Action transfer)
+    public void Set(CloudMember member, Guid host, osu.Game.Online.API.Requests.Responses.APIUser user, bool canTransfer, Action transfer, Action kick)
     {
-        if (!IsLoaded) { Schedule(() => Set(member, host, user, canTransfer, transfer)); return; }
+        if (!IsLoaded) { Schedule(() => Set(member, host, user, canTransfer, transfer, kick)); return; }
         crown.Alpha = member.Id == host ? 1 : 0;
         transferHost.Alpha = canTransfer ? 1 : 0; transferHost.Enabled.Value = canTransfer; transferHost.Action = transfer;
+        kickPlayer.Alpha = canTransfer ? 1 : 0; kickPlayer.Enabled.Value = canTransfer; kickPlayer.Action = kick;
+        ContextMenuItems = canTransfer ? [new OsuMenuItem(LazerRaveText.D("Transfer host"), MenuItemType.Standard, transfer), new OsuMenuItem(LazerRaveText.D("Kick player"), MenuItemType.Destructive, kick)] : [];
         name.Text = member.DisplayName;
         state.Text = member.Ready ? "Ready" : member.ContentState switch { "available" => "Idle", "missing" => "Missing", "downloading" => "Downloading", _ => "Idle" };
         state.Colour = member.Ready ? Color4.LightGreen : member.ContentState == "missing" ? Color4.Orange : Color4.White;
