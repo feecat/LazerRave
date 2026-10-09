@@ -1,0 +1,16 @@
+# Match type	Manifest resource name or prefix	Reason
+prefix	osu.Game.Resources.Samples.Intro.	Removed startup and exit sequences
+prefix	osu.Game.Resources.Textures.Intro.Circles.	Removed circles startup sequence
+prefix	osu.Game.Resources.Textures.Intro.Triangles.	Removed triangles startup sequence
+exact	osu.Game.Resources.Textures.Intro.Welcome.welcome_text.png	Removed first-run welcome sequence
+prefix	osu.Game.Resources.Samples.DailyChallenge.	Removed daily challenge interface
+prefix	osu.Game.Resources.Samples.Multiplayer.Matchmaking.	Removed official matchmaking and ranked-play interfaces
+prefix	osu.Game.Resources.Tracks.	Removed built-in osu chart import and official ranked-play music
+prefix	osu.Game.Resources.Textures.Gameplay.osu.	Removed osu ruleset
+prefix	osu.Game.Resources.Textures.Gameplay.taiko.	Removed taiko ruleset
+prefix	osu.Game.Resources.Textures.Gameplay.catch.	Removed catch ruleset
+prefix	osu.Game.Resources.Skins.Legacy.spinner	Removed osu spinner gameplay
+prefix	osu.Game.Resources.Skins.Legacy.taiko	Removed taiko gameplay
+prefix	osu.Game.Resources.Skins.Legacy.fruit-	Removed catch gameplay
+prefix	osu.Game.Resources.Skins.Retro.spinner	Removed osu spinner gameplay
+exact	osu.Game.Resources.Skins.Retro.fruit-ryuuta.png	Removed catch gameplay

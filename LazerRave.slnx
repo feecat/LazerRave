@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Client/">
+    <Project Path="src/LazerRave/lazer/LazerRave.Lazer.csproj" />
+    <Project Path="src/LazerRave/resource-pack/LazerRave.ResourcePack.csproj" />
+  </Folder>
+  <Folder Name="/Upstream/">
+    <Project Path="src/osu-lazer/osu.Game/osu.Game.csproj" />
+    <Project Path="src/osu-lazer/osu.Game.Rulesets.Mania/osu.Game.Rulesets.Mania.csproj" />
+  </Folder>
+</Solution>

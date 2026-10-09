@@ -1,0 +1,4126 @@
+﻿#include "LR2_bmsload.h"
+#include "Engine.h"
+#include "LR2_embedding.h"
+#include "LR2_replay.h"
+#include "Unrandomizer_SeedMap5K.h"
+#include "Unrandomizer_SeedMap7K.h"
+#include "filesystem.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <mutex>
+#include <ranges>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include <DxLib.h>
+
+// Converts into LR2's more generic internal representation
+//TOFIX: unintended result when isDSC && isPMS == true
+static int channelConvert(int channel, bool isDSC, bool isPMS)
+{
+    switch(channel)
+    {
+    case 0: channel = -1; break;
+    case 10: channel = -1; break;
+    case 11:
+        if(isDSC)
+            channel = 12;
+        break;
+    case 12:
+        if(isDSC)
+            channel = 13;
+        break;
+    case 13:
+        if(isDSC)
+            channel = 14;
+        break;
+    case 14:
+        if(isDSC)
+            channel = 15;
+        break;
+    case 15:
+        if(isDSC)
+            channel = 16;
+        break;
+    case 16:
+        if(isDSC)
+            channel = 11;
+        else if(isPMS)
+            channel = 18;
+        else
+            channel = 10;
+        break;
+    case 17:
+        if(isPMS)
+            channel = 19;
+        else
+            channel = -1;
+        break;
+    case 18:
+        if(isDSC)
+            channel = 17;
+        else
+            channel = 16;
+        break;
+    case 19:
+        if(isDSC)
+            channel = 18;
+        else
+            channel = 17;
+        break;
+    case 20: channel = -1; break;
+    case 22:
+        if(isPMS)
+            channel = 16;
+        break;
+    case 23:
+        if(isPMS)
+            channel = 17;
+        break;
+    case 24:
+        if(isPMS)
+            channel = 18;
+        break;
+    case 25:
+        if(isPMS)
+            channel = 19;
+        break;
+    case 26:
+        if(isDSC)
+            channel = 19;
+        else
+            channel = 20;
+        break;
+    case 27: channel = -1; break;
+    case 28: channel = 26; break;
+    case 29: channel = 27; break;
+    case 30: channel = -1; break;
+    case 31:
+        if(isDSC)
+            channel = 32;
+        break;
+    case 32:
+        if(isDSC)
+            channel = 33;
+        break;
+    case 33:
+        if(isDSC)
+            channel = 34;
+        break;
+    case 34:
+        if(isDSC)
+            channel = 35;
+        break;
+    case 35:
+        if(isDSC)
+            channel = 36;
+        break;
+    case 36:
+        if(isDSC)
+            channel = 31;
+        else if(isPMS)
+            channel = 38;
+        else
+            channel = 30;
+        break;
+    case 37:
+        if(isPMS)
+            channel = 39;
+        else
+            channel = -1;
+        break;
+    case 38:
+        if(isDSC)
+            channel = 37;
+        else
+            channel = 36;
+        break;
+    case 39:
+        if(isDSC)
+            channel = 38;
+        else
+            channel = 37;
+        break;
+    case 40: channel = -1; break;
+    case 42:
+        if(isPMS)
+            channel = 36;
+        break;
+    case 43:
+        if(isPMS)
+            channel = 37;
+        break;
+    case 44:
+        if(isPMS)
+            channel = 38;
+        break;
+    case 45:
+        if(isPMS)
+            channel = 39;
+        break;
+    case 46:
+        if(isDSC)
+            channel = 39;
+        else
+            channel = 40;
+        break;
+    case 47: channel = -1; break;
+    case 48: channel = 46; break;
+    case 49: channel = 47; break;
+    case 50: channel = -1; break;
+    case 51:
+        if(isDSC)
+            channel = 52;
+        break;
+    case 52:
+        if(isDSC)
+            channel = 53;
+        break;
+    case 53:
+        if(isDSC)
+            channel = 54;
+        break;
+    case 54:
+        if(isDSC)
+            channel = 55;
+        break;
+    case 55:
+        if(isDSC)
+            channel = 56;
+        break;
+    case 56:
+        if(isDSC)
+            channel = 51;
+        else if(isPMS)
+            channel = 58;
+        else
+            channel = 50;
+        break;
+    case 57:
+        if(isPMS)
+            channel = 59;
+        else
+            channel = -1;
+        break;
+    case 58:
+        if(isDSC)
+            channel = 57;
+        else
+            channel = 56;
+        break;
+    case 59:
+        if(isDSC)
+            channel = 58;
+        else
+            channel = 57;
+        break;
+    case 60: channel = -1; break;
+    case 62:
+        if(isPMS)
+            channel = 56;
+        break;
+    case 63:
+        if(isPMS)
+            channel = 57;
+        break;
+    case 64:
+        if(isPMS)
+            channel = 58;
+        break;
+    case 65:
+        if(isPMS)
+            channel = 59;
+        break;
+    case 66:
+        if(isDSC)
+            channel = 59;
+        else
+            channel = 60;
+        break;
+    case 67: channel = -1; break;
+    case 68: channel = 66; break;
+    case 69: channel = 67; break;
+    case 130: channel = -1; break;
+	//TOFIX: case 131-135 is missing, and this cause normal note and mine channel unmatching on DSC chart
+    case 136:
+        if(isDSC)
+            channel = 131;
+        else if(isPMS)
+            channel = 138;
+        else
+            channel = 130;
+        break;
+    case 137:
+        if(isPMS)
+            channel = 139;
+        else
+            channel = -1;
+        break;
+    case 138:
+        if(isDSC)
+            channel = 137;
+        else
+            channel = 136;
+        break;
+    case 139:
+        if(isDSC)
+            channel = 138;
+        else
+            channel = 137;
+        break;
+    case 140: channel = -1; break;
+    case 142:
+        if(isPMS)
+            channel = 136;
+        break;
+    case 143:
+        if(isPMS)
+            channel = 137;
+        break;
+    case 144:
+        if(isPMS)
+            channel = 138;
+        break;
+    case 145:
+        if(isPMS)
+            channel = 139;
+        break;
+    case 146:
+        if(isDSC)
+            channel = 139;
+        else
+            channel = 140;
+        break;
+    case 147: channel = -1; break;
+    case 148: channel = 146; break;
+    case 149: channel = 147; break;
+    default: break;
+    }
+    return channel;
+}
+
+int StopAllKeysound(game *g){
+	for (int i = 0; i < SLOTS; i++) {
+		StopSound(&g->audio, &g->gameplay.keysound[i]);
+	}
+	return 1;
+}
+
+int InitKeysound(game *g){
+	for (int i = 0; i < SLOTS; i++) {
+		StopSound(&g->audio, &g->gameplay.keysound[i]);
+		ReleaseSound(&g->audio, &g->gameplay.keysound[i]);
+	}
+	ErrorLogAdd("BMSの音を初期化しました\n");
+	return 1;
+}
+
+int ReleaseBGA(game *g){
+	for (int i = 0; i < SLOTS; i++) {
+		DeleteGraph(g->gameplay.bgaHandle[i]);
+		g->gameplay.bgaHandle[i] = -1;
+	}
+	return 1;
+}
+
+bool isVisibleNote(int ch){
+	if (CHANNEL_1P_NOTE_SC <= ch && ch <= CHANNEL_2P_NOTE_END) {
+		return true;
+	}
+	return (CHANNEL_1P_LN_SC <= ch && ch <= CHANNEL_2P_LN_END);
+}
+
+int InitNoteBuffer(LaneStruct *lane, int count){
+
+	lane->size = count;
+	// FIXME: never freed, memory leak.
+	lane->notes = (NoteStruct *)malloc(count * sizeof(NoteStruct));
+
+	lane->count = 0;
+	lane->autoplay = 0;
+
+	for (int i = 0; i < lane->size; i++) {
+		lane->notes[i].bmsTiming_ln = -1.0;
+		lane->notes[i].renderTiming_ln = -1.0;
+		lane->notes[i].realTiming_ln = -1.0;
+		lane->notes[i].active = -1;
+		lane->notes[i].val = -1.0;
+		lane->notes[i].bmsTiming = -1.0;
+		lane->notes[i].renderTiming = -1.0;
+		lane->notes[i].realTiming = -1.0;
+		lane->notes[i].op = -1;
+		lane->notes[i].mine = -1;
+	}
+	return 1;
+}
+
+
+int ExpandNoteBuffer(LaneStruct *lane, int addsize){
+
+	int oldCount;
+
+	oldCount = lane->size;
+	lane->size += addsize;
+	lane->notes = (NoteStruct*)realloc(lane->notes, (lane->size) * sizeof(NoteStruct));
+	assert(lane->notes != nullptr);
+
+	for (int i = oldCount; i < lane->size; i++) {
+		lane->notes[i].bmsTiming_ln = -1.0;
+		lane->notes[i].renderTiming_ln = -1.0;
+		lane->notes[i].realTiming_ln = -1.0;
+		lane->notes[i].active = -1;
+		lane->notes[i].val = -1.0;
+		lane->notes[i].bmsTiming = -1.0;
+		lane->notes[i].renderTiming = -1.0;
+		lane->notes[i].realTiming = -1.0;
+		lane->notes[i].op = -1;
+		lane->notes[i].mine = -1;
+	}
+	return 1;
+}
+
+int CMP_NotesByBmsTiming(const void *p1, const void *p2){
+	NoteStruct* n1 = (NoteStruct*)p1;
+	NoteStruct* n2 = (NoteStruct*)p2;
+
+	if (n1->bmsTiming >= 0.0 && n2->bmsTiming < 0.0) return -1;
+	if (n1->bmsTiming < 0.0 && n2->bmsTiming < 0.0) return 0;
+	if (n1->bmsTiming < 0.0 && n2->bmsTiming >= 0.0) return 1;
+
+	if (n2->bmsTiming == n1->bmsTiming) return n1->op - n2->op;
+
+	return n1->bmsTiming * 100000.0 - n2->bmsTiming * 100000.0;
+	
+	/*if (p1->bmsTiming >= 0.0) {
+		if (p2->bmsTiming < 0.0) {
+			return -1;
+		}
+	}
+	else if (p2->bmsTiming < 0.0) {
+		return 0;
+	}
+	if (p1->bmsTiming < 0.0) {
+		return 1;
+	}
+	if (p2->bmsTiming == p1->bmsTiming) {
+		return p1->op - p2->op;
+	}
+	return p1->bmsTiming * 100000.0 - p2->bmsTiming * 100000.0;*/
+}
+
+int CMP_NotesByRealTiming(const void *p1, const void *p2){
+	NoteStruct* n1 = (NoteStruct*)p1;
+	NoteStruct* n2 = (NoteStruct*)p2;
+	
+	return n1->realTiming - n2->realTiming;
+}
+
+int CMP_NotesByRealTimingOp(const void *p1, const void *p2){
+	NoteStruct* n1 = (NoteStruct*)p1;
+	NoteStruct* n2 = (NoteStruct*)p2;
+
+	if (n2->realTiming == n1->realTiming) {
+		return n1->op - n2->op;
+	}
+	return n1->realTiming - n2->realTiming;
+}
+
+int PlayerCheckAndSwap(gameplay *gp){
+	PLAYERSTATUS temp_status;
+	GRAPHDATA temp_graph;
+
+	if (gp->player[PLAYER_2].flag_active == 0) {
+		ErrorLogAdd("メインプレイヤーチェック：スコアを入れ替えません\n");
+	}
+	else {
+		memcpy(&temp_status, &gp->player[PLAYER_1], sizeof(PLAYERSTATUS));
+		memcpy(&gp->player[PLAYER_1], &gp->player[PLAYER_2], sizeof(PLAYERSTATUS));
+		memcpy(&gp->player[PLAYER_2], &temp_status, sizeof(PLAYERSTATUS));
+
+		memcpy(&temp_graph, &gp->statgraph[PLAYER_1], sizeof(GRAPHDATA));
+		memcpy(&gp->statgraph[PLAYER_1], &gp->statgraph[PLAYER_2], sizeof(GRAPHDATA));
+		memcpy(&gp->statgraph[PLAYER_2], &temp_graph, sizeof(GRAPHDATA));
+
+		gp->player[PLAYER_1].clearType = gp->player[PLAYER_2].clearType;
+		ErrorLogAdd("メインプレイヤーチェック：スコアを入れ替えました\n");
+	}
+	gp->player[PLAYER_1].flag_active = 1;
+	gp->player[PLAYER_2].flag_active = 0;
+	return 1;
+}
+
+int InitGameplay(gameplay *gp, CONFIG_PLAY *cfg) {
+
+	PlayerCheckAndSwap(gp);
+	gp->lastFastSlowBySide = {};
+	gp->lastHitOffsetBySide = {};
+	gp->bpmt_start = 1;
+	gp->isPreviewLoad = 0;
+	if (gp->bmsobj.count == 0) InitNoteBuffer(&gp->bmsobj, 1000);
+	for (int i = 0; i < gp->bmsobj.size; i++) {
+		gp->bmsobj.notes[i].bmsTiming_ln = -1.0;
+		gp->bmsobj.notes[i].renderTiming_ln = -1.0;
+		gp->bmsobj.notes[i].realTiming_ln = -1.0;
+		gp->bmsobj.notes[i].active = -1;
+		gp->bmsobj.notes[i].val = -1.0;
+		gp->bmsobj.notes[i].bmsTiming = -1.0;
+		gp->bmsobj.notes[i].renderTiming = -1.0;
+		gp->bmsobj.notes[i].realTiming = -1.0;
+		gp->bmsobj.notes[i].op = -1;
+		gp->bmsobj.notes[i].mine = -1;
+		gp->bmsobj.notes[i].stage = 0;
+	}
+	gp->bmsobj.count = 0;
+	gp->bmsobj.draw_count = 0;
+	gp->bmsobj.note_count = 0;
+	gp->bmsobj.autoplay = 0;
+	gp->bmsobj.noteVal = -1;
+
+	for (int lane = 0; lane < 20; lane++) {
+		if (gp->bmsobj_note[lane].count == 0) InitNoteBuffer(&gp->bmsobj_note[lane], 100);
+		for (int i = 0; i < gp->bmsobj_note[lane].size; i++) {
+			gp->bmsobj_note[lane].notes[i].bmsTiming_ln = -1.0;
+			gp->bmsobj_note[lane].notes[i].renderTiming_ln = -1.0;
+			gp->bmsobj_note[lane].notes[i].realTiming_ln = -1.0;
+			gp->bmsobj_note[lane].notes[i].active = -1;
+			gp->bmsobj_note[lane].notes[i].val = -1.0;
+			gp->bmsobj_note[lane].notes[i].bmsTiming = -1.0;
+			gp->bmsobj_note[lane].notes[i].renderTiming = -1.0;
+			gp->bmsobj_note[lane].notes[i].realTiming = -1.0;
+			gp->bmsobj_note[lane].notes[i].op = -1;
+			gp->bmsobj_note[lane].notes[i].mine = -1;
+			gp->bmsobj_note[lane].notes[i].stage = 0;
+		}
+		gp->bmsobj_note[lane].count = 0;
+		gp->bmsobj_note[lane].draw_count = 0;
+		gp->bmsobj_note[lane].note_count = 0;
+		gp->bmsobj_note[lane].autoplay = 0;
+		gp->bmsobj_note[lane].noteVal = -1;
+	}
+
+	if (gp->bmsobj_line.count == 0) InitNoteBuffer(&gp->bmsobj_line, 100);
+	for (int i = 0; i < gp->bmsobj_line.size; i++) {
+		gp->bmsobj_line.notes[i].bmsTiming_ln = -1.0;
+		gp->bmsobj_line.notes[i].renderTiming_ln = -1.0;
+		gp->bmsobj_line.notes[i].realTiming_ln = -1.0;
+		gp->bmsobj_line.notes[i].active = -1;
+		gp->bmsobj_line.notes[i].val = -1.0;
+		gp->bmsobj_line.notes[i].bmsTiming = -1.0;
+		gp->bmsobj_line.notes[i].renderTiming = -1.0;
+		gp->bmsobj_line.notes[i].realTiming = -1.0;
+		gp->bmsobj_line.notes[i].op = -1;
+		gp->bmsobj_line.notes[i].mine = -1;
+		gp->bmsobj_line.notes[i].stage = 0;
+	}
+	gp->bmsobj_line.count = 0;
+	gp->bmsobj_line.draw_count = 1;
+	gp->bmsobj_line.note_count = 0;
+	gp->bmsobj_line.autoplay = 0;
+	gp->bmsobj_line.noteVal = -1;
+
+	gp->BPM_fix = 0.0;
+	gp->BPM = 0.0;
+	gp->lastMeasure = 0;
+	gp->song_runtime = 0.0;
+	gp->trialClear = 0;
+	gp->delayCheckCount = 0;
+	gp->delayDetectedCount = 0; 
+	gp->nabeatsu_x = 0.0;
+	gp->nabeatsu_y = 0.0;
+	gp->isNosave = 0;
+	gp->earthquake_x = 0.0;
+	gp->earthquake_y = 0.0;
+	
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		int prevJudge[6];
+		memcpy(prevJudge,gp->player[p].judgecount2,6*sizeof(int));
+		int prevNowcombo = gp->player[p].now_combo_course;
+		int prevMaxcombo = gp->player[p].max_combo_course;
+		int prevCombodraw = gp->player[p].combo_draw;
+		int prevTotalnote = gp->player[p].total_note;
+		int prevNotecurrent = gp->player[p].note_current2;
+		int prevGaugeType = gp->player[p].gaugeType;
+		int prevLastCourseGaugeType = gp->player[p].lastCourseGaugeType;
+		int prevClearGaugeTypeCourse = gp->player[p].clearGaugeTypeCourse;
+		auto prevHP = gp->player[p].HP;
+		double prevHP_print = gp->player[p].HP[prevGaugeType];
+		EXTENDEDPLAYERSTATS extendedStatsCourse = gp->player[p].extendedStatsCourse;
+		std::array<EXTENDEDPLAYERSTATS, 20> extendedColumnStatsCourse = gp->player[p].extendedColumnStatsCourse;
+
+		gp->player[p] = PLAYERSTATUS();
+		gp->player[p].gaugeType = cfg->gaugeType[p];
+		gp->statgraph[p] = GRAPHDATA();
+
+		if (gp->courseStageNow > 0) {
+			gp->player[p].gaugeType = prevGaugeType;
+			gp->player[p].lastCourseGaugeType = prevLastCourseGaugeType;
+			gp->player[p].clearGaugeTypeCourse = prevClearGaugeTypeCourse;
+			gp->player[p].HP = prevHP;
+			gp->player[p].HP_print = prevHP_print;
+			gp->player[p].now_combo_course = prevNowcombo;
+			gp->player[p].max_combo_course = prevMaxcombo;
+			gp->player[p].combo_draw = prevCombodraw;
+			memcpy(gp->player[p].judgecount2, prevJudge, 6 * sizeof(int));
+			gp->player[p].total_note = prevTotalnote;
+			gp->player[p].note_current2 = prevNotecurrent;
+			gp->player[p].extendedStatsCourse = extendedStatsCourse;
+			gp->player[p].extendedColumnStatsCourse = extendedColumnStatsCourse;
+		}
+	}
+	gp->player[PLAYER_1].flag_active = 1;
+	gp->player[PLAYER_2].flag_active = 0;
+
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		if (gp->courseStageNow < 1) {
+			if (gp->isCourse == 0) {
+				gp->player[p].HP[0] = 20.;
+				gp->player[p].HP[3] = 20.;
+			}
+			else {
+				gp->player[p].HP[0] = 100.;
+				gp->player[p].HP[3] = 100.;
+			}
+			gp->player[p].HP[1] = 100.;
+			gp->player[p].HP[2] = 100.;
+			gp->player[p].HP[4] = 100.;
+			gp->player[p].HP[5] = 100.;
+			gp->player[p].HP_old = gp->player[p].HP[gp->player[p].gaugeType];
+			gp->player[p].HP_print = gp->player[p].HP[gp->player[p].gaugeType];
+			for (int i = 0; i < 6; i++) {
+				gp->statgraph[p].hp[i][0] = gp->player[p].HP[i];
+			}
+		}
+	}
+	std::ranges::fill(gp->bgaHandle, -1);
+	gp->bgaLayer1 = -1;
+	gp->bgaLayer2 = -1;
+	gp->missLayer = -1;
+	std::ranges::fill(gp->courseBgaLayer1, -1);
+	std::ranges::fill(gp->courseBgaLayer2, -1);
+	std::ranges::fill(gp->courseMissLayer, -1);
+	std::ranges::fill(gp->courseLayer1ChangeTime, -1);
+	std::ranges::fill(gp->courseLayer2ChangeTime, -1);
+	gp->speedmultiplier = 1.0;
+	gp->layer2ChangeTime = -1;
+	gp->maxBPM = 0.0;
+	gp->layer1ChangeTime = -1;
+	gp->minBPM = 0.0;
+	gp->loadObject_loaded = 0;
+	gp->loadObject_total = 0;
+	gp->lastMissTime = 0;
+	gp->misslayerTime[PLAYER_1] = 0;
+	gp->misslayerTime[PLAYER_2] = 0;
+	gp->soundonly = 1;
+	gp->fxChangeInRecording = 0;
+	gp->procGameCallCount = 0;
+	gp->isSpeedChanged = false;
+	gp->lanecoverDoubleclickTimeP1 = 0;
+	gp->lanecoverDoubleclickTimeP2 = 0;
+	gp->lanecoverDisplayP1 = 1;
+	gp->lanecoverDisplayP2 = 1;
+	gp->isForceEasy = 0;
+	gp->flag_threadDoingProcGame = 0;
+	gp->flag_gameinput = 0;
+	gp->flag_longsound = 0;
+	gp->flag_0note = 0;
+	gp->isGhostDisabled = 0;
+	gp->bpmChangedRealtime = -1;
+	gp->bpmChangedBmstime = -1;
+	for (int i = 0; i < 1000; i++) {
+		gp->rategraph[0].val[i] = 0;
+		gp->rategraph[1].val[i] = 0;
+	}
+	gp->rategraph[0].cursor = 0;
+	gp->rategraph[1].cursor = 0;
+	for (int i = 0; i < SLOTS; i++) {
+		gp->keysound_filename[i].fillzero();
+		gp->BMP_filename[i].fillzero();
+	}
+	std::ranges::fill(gp->fadeinSOUNDstart, -1);
+	std::ranges::fill(gp->fadeinSOUNDend, -1);
+	std::ranges::fill(gp->fadeoutSOUNDend, -1);
+	std::ranges::fill(gp->fadeinBGAstart, -1);
+	std::ranges::fill(gp->fadeinBGAend, -1);
+	std::ranges::fill(gp->fadeoutBGAend, -1);
+	gp->bgaMixer[0] = 100;
+	std::ranges::fill(std::ranges::views::drop(gp->bgaMixer, 1), 0);
+
+	return 1;
+}
+
+int LoadBmsResource(gameplay *gp, CSTR /*BMSfilepath*/, AUDIO *aud, ConfigStruct *cfg, BMSMETA */*meta*/, char /*bga*/, char /*flip*/, char noVideo, bool isMainThread){
+
+	int Rtmp, Gtmp, Btmp;
+
+	ErrorLogAdd("BMSの画像とサウンドをロードします\n");
+
+	if ((cfg->play).autojudge == 2) { //silent
+		gp->loadObject_loaded = gp->loadObject_total;
+		return 1;
+	}
+
+	std::unique_lock l{gp->criticalSection};
+
+	// Unloading keysounds of previous song.
+	for (auto [keysound, filename] : std::views::zip(gp->keysound, gp->keysound_filename)) {
+		if (filename.length() == 0) ReleaseSound(aud, &keysound);
+	}
+
+	std::vector<unsigned int> keysoundLoadQueue;
+	std::vector<std::jthread> keysoundsLoadWorkers;
+	std::atomic<unsigned int> keysoundsLoaded = 0;
+	std::atomic<bool> keysoundsLoadAbort = false;
+	keysoundLoadQueue.reserve(SLOTS);
+	for (int i = 0; i < SLOTS; i++) {
+		if (gp->keysound_filename[i].length() > 0) {
+			keysoundLoadQueue.push_back(i);
+		}
+	}
+	const auto workerCount = std::max(2u, cfg->system.coreCount / 2);
+	keysoundsLoadWorkers.reserve(workerCount);
+	for (auto _ : std::views::iota(0u, workerCount + 1)) {
+		keysoundsLoadWorkers.emplace_back([&]() {
+			while (!keysoundsLoadAbort) {
+				unsigned int queue_i = keysoundsLoaded++;
+				if (queue_i >= keysoundLoadQueue.size())
+					break;
+				unsigned int i = keysoundLoadQueue[queue_i];
+				LoadSound(aud, &gp->keysound[i], gp->keysound_filename[i], false);
+				if (gp->keysound[i].length > 60000 && gp->keysound[i].load) gp->flag_longsound = 1;
+				gp->loadObject_loaded++;
+				if (gp->flag_closingPhase || (gp->previewStatus != 1 && noVideo)) {
+					keysoundsLoadAbort = true;
+				}
+			}
+		});
+	}
+	keysoundsLoadWorkers.clear(); // join all
+	if (keysoundsLoadAbort) return 1;
+
+	gp->flag_0note = 1;
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+		if ( (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END)
+			&& (0 < gp->bmsobj.notes[i].val && gp->bmsobj.notes[i].val < SLOTS)
+			&& gp->keysound[(int)gp->bmsobj.notes[i].val].load) {
+
+			gp->flag_0note = 0;
+			break;
+		}
+	}
+
+	if (noVideo || !embedding::BgaEnabled()) {
+		gp->loadObject_loaded = gp->loadObject_total;
+		return 1;
+	}
+
+	// Use DxLib's async load methods when not on the main thread.
+	// Needed because graphics APIs, DirectX normally and OpenGL with dxlib-for-linux, require resources to be
+	// loaded from the main thread.
+	// These async methods will make DxLib delay uploading resources to the GPU until we call ProcessMessage, which
+	// we do on the main thread.
+	// Fixes crashes in DX11 and fixes BGAs not displaying with dxlib-for-linux.
+	if (!isMainThread) {
+#ifdef _WIN32
+		CoInitialize(NULL);
+#endif // _WIN32
+		SetUseASyncLoadFlag(TRUE);
+	}
+	GetTransColor(&Rtmp,&Gtmp,&Btmp);
+	SetTransColor(0,0,0);
+	for (int i = 0; i < SLOTS; i++) {
+		if (gp->BMP_filename[i].length() > 0) {
+			if (gp->BMP_filename[i].right(3).isSame("mpg") || gp->BMP_filename[i].right(3).isSame("avi")) {
+				SetTransColor(0, 255, 0);
+				gp->bgaHandle[i] = LoadGraph(gp->BMP_filename[i]);	// Note: When using SetUseASyncLoadFlag, LoadGraph returns the handle immediately. Further check is required
+				SetTransColor(0, 0, 0);
+			}
+			else {
+				gp->bgaHandle[i] = LoadGraph(gp->BMP_filename[i]);	// Note: When using SetUseASyncLoadFlag, LoadGraph returns the handle immediately. Further check is required
+			}
+
+			// Count only after load finish. Only add if using synchronous load here
+			if (isMainThread) {
+				gp->loadObject_loaded++;
+			}
+		}
+
+		if (gp->flag_closingPhase) {
+			if (!isMainThread) {
+				SetUseASyncLoadFlag(FALSE);
+#ifdef _WIN32
+				CoUninitialize();
+#endif // _WIN32
+			}
+			return 1;
+		}
+	}
+
+	// Check and wait until the handles finished loading
+	if (!isMainThread) {
+		std::unordered_map<int, bool> bgaHandleLoaded;	// to prevent count repeateadly
+		for (int i = 0; i < SLOTS; i++) {
+			if (gp->bgaHandle[i] != -1) {
+				bgaHandleLoaded[i] = false;
+			}
+		}
+		while (true) {
+			if (gp->flag_closingPhase) {
+				for (auto& [i, _loaded] : bgaHandleLoaded) {
+					// NOTE: SetASyncLoadFinishDeleteFlag is the same as DeleteGraph for already loaded images
+					SetASyncLoadFinishDeleteFlag(gp->bgaHandle[i]);
+					gp->bgaHandle[i] = -1;
+				}
+				SetUseASyncLoadFlag(FALSE);
+#ifdef _WIN32
+				CoUninitialize();
+#endif // _WIN32
+				return 1;
+			}
+
+			bool anyLoading = false;
+			for (auto& [i, loaded] : bgaHandleLoaded) {
+				if (loaded) continue;
+				int loadResult = CheckHandleASyncLoad(gp->bgaHandle[i]);
+				if (loadResult == TRUE/*still loading*/) {
+					anyLoading = true;
+					continue;
+				}
+				if (loadResult != FALSE/*finished*/) {
+					// Error
+					DeleteGraph(gp->bgaHandle[i]);
+					gp->bgaHandle[i] = -1;
+				}
+				loaded = true;
+				gp->loadObject_loaded++;
+			}
+			if (!anyLoading) break;
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	}
+
+	SetTransColor(Rtmp, Gtmp, Btmp);
+	if (!isMainThread) {
+		SetUseASyncLoadFlag(FALSE);
+#ifdef _WIN32
+		CoUninitialize();
+#endif // _WIN32
+	}
+	if (gp->bgaHandle[0] != -1) gp->missLayer = 0;
+
+	if (gp->isAutoplay == 1) {
+
+		for (int i = 0; i < gp->bmsobj.count; i++) {
+			if (!(gp->bmsobj.notes[i].op >= CHANNEL_1P_NOTE_SC && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END)) {
+				if (gp->bmsobj.notes[i].op == 1) {
+					if (0 < gp->bmsobj.notes[i].val && gp->bmsobj.notes[i].val < SLOTS) { //TODO : is it okay to delete compiler code dealing unsigned?
+						if ((gp->song_runtime < gp->keysound[(int)gp->bmsobj.notes[i].val].length + gp->bmsobj.notes[i].realTiming) && (int)gp->keysound[(int)gp->bmsobj.notes[i].val].length > 0) {
+							double len = gp->keysound[(int)gp->bmsobj.notes[i].val].length;
+							if ((int)gp->keysound[(int)gp->bmsobj.notes[i].val].length < 0) len += 4294967296.0;
+							gp->song_runtime = gp->bmsobj.notes[i].realTiming + len;
+						}
+					}
+				}
+				else if ((gp->bmsobj.notes[i].op == CHANNEL_BGABASE || gp->bmsobj.notes[i].op == CHANNEL_BGALAYER)
+					&& 0 < gp->bmsobj.notes[i].val && gp->bmsobj.notes[i].val < SLOTS
+					&& gp->song_runtime < gp->bmsobj.notes[i].realTiming) {
+
+					gp->song_runtime = gp->bmsobj.notes[i].realTiming;
+				}
+			}
+			else if (0 < gp->bmsobj.notes[i].val && gp->bmsobj.notes[i].val < SLOTS) {
+				if (!gp->keysound[(int)gp->bmsobj.notes[i].val].load && gp->song_runtime < gp->bmsobj.notes[i].realTiming)
+					gp->song_runtime = gp->bmsobj.notes[i].realTiming;
+
+				if (gp->keysound[(int)gp->bmsobj.notes[i].val].length < 2000 && gp->keysound[(int)gp->bmsobj.notes[i].val].length > 0) {
+					if (gp->song_runtime < gp->bmsobj.notes[i].realTiming + gp->keysound[(int)gp->bmsobj.notes[i].val].length) {
+						gp->song_runtime = gp->bmsobj.notes[i].realTiming + gp->keysound[(int)gp->bmsobj.notes[i].val].length;
+					}
+				}
+				else {
+					double len = gp->keysound[(int)gp->bmsobj.notes[i].val].length;
+					if ((int)gp->keysound[(int)gp->bmsobj.notes[i].val].length < 0) len += 4294967296.0;
+					if (gp->song_runtime < gp->bmsobj.notes[i].realTiming + len && (int)gp->keysound[(int)gp->bmsobj.notes[i].val].length > 0) {
+						gp->song_runtime = gp->bmsobj.notes[i].realTiming + len;
+					}
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+int InitGameplay_retry(gameplay *gp, AUDIO *snd, game *g) {
+	
+	PlayerCheckAndSwap(gp);
+	gp->lastFastSlowBySide = {};
+	gp->lastHitOffsetBySide = {};
+	if (gp->replay.status != 2 && gp->replay.status == 1) {
+		AddReplayData(&gp->replay, 0, 200, gp->randomseed);
+	}
+
+	gp->bgaMixer[0] = 100;
+	std::ranges::fill(std::ranges::views::drop(gp->bgaMixer, 1), 0);
+
+	gp->lanecoverDisplayP1 = true;
+	gp->lanecoverDisplayP2 = true;
+	gp->flag_threadDoingProcGame = false;
+	gp->lanecoverDoubleclickTimeP1 = 0;
+	gp->lanecoverDoubleclickTimeP2 = 0;
+	gp->trialClear = 0;
+	gp->bpmt_start = 1;
+	gp->procGameCallCount = 0;
+
+	for (int i = 0; i < gp->bmsobj.size; i++) {
+		gp->bmsobj.notes[i].active = 0;
+	}
+	gp->bmsobj.draw_count = 0;
+	gp->bmsobj.note_count = 0;
+	gp->bmsobj.noteVal = -1;
+
+	for (int lane = 0; lane < 20; lane++) {
+		for (int i = 0; i < gp->bmsobj_note[lane].size; i++) {
+			gp->bmsobj_note[lane].notes[i].active = 0;
+		}
+		gp->bmsobj_note[lane].draw_count = 0;
+		gp->bmsobj_note[lane].note_count = 0;
+		gp->bmsobj_note[lane].noteVal = -1;
+	}
+
+	for (int i = 0; i < gp->bmsobj_line.size; i++) {
+		gp->bmsobj_line.notes[i].active = 0;
+	}
+	gp->bmsobj_line.draw_count = 1;
+	gp->bmsobj_line.note_count = 0;
+	gp->bmsobj_line.noteVal = -1;
+	gp->delayDetectedCount = 0;
+	gp->delayCheckCount = 0;
+
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		int tempTime[6], tempCount, tempTotalNote;
+		tempCount = gp->player[p].totalnotes;
+		tempTotalNote = gp->player[p].total_note;
+		auto tempDmg = gp->player[p].judge_damage;
+		memcpy(tempTime, &gp->player[p].judgetime, sizeof(tempTime));
+		gp->player[p] = PLAYERSTATUS();
+		gp->player[p].gaugeType = g->config.play.gaugeType[p];
+		gp->player[p].judge_damage = tempDmg;
+		memcpy(&gp->player[p].judgetime, tempTime, sizeof(tempTime));
+		gp->player[p].totalnotes = tempCount;
+		gp->player[p].total_note = tempTotalNote;
+		gp->statgraph[p] = GRAPHDATA();
+	}
+	gp->player[PLAYER_1].flag_active = 1;
+	gp->player[PLAYER_2].flag_active = 0;
+
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		if (gp->isCourse == 0) {
+			gp->player[p].HP[0] = 20.;
+			gp->player[p].HP[3] = 20.;
+		}
+		else {
+			gp->player[p].HP[0] = 100.;
+			gp->player[p].HP[3] = 100.;
+		}
+		gp->player[p].HP[1] = 100.;
+		gp->player[p].HP[2] = 100.;
+		gp->player[p].HP[4] = 100.;
+		gp->player[p].HP[5] = 100.;
+		gp->player[p].HP_old = gp->player[p].HP[gp->player[p].gaugeType];
+		gp->player[p].HP_print = gp->player[p].HP[gp->player[p].gaugeType];
+		for (int i = 0; i < 6; i++) {
+			gp->statgraph[p].hp[i][0] = gp->player[p].HP[i];
+		}
+	}
+
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		PauseMovieToGraph(gp->bgaHandle[i]);
+		SeekMovieToGraph(gp->bgaHandle[i], 0);
+	}
+
+	gp->BPM = gp->BPM_fix;
+	gp->bgaLayer1 = -1;
+	gp->bgaLayer2 = -1;
+	gp->layer2ChangeTime = -1;
+	gp->layer1ChangeTime = -1;
+	gp->isSpeedChanged = false;
+	gp->flag_gameinput = false;
+	gp->missLayer = (gp->bgaHandle[0] == -1)? -1 : 0;
+	gp->lastMissTime = 0;
+	gp->misslayerTime[PLAYER_1] = 0;
+	gp->misslayerTime[PLAYER_2] = 0;
+	gp->p1Score.InitJudgeQueue();
+	gp->p1Score.ResetJudgeQueue(gp->player[PLAYER_1].totalnotes * 2);
+	gp->fxChangeInRecording = false;
+
+	for (int i = 0; i < 20; i++) {
+		if(gp->bmsobj_note[i].count <= 0)
+			gp->bmsobj_note[i].noteVal = -1;
+		else
+			gp->bmsobj_note[i].noteVal = (int)gp->bmsobj_note[i].notes[0].val;
+	}
+
+	gp->nabeatsu_x = 0.0;
+	gp->nabeatsu_y = 0.0;
+	gp->bpmChangedRealtime = -1;
+	gp->bpmChangedBmstime = -1;
+	gp->earthquake_x = 0.0;
+	gp->earthquake_y = 0.0;
+	
+	for (int i = 0; i < 1000; i++) {
+		gp->rategraph[0].val[i] = 0;
+		gp->rategraph[1].val[i] = 0;
+	}
+	gp->rategraph[0].cursor = 0;
+	gp->rategraph[1].cursor = 0;
+
+	snd->param.stageBgmVolume[0] = 1.0;
+	std::ranges::fill(std::views::drop(snd->param.stageBgmVolume, 1), 1.0);
+	std::ranges::fill(snd->param.stageKeyVolume, 1.0);
+	ErrorLogAdd("リトライ用の初期化を行いました\n");
+	return 1;
+}
+
+
+double RealTimeToBMSTime(gameplay *gp, double time){
+	if (gp->bpmt_count == 0) {
+		return {};
+	}
+
+	if (time <= gp->bpmt_data[0].realtime) {
+		return gp->bpmt_data[0].converted;
+	}
+
+	for (int i = gp->bpmt_start; i < gp->bpmt_count; i++) {
+		if (gp->bpmt_data[i-1].realtime <= time && time <= gp->bpmt_data[i].realtime) {
+			if (gp->bpmt_data[i].converted == gp->bpmt_data[i-1].converted) return gp->bpmt_data[i-1].converted; //can be skipped this line. they have a same result
+			return ChangeValueByTime(gp->bpmt_data[i - 1].converted, gp->bpmt_data[i].converted, gp->bpmt_data[i - 1].realtime, gp->bpmt_data[i].realtime, time, 0);
+		}
+	}
+	return gp->bpmt_data[gp->bpmt_count - 1].converted;
+}
+
+double RealTimeToRenderTime(gameplay *gp, double time){
+	if (gp->bpmt_count == 0) {
+		return {};
+	}
+
+	if (time <= gp->bpmt_data[0].realtime) {
+		return gp->bpmt_data[0].render_converted;
+	}
+
+	for (int i = gp->bpmt_start; i < gp->bpmt_count; i++) {
+		if (gp->bpmt_data[i-1].realtime <= time && time <= gp->bpmt_data[i].realtime) {
+			if (gp->bpmt_data[i-1].realtime == gp->bpmt_data[i].realtime) {
+				return gp->bpmt_data[i].render_converted;
+			}
+			if (gp->bpmt_data[i].render_converted == gp->bpmt_data[i-1].render_converted) {
+				return gp->bpmt_data[i-1].render_converted;
+			}
+			
+			return ChangeValueByTime(gp->bpmt_data[i - 1].render_converted, gp->bpmt_data[i].render_converted, gp->bpmt_data[i - 1].realtime, gp->bpmt_data[i].realtime, time, 0);
+		}
+	}
+	return gp->bpmt_data[gp->bpmt_count - 1].render_converted;
+}
+
+int CMP_CCARRbyCount(const void *p1, const void *p2) {
+	struct_0x14* s1 = (struct_0x14*)p1;
+	struct_0x14* s2 = (struct_0x14*)p2;
+	if (s2->count == s1->count) {
+		return s1->ID - s2->ID;
+	}
+	return s2->count - s1->count;
+}
+
+int CMP_CCARRbyID(const void *p1, const void *p2) {
+	struct_0x14* s1 = (struct_0x14*)p1;
+	struct_0x14* s2 = (struct_0x14*)p2;
+	return s1->ID - s2->ID;
+}
+
+int SplitNotesToDP(LaneStruct *lane, int start, CHARTCONVERTER *cc, int end) {
+
+	for (int i = start; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+
+		if (CHANNEL_1P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) {
+			if (cc->flagSplit) {
+				lane->notes[i].op += 10;
+			}
+			cc->flagSplit ^= 1; //xor
+		}
+
+		if (i == end) break;
+	}
+	return 1;
+}
+
+int RightLaneTo2P(LaneStruct *lane, int start, CHARTCONVERTER *cc) {
+
+	int op = 0;
+	//it may work as original code. maybe
+	for (int i = 7; i >= 1; i--) {
+		if (cc->noteCountPerLane[i] > 0) {
+			op = 10 + i;
+			break;
+		}
+	}
+	
+	for (int i = start; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if (lane->notes[i].op == op) {
+			lane->notes[i].op += 10;
+		}
+	}
+
+	return 1;
+}
+
+// move 3rd note lane or 2nd lane(when only 2 lane)
+int Move3rdLaneTo2P(LaneStruct *lane, int start, CHARTCONVERTER *cc) {
+
+	int laneA = 0, laneB = 0, laneC = 0, laneD = 0;
+
+	for (int i = 0; i < 7; i++) {
+		if (cc->noteCountPerLane[i+1] > 0) {
+			if (laneA == 0) {
+				laneA = 11 + i;
+			}
+			else if (laneB == 0) {
+				laneB = 11 + i;
+			}
+			else if (laneC == 0) {
+				laneC = 11 + i;
+				laneD = 11 + i;
+			}
+		}
+	}
+
+	for (int i = start; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if ( (lane->notes[i].op == laneB && laneC < laneA) || lane->notes[i].op == laneD) {
+			lane->notes[i].op += 10;
+		}
+	}
+
+	return 1;
+}
+
+int DPsplitLane(LaneStruct *lane, int start, CHARTCONVERTER *cc) {
+
+	int laneNoteCount[8] = { 0, };
+	int laneCount = 0;
+	int totalNoteCount = 0;
+
+	for (int i = start; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if (CHANNEL_1P_NOTE_SC <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) {
+			laneNoteCount[lane->notes[i].op - 10]++; //maybe right
+		}
+		else if (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7){
+			lane->notes[i].op -= 10;
+			laneNoteCount[lane->notes[i].op - 10]++; //maybe right
+		}
+	}
+
+	
+	for (int i = 1; i < 8; i++) {
+		if (laneNoteCount[i] > 0) {
+			laneCount++;
+		}
+		totalNoteCount += laneNoteCount[i];
+	}
+
+	if (laneCount >= 4 || totalNoteCount == 1) {
+		cc->unk1442c = 1; //TODO : rename
+		SplitNotesToDP(lane, start, cc, -1);
+		cc->unk14428 = 0;
+	}
+	else if (laneCount == 2) {
+		cc->unk1442c = 2;
+		RightLaneTo2P(lane, start, cc);
+		cc->unk14428 = 0;
+	}
+	else if (laneCount == 3) {
+		Move3rdLaneTo2P(lane, start, cc);
+	}
+
+	return 1;
+}
+
+int DPsplit(LaneStruct *lane, int start, CHARTCONVERTER *cc) {
+
+	int laneNoteCount[8] = { 0, };
+	int laneCount = 0;
+
+	for (int i = start; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if ((CHANNEL_1P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) || (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7)) {
+			if (cc->arr3[(int)lane->notes[i].val].soundLoadID == cc->arr2[0].ID) {
+				if (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7) {
+					laneNoteCount[lane->notes[i].op - 20]++;
+				}
+				else {
+					laneNoteCount[lane->notes[i].op - 10]++;
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < 8; i++) {
+		if (laneNoteCount[i] > 0) {
+			laneCount++;
+		}
+	}
+
+	if (laneCount > 3) {
+		for (int i = start; i < lane->count; i++) {
+			if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+			if ((CHANNEL_1P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) || (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7)) {
+				if (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7)
+					lane->notes[i].op -= 10;
+
+				if (cc->arr3[(int)lane->notes[i].val].soundLoadID == cc->arr2[0].ID) {
+					if (cc->flagSplit) {
+						lane->notes[i].op += 10;
+					}
+					cc->flagSplit ^= 1;
+				}
+			}
+		}
+	}
+
+	return 1;
+}
+
+void MakeExtraChart(gameplay *gp, CHARTCONVERTER *cc) {  //test completed
+
+	int notecount = 0;
+	double endtime{};
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+		if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+			notecount++;
+			endtime = gp->bmsobj.notes[i].bmsTiming;
+		}
+
+		if (gp->keymode >= 10) {
+			if (gp->bmsobj.notes[i].op == CHANNEL_1P_NOTE_SC) {
+				gp->bmsobj.notes[i].op = CHANNEL_BGM;
+			}
+			if (gp->bmsobj.notes[i].op == CHANNEL_2P_NOTE_SC) {
+				gp->bmsobj.notes[i].op = CHANNEL_BGM;
+			}
+		}
+	}
+
+	if (gp->extramode_level == 0) {
+		if (notecount >= 1200) gp->extramode_level = 2;
+		else if (notecount >= 1000) gp->extramode_level = 1;
+		else gp->extramode_level = 0;
+	}
+	else if (gp->extramode_level == 1) {
+		if (notecount >= 1000) gp->extramode_level = 2;
+		else gp->extramode_level = 1;
+	}
+	else if (gp->extramode_level == 2) {
+		gp->extramode_level = 2;
+	}
+
+	//find most used lane of sound
+	int laneOfSound[SINGLESLOTS];
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		int maxLaneNotes = 0;
+		int Lane[20] = { 0, };
+		laneOfSound[i] = -1;
+
+		for (int j = 0; j < gp->bmsobj.count; j++) {
+			if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_2P_NOTE_END) {
+				if ((int)gp->bmsobj.notes[j].val == i) {
+					Lane[gp->bmsobj.notes[j].op-10]++;
+				}
+			}
+		}
+		
+		for (int j = 0; j < 20; j++) {
+			if (maxLaneNotes < Lane[j]) {
+				cc->arr3[i].field4_0x10 = j;
+				laneOfSound[i] = j;
+				cc->arr1[cc->arr3[i].soundLoadID].field4_0x10++;
+				maxLaneNotes = Lane[j];
+			}
+		}
+	}
+	bool flagShuffle = 0;
+
+	//set default lane for non-used sound with previous sound lane
+	for (int i = 1; i < SINGLESLOTS; i++) {
+		if (laneOfSound[i] == -1 && cc->arr1[cc->arr3[i].soundLoadID].field4_0x10 > 0) {
+			
+			int lane = laneOfSound[i-1];
+			if (lane >= 1) {
+				if (gp->keymode == 7 || gp->keymode == 14) {
+					switch (lane) {
+						case 1:
+						case 6: //TOFIX : 6 to 1?
+							laneOfSound[i] = 3;
+							break;
+						case 2:
+							laneOfSound[i] = 4;
+							break;
+						case 3:
+							laneOfSound[i] = 5;
+							break;
+						case 4:
+							laneOfSound[i] = 6;
+							break;
+						case 5:
+							laneOfSound[i] = 7;
+							break;
+						case 7:
+							laneOfSound[i] = 2;
+							break;
+					}
+				}
+				else if (gp->keymode == 5 || gp->keymode == 10) {
+					switch (lane) {
+						case 1:
+							laneOfSound[i] = 3;
+							break;
+						case 2:
+							laneOfSound[i] = 4;
+							break;
+						case 3:
+							laneOfSound[i] = 5;
+							break;
+						case 4:
+							laneOfSound[i] = 1;
+							break;
+						case 5:
+							laneOfSound[i] = 2;
+							break;
+					}
+				}
+				else if (gp->keymode == 9) {
+					switch (lane) {
+						case 1:
+							laneOfSound[i] = 3;
+							break;
+						case 2:
+							laneOfSound[i] = 5;
+							break;
+						case 3:
+							laneOfSound[i] = 7;
+							break;
+						case 4:
+							laneOfSound[i] = 9;
+							break;
+						case 5:
+							laneOfSound[i] = 2;
+							break;
+						case 6:
+							laneOfSound[i] = 4;
+							break;
+						case 7:
+							laneOfSound[i] = 6;
+							break;
+						case 8:
+							laneOfSound[i] = 8;
+							break;
+						case 9:
+							laneOfSound[i] = 1;
+							break;
+					}
+				}
+			}
+			else {
+				laneOfSound[i] = 7;
+			}
+		}
+	}
+
+	
+	int laneA[20] = { 0, };
+	int cur = 0;
+
+	int mingap = 0;
+	if (gp->BPM_fix > 0) {
+		if (gp->extramode_level == 0) {
+			mingap = 60000.0 / gp->BPM_fix;
+		}
+		if (gp->extramode_level == 1) {
+			mingap = 45000.0 / gp->BPM_fix;
+		}
+		if (gp->extramode_level == 2) {
+			mingap = 30000.0 / gp->BPM_fix;
+		}
+
+		if (mingap < 125) mingap = 125;
+	}
+
+	double lastRealTiming = 0.0;
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+		if (gp->bmsobj.notes[i].realTiming == lastRealTiming) {
+			if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+				laneA[gp->bmsobj.notes[i].op-10] = 2;
+			}
+			if (gp->bmsobj.notes[i].op == CHANNEL_BPM || gp->bmsobj.notes[i].op == CHANNEL_EXBPM) {
+				mingap = 30000.0 / gp->bmsobj.notes[i].val;
+				if (mingap < 125) mingap = 125;
+			}
+		}
+		else {
+			
+			for (int j = cur-1; j >= 0; j--) {
+				if (mingap <= lastRealTiming - gp->bmsobj.notes[j].realTiming) break;
+
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_2P_NOTE_END && laneA[gp->bmsobj.notes[j].op - 10] == 0) {
+					laneA[gp->bmsobj.notes[j].op - 10] = 1;
+				}
+			}
+
+			for (int j = i; j < gp->bmsobj.count; j++) {
+				if (mingap <= gp->bmsobj.notes[j].realTiming - lastRealTiming) break;
+
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_2P_NOTE_END && laneA[gp->bmsobj.notes[j].op - 10] == 0) {
+					laneA[gp->bmsobj.notes[j].op - 10] = 1;
+				}
+			}
+
+			for (int j = cur; j <= i-1; j++) {
+
+				if (gp->bmsobj.notes[j].op == CHANNEL_BGM && gp->bmsobj.notes[j].bmsTiming >= 0) {
+					
+					int newLane = laneOfSound[(int)gp->bmsobj.notes[j].val];
+
+					if (0 <= newLane && newLane < 20) {
+
+						if (gp->keymode == 10 || gp->keymode == 14) { //TODO : need test at DP
+							if (flagShuffle == 0) {
+								newLane += newLane / 10 * (-10) + 10;
+							}
+							else {
+								newLane += newLane / (-10) * 10;
+							}
+							flagShuffle ^= 1;
+						}
+
+						if (laneA[newLane] == 0 && (newLane%10 <= gp->keymode % 10)) {
+							laneA[newLane] = 2;
+							gp->bmsobj.notes[j].op = newLane + 10;
+						}
+						else if (newLane != 0 && newLane != 10) {
+							int shift = 1;
+							if ((int)gp->bmsobj.notes[j].val % 2 == 0) {
+								shift = -1;
+							}
+							if (gp->keymode < 10) {
+								for (int k = 1; k < gp->keymode+1; k++) {
+									int next = newLane + k*shift;
+									int prev = newLane - k*shift;
+
+									if (1 <= next && next <= gp->keymode && laneA[next] == 0) {
+										laneA[next] = 2;
+										gp->bmsobj.notes[j].op = next + 10;
+										break;
+									}
+									if (1 <= prev && prev <= gp->keymode && laneA[prev] == 0) {
+										laneA[prev] = 2;
+										gp->bmsobj.notes[j].op = prev + 10;
+										break;
+									}
+								}
+							}
+							else {
+								for (int k = 1; k < gp->keymode / 2 + 1; k++) {
+									int next = newLane + k * shift;
+									int prev = newLane - k * shift;
+
+									if (1 <= next % 10 && next % 10 <= gp->keymode / 2 && laneA[next] == 0) {
+										laneA[next] = 2;
+										gp->bmsobj.notes[j].op = next + 10;
+										break;
+									}
+									if (1 <= prev % 10 && prev % 10 <= gp->keymode / 2 && laneA[prev] == 0) {
+										laneA[prev] = 2;
+										gp->bmsobj.notes[j].op = prev + 10;
+										break;
+									}
+
+									if (newLane <= 10) newLane += 10;
+									else newLane -= 10;
+
+									next = newLane + k * shift;
+									prev = newLane - k * shift;
+
+									if (1 <= next % 10 && next % 10 <= gp->keymode / 2 && laneA[next] == 0) {
+										laneA[next] = 2;
+										gp->bmsobj.notes[j].op = next + 10;
+										break;
+									}
+									if (1 <= prev % 10 && prev % 10 <= gp->keymode / 2 && laneA[prev] == 0) {
+										laneA[prev] = 2;
+										gp->bmsobj.notes[j].op = prev + 10;
+										break;
+									}
+								}
+							}
+						}
+					}
+
+				}
+			}
+
+			for (int j = 0; j < 20; j++) laneA[j] = 0;
+			lastRealTiming = gp->bmsobj.notes[i].realTiming;
+			cur = i;
+		}
+
+		if (gp->bmsobj.notes[i].bmsTiming > endtime) break;
+	}
+
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+}
+
+void DPtoSP(gameplay *gp) { //test completed
+
+	int mingap;
+	char laneA[10], laneB[10];
+
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+	
+	if (gp->BPM_fix <= 0.0 || (int)(30000.0 / gp->BPM_fix) < 125)
+		mingap = 125;
+	else
+		mingap = (30000.0 / gp->BPM_fix);
+
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+
+		int op = gp->bmsobj.notes[i].op;
+		if (op == CHANNEL_BPM || op == CHANNEL_EXBPM) {
+			mingap = (int)(30000.0 / gp->bmsobj.notes[i].val);
+			if (mingap < 125) mingap = 125;
+		}
+		else if (CHANNEL_2P_NOTE_SC <= op && op <= CHANNEL_2P_NOTE_END) {
+
+			int newop = op - 10;
+			bool fSameLane = 0, fSameTime = 0;
+			std::ranges::fill(laneA, 0);
+
+			for (int prev = i - 1; prev >= 0; prev--) {
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[prev].op && gp->bmsobj.notes[prev].op <= CHANNEL_1P_NOTE_END) {
+					laneA[gp->bmsobj.notes[prev].op - 10] = 1;
+					if (gp->bmsobj.notes[prev].bmsTiming == gp->bmsobj.notes[i].bmsTiming) {
+						laneB[gp->bmsobj.notes[prev].op - 10] = 1;
+					}
+				}
+				if (gp->bmsobj.notes[prev].op == newop) {
+					fSameLane = 1;
+					if (gp->bmsobj.notes[prev].bmsTiming == gp->bmsobj.notes[i].bmsTiming) {
+						fSameTime = 1;
+					}
+				}
+				if (gp->bmsobj.notes[i].realTiming - gp->bmsobj.notes[prev].realTiming >= mingap) break;
+			}
+			
+
+			for (int next = i+1; next < gp->bmsobj.count; next++) {
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[next].op && gp->bmsobj.notes[next].op <= CHANNEL_1P_NOTE_END) {
+					laneA[gp->bmsobj.notes[next].op - 10] = 1;
+					if (gp->bmsobj.notes[next].bmsTiming == gp->bmsobj.notes[i].bmsTiming) {
+						laneB[gp->bmsobj.notes[next].op - 10] = 1;
+					}
+				}
+				if (gp->bmsobj.notes[next].op == newop) {
+					fSameLane = 1;
+					if (gp->bmsobj.notes[next].bmsTiming == gp->bmsobj.notes[i].bmsTiming) {
+						fSameTime = 1;
+					}
+				}
+				if (gp->bmsobj.notes[next].realTiming - gp->bmsobj.notes[i].realTiming >= mingap) break;
+			}
+
+			if (op == 20) {
+				if (fSameTime == 0) {
+					gp->bmsobj.notes[i].op = gp->bmsobj.notes[i].op - 10;
+				}
+			}
+			else if (fSameLane == 0) {
+				gp->bmsobj.notes[i].op = gp->bmsobj.notes[i].op - 10;
+			}
+			else {
+				for (int j = 1; j < 8; j++) {
+					if (11 <= newop + j && newop + j <= gp->keymode / 2 + 10){ //don't combine these IFs. notes will be different
+						if (laneA[newop + j - 10] == 0) {
+							gp->bmsobj.notes[i].op = newop + j;
+							ErrorLogFmtAdd("移動後チャンネル%d\n", newop + j);
+							break;
+						}
+					}
+					else if (11 <= newop - j && newop - j <= gp->keymode / 2 + 10 && laneA[newop - j - 10] == 0) {
+						gp->bmsobj.notes[i].op = newop - j;
+						ErrorLogFmtAdd("移動後チャンネル%d\n", newop - j);
+						break;
+					}
+				}
+			}
+			
+			if (CHANNEL_2P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+				gp->bmsobj.notes[i].op = 1;
+				ErrorLogFmtAdd("しまっちゃうノート\n");
+			}
+		}
+	}
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+}
+
+void PMStoSP(gameplay *gp) { //test&fix completed
+
+	int mingap;
+	char laneA[10], laneB[10], laneC[10];
+	int newLane, measureLaneCount;
+	int emptyLane{}, emptyLaneL{}, emptyLaneR{};
+	int countLaneA;
+	int left, right;
+
+	//if (gp->BPM_fix > 0.0) {
+	//	mingap = 30000.0 / gp->BPM_fix;
+	//	if (mingap < 125) mingap = 125;
+	//}
+	//else mingap = 125;
+
+	if (gp->BPM_fix <= 0.0 || (int)(30000.0 / gp->BPM_fix) < 125)
+		mingap = 125;
+	else
+		mingap = (30000.0 / gp->BPM_fix);
+
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+	int prev = 0; //prevMeasureStart
+	int measure = 0;
+	std::ranges::fill(laneA, 0);
+	left = 9;
+	right = 1;
+	measureLaneCount = 0;
+
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+
+		int op = gp->bmsobj.notes[i].op;
+		if (op == 3 || op == 8) {
+			mingap = (int)(30000.0 / gp->bmsobj.notes[i].val);
+			if (mingap < 125) mingap = 125;
+		}
+		else if (op == 2 && measureLaneCount > 0) {
+			measure++;
+
+			countLaneA = 0;
+			for (int j = 1; j <= 9; j++) {
+				if (laneA[j]) countLaneA++;
+			}
+
+			if (right <= 7) {
+				ErrorLogFmtAdd("%d:なにもしない\n", measure);
+			}
+			else if (right == 8 && left >= 2) {
+				for (int j = prev; j < i; j++) {
+					if (CHANNEL_PMS_NOTE_2 <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+						gp->bmsobj.notes[j].op--;
+					}
+				}
+				ErrorLogFmtAdd("%d:左シフト１\n", measure);
+			}
+			else if (right == 9 && left >= 3) {
+				for (int j = prev; j < i; j++) {
+					if (CHANNEL_PMS_NOTE_3 <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+						gp->bmsobj.notes[j].op -= 2;
+					}
+				}
+				ErrorLogFmtAdd("%d:左シフト2\n", measure);
+			}
+			else if (right == 9 && left == 2 && countLaneA <= 7) {
+				ErrorLogFmtAdd("%d:左シフトしてレーンつめる 左%d 右%d\n", measure, 2, 9);
+				for (int j = 2; j < 9; j++) {
+					if (laneA[j] == 0) {
+						emptyLane = j;
+						break;
+					}
+				}
+				ErrorLogFmtAdd("つめるレーンは%d\n", emptyLane);
+				for (int j = prev; j < i; j++) {
+					if (emptyLane + 10 < gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+						gp->bmsobj.notes[j].op--;
+					}
+				}
+				ErrorLogFmtAdd("さらに全体左シフト\n");
+				for (int j = prev; j < i; j++) {
+					if (CHANNEL_PMS_NOTE_1 <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+						gp->bmsobj.notes[j].op--;
+					}
+				}
+			}
+			else if (left == 1 && countLaneA <= 7) {
+				ErrorLogFmtAdd("%d:レーンつめる 左%d 右%d\n", measure, 1, right);
+
+				if (right == 8) {
+					for (int j = 1; j < 9; j++) {
+						if (laneA[j] == 0) {
+							emptyLane = j;
+							break;
+						}
+					}
+					ErrorLogFmtAdd("つめるレーンは%d\n", emptyLane);
+					for (int j = prev; j < i; j++) {
+						if (CHANNEL_PMS_NOTE_1 - 1 + emptyLane < gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+							gp->bmsobj.notes[j].op--;
+						}
+					}
+				}
+				else {
+					for (int j = 1; j < 9; j++) {
+						if (laneA[j] == 0) {
+							emptyLaneL = j;
+							break;
+						}
+					}
+					for (int j = 9; j > 1; j--) {
+						if (laneA[j] == 0) {
+							emptyLaneR = j;
+							break;
+						}
+					}
+					ErrorLogFmtAdd("つめるレーンは%dと%d\n", emptyLaneL, emptyLaneR);
+					for (int j = prev; j < i; j++) {
+						if (CHANNEL_PMS_NOTE_1 - 1 + emptyLaneL < gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+							gp->bmsobj.notes[j].op--;
+						}
+					}
+					for (int j = prev; j < i; j++) {
+						if (CHANNEL_PMS_NOTE_1 - 2 + emptyLaneR < gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+							gp->bmsobj.notes[j].op--;
+						}
+					}
+				}
+			}
+			else {
+				ErrorLogFmtAdd("%d:89移動\n", measure);
+				if (left == 2) {
+					for (int j = prev; j < i; j++) {
+						if (CHANNEL_PMS_NOTE_2 <= gp->bmsobj.notes[j].op && gp->bmsobj.notes[j].op <= CHANNEL_PMS_NOTE_9) {
+							gp->bmsobj.notes[j].op--;
+						}
+					}
+				}
+
+				for (int j = prev; j < i; j++) {
+					left = gp->bmsobj.notes[j].op;
+					if (left == CHANNEL_PMS_NOTE_8 || left == CHANNEL_PMS_NOTE_9) {
+						bool fSameLane = 0;
+						std::ranges::fill(laneB, 0);
+						newLane = 14 + (left - 18);
+
+						for (int x = j - 1; x >= 0; x--) {
+							if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[x].op && gp->bmsobj.notes[x].op <= CHANNEL_1P_NOTE_END) {
+								laneB[gp->bmsobj.notes[x].op - 10] = 1;
+								if (gp->bmsobj.notes[x].bmsTiming == gp->bmsobj.notes[j].bmsTiming) {
+									laneC[gp->bmsobj.notes[x].op - 10] = 1;
+								}
+							}
+							if (gp->bmsobj.notes[x].op == newLane) {
+								fSameLane = 1;
+							}
+							if (gp->bmsobj.notes[j].realTiming - gp->bmsobj.notes[x].realTiming >= mingap) break;
+						}
+
+
+						for (int next = j + 1; next < gp->bmsobj.count; next++) {
+							if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[next].op && gp->bmsobj.notes[next].op <= CHANNEL_1P_NOTE_END) {
+								laneB[gp->bmsobj.notes[next].op - 10] = 1;
+								if (gp->bmsobj.notes[next].bmsTiming == gp->bmsobj.notes[j].bmsTiming) {
+									laneC[gp->bmsobj.notes[next].op - 10] = 1;
+								}
+							}
+							if (gp->bmsobj.notes[next].op == newLane) {
+								fSameLane = 1;
+							}
+							if (gp->bmsobj.notes[next].realTiming - gp->bmsobj.notes[j].realTiming >= mingap) break;
+						}
+
+						if (fSameLane) {
+							fSameLane = 0;
+							//looks weird, but really doing this
+							for (int k = 1; k < 5; k++) {
+								int L = newLane + k * 2;
+								if (11 <= L && L <= 17) {
+									if (laneB[L - 10] == 0) {
+										gp->bmsobj.notes[j].op = L;
+										ErrorLogFmtAdd("移動後チャンネル%d\n", L);
+										fSameLane = 1;
+										break;
+									}
+
+								}
+								else {
+									L = newLane - k * 2;
+									if (11 <= L && L <= 17 && laneB[L - 10] == 0) {
+										gp->bmsobj.notes[j].op = L;
+										ErrorLogFmtAdd("移動後チャンネル%d\n", L);
+										fSameLane = 1;
+										break;
+									}
+								}
+							}
+							if (!fSameLane) {
+								for (int k = 1; k < 5; k++) {
+									int L = newLane + k * 2 - 1;
+									if (11 <= L && L <= 17) {
+										if (laneB[L - 10] == 0) {
+											gp->bmsobj.notes[j].op = L;
+											ErrorLogFmtAdd("移動後チャンネル%d\n", L);
+											break;
+										}
+									}
+									else {
+										L = newLane - k * 2 + 1;
+										if (11 <= L && L <= 17 && laneB[L - 10] == 0) {
+											gp->bmsobj.notes[j].op = L;
+											ErrorLogFmtAdd("移動後チャンネル%d\n", L);
+											break;
+										}
+									}
+								}
+							}
+						}
+						else {
+							gp->bmsobj.notes[j].op = newLane;
+						}
+
+						if (gp->bmsobj.notes[j].op == CHANNEL_PMS_NOTE_8 || gp->bmsobj.notes[j].op == CHANNEL_PMS_NOTE_9) {
+							gp->bmsobj.notes[j].op = (gp->bmsobj.notes[j].mine <= 0) ? 1 : -1;
+							ErrorLogFmtAdd("しまっちゃうノート\n");
+						}
+					}
+				}
+			}
+			measureLaneCount = 0;
+			prev = i;
+			left = 9;
+			right = 1;
+			std::ranges::fill(laneA, 0);
+		}
+		else if (op == 2 && measureLaneCount == 0) {
+			measure++;
+
+			left = 9;
+			right = 1;
+			prev = i;
+			std::ranges::fill(laneA, 0);
+		}
+		else if (11 <= op && op <= 19) {
+			laneA[op - 10] = 1;
+			measureLaneCount++;
+			if (op - 10 < left) {
+				left = op - 10;
+			}
+			if (right < op - 10) {
+				right = op - 10;
+			}
+		}
+	}
+
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+	measure = 0;
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+		if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH)
+			measure++;
+
+		if(gp->bmsobj.notes[i].op == CHANNEL_PMS_NOTE_8 || gp->bmsobj.notes[i].op == CHANNEL_PMS_NOTE_9)
+			ErrorLogFmtAdd("###########################################################\n移動できてな いノート 小節%d チャンネル%d\n", measure, gp->bmsobj.notes[i].op);
+
+		if(gp->bmsobj.notes[i].op == CHANNEL_1P_NOTE_SC)
+			ErrorLogFmtAdd("###########################################################\n空気を読まな いスクラッチ 小節%d チャンネル%d\n", measure, 10);
+	}
+
+}
+
+int DPsplitLaneScratch(LaneStruct *lane, int start, CHARTCONVERTER *cc) {
+
+	int nNotesP1 = 0;
+	int nNotesP2 = 0;
+	int nNotesSC = 0;
+
+	for (int i = start; i < lane->count; i++) {
+		int op = lane->notes[i].op;
+		
+		if (op == 2) break;
+
+		if (11 <= op && op <= 17) {
+			nNotesP1++;
+		}
+		else if (21 <= op && op <= 27) {
+			nNotesP2++;
+		}
+		else if (op == 10) {
+			nNotesSC++;
+		}
+	}
+
+	if ((nNotesP1 > 0 && nNotesP2 == 0) || (nNotesP1 == 0 && nNotesP2 > 0)) {
+		DPsplitLane(lane, start, cc);
+	}
+
+	double realTimeLastNote = -1.0;
+	int scratchNoteID = -1, oldScratchNoteID = -1;
+	int LaneA[20];
+
+	for (int i = start; true; i++) {
+
+		if (lane->notes[i].realTiming > realTimeLastNote) {
+			realTimeLastNote = lane->notes[i].realTiming;
+			if (scratchNoteID != -1) {
+
+				if (cc->RealTimingSplitScratch + 500 < lane->notes[scratchNoteID].realTiming && (nNotesSC <= 3 || cc->RealTimingSplitScratch == -1))
+					cc->flagSplitScratch ^= 1;
+
+				cc->RealTimingSplitScratch = lane->notes[scratchNoteID].realTiming;
+
+
+				if (cc->flagSplitScratch == 0) {
+					if (cc->assist[PLAYER_1] == 0) {
+						for (int j = scratchNoteID; j > 0; j--) {
+							if (lane->notes[j].op == CHANNEL_MEASURE_LENGTH) break;
+							if (cc->RealTimingSplitScratch - lane->notes[j].realTiming >= 200) break;
+							if (CHANNEL_1P_NOTE_2 <= lane->notes[j].op && lane->notes[j].op <= CHANNEL_1P_NOTE_7) lane->notes[j].op += 10;
+						}
+
+						for (int j = scratchNoteID; j < lane->count; j++) {
+							if (lane->notes[j].op == CHANNEL_MEASURE_LENGTH) break;
+							if (lane->notes[j].realTiming - cc->RealTimingSplitScratch >= 200) break;
+							if (CHANNEL_1P_NOTE_2 <= lane->notes[j].op && lane->notes[j].op <= CHANNEL_1P_NOTE_7) lane->notes[j].op += 10;
+						}
+					}
+				}
+				else {
+					lane->notes[scratchNoteID].op += 10;
+					if (cc->assist[PLAYER_2] == 0) {
+						for (int j = scratchNoteID; j > 0; j--) {
+							if (lane->notes[j].op == CHANNEL_MEASURE_LENGTH) break;
+							if (cc->RealTimingSplitScratch - lane->notes[j].realTiming >= 200) break;
+							if (CHANNEL_2P_NOTE_1 <= lane->notes[j].op && lane->notes[j].op <= CHANNEL_2P_NOTE_6) lane->notes[j].op -= 10;
+						}
+
+						for (int j = scratchNoteID; j < lane->count; j++) {
+							if (lane->notes[j].op == CHANNEL_MEASURE_LENGTH) break;
+							if (lane->notes[j].realTiming - cc->RealTimingSplitScratch >= 200) break;
+							if (CHANNEL_2P_NOTE_1 <= lane->notes[j].op && lane->notes[j].op <= CHANNEL_2P_NOTE_6) lane->notes[j].op -= 10;
+						}
+					}
+				}
+				scratchNoteID = -1;
+				oldScratchNoteID = -1;
+			}
+		}
+
+		if (i >= lane->count) break;
+
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+
+		if (lane->notes[i].op == CHANNEL_1P_NOTE_SC) {
+			scratchNoteID = i;
+			oldScratchNoteID = i;
+		}
+		if ( (CHANNEL_1P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) || (CHANNEL_2P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_2P_NOTE_7)) {
+			LaneA[lane->notes[i].op - 10] = i;
+			scratchNoteID = oldScratchNoteID;
+		}
+	}
+	cc->RealTimingSplitScratch = -1;
+	return 1;
+}
+
+int SPtoDP(LaneStruct *lane, int baseNoteID, CHARTCONVERTER *cc) {
+
+	for (int i = 0; i < 8; i++) cc->noteCountPerLane[i] = 0;
+	cc->laneCount = 0;
+
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		cc->arr1[i].count = 0;
+		cc->arr1[i].side = -1;
+		cc->arr3[i].field3_0xc = -1;
+	}
+	for (int i = baseNoteID + 1; i < lane->count; i++) {
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if (CHANNEL_1P_NOTE_SC <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) {
+			cc->noteCountPerLane[lane->notes[i].op - 10]++;
+			if (lane->notes[i].op != CHANNEL_1P_NOTE_SC) {
+				cc->arr1[cc->arr3[(int)lane->notes[i].val].soundLoadID].count++;
+				cc->arr1[cc->arr3[(int)lane->notes[i].val].soundLoadID].side = 0;
+			}
+		}
+	}
+
+	for (int i = 1; i <= 7; i++) {
+		if (cc->noteCountPerLane[i]) cc->laneCount++;
+	}
+
+	qsort(&cc->arr1, SINGLESLOTS, sizeof(struct_0x14), CMP_CCARRbyCount);
+
+	bool fA = false, fB = false;
+	if (cc->arr2[0].count && cc->arr1[0].count&& ((cc->arr1[0].ID == cc->arr2[0].ID && (cc->arr1[1].ID == cc->arr2[1].ID || cc->arr1[1].ID == cc->arr2[2].ID || cc->arr1[2].ID == cc->arr2[1].ID || cc->arr1[2].ID == cc->arr2[2].ID)) 
+													|| (cc->arr1[0].ID == cc->arr2[1].ID && cc->arr1[1].ID == cc->arr2[0].ID) 
+													|| (cc->arr1[1].ID == cc->arr2[0].ID && cc->arr2[1].ID == 0))) {
+		cc->unk14428++;
+		fB = true;
+
+		if (cc->unk14428 == 4){
+			fA = true;
+			cc->unk14428 = 0;
+		}
+	}
+	else {
+		cc->unk14428 = 0;
+	}
+
+	qsort(&cc->arr2, SINGLESLOTS,sizeof(struct_0x14), CMP_CCARRbyID);
+	if (fA) {
+		for (int i = 0; i < SINGLESLOTS; i++) {
+			if (cc->arr2[i].side == 0) cc->arr2[i].side = 1;
+			else if (cc->arr2[i].side == 1) cc->arr2[i].side = 0;
+		}
+	}
+
+	int unk8 = 0, unk10 = 0;
+	int unkArr[2] = { 0,0 };
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		int unk9 = cc->arr1[i].count;
+		if (cc->arr1[i].count > 0) {
+			if (fB && cc->arr2[cc->arr1[i].ID].side != -1 && i == 0) {
+				unkArr[cc->arr2[cc->arr1[0].ID].side] += cc->arr1[0].count; //really 0. not i
+				cc->arr1[0].side = cc->arr2[cc->arr1[i].ID].side;
+				unk8 = unkArr[1];
+				unk10 = unkArr[0];
+			}
+			else if (unk10 == 0 && unk8 == 0) {
+				if (cc->flagSplitUnknown == 0) {
+					cc->arr1[i].side = 0;
+					unkArr[0] = cc->arr1[i].count;
+					unk10 = cc->arr1[i].count;
+				}
+				else {
+					cc->arr1[i].side = 1;
+					unkArr[1] = cc->arr1[i].count;
+					unk8 = cc->arr1[i].count;
+					unk9 = unk10;
+					unk10 = unk9;
+				}
+				cc->flagSplitUnknown ^= 1;
+				
+			}
+			else if (unk8 < unk10) {
+				unk8 += cc->arr1[i].count;
+				cc->arr1[i].side = 1;
+				unkArr[1] = unk8;
+			}
+			else {
+				unk10 += cc->arr1[i].count;
+				cc->arr1[i].side = 0;
+				unkArr[0] = unk10;
+			}
+		}
+	}
+	
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		cc->arr2[i].count = cc->arr1[i].count;
+		cc->arr2[i].ID = cc->arr1[i].ID;
+		cc->arr2[i].side = cc->arr1[i].side;
+	}
+
+	qsort(&cc->arr1, SINGLESLOTS, sizeof(struct_0x14), CMP_CCARRbyID);
+	for (int i = baseNoteID + 1; i < lane->count; i++) {
+
+		if (lane->notes[i].op == CHANNEL_MEASURE_LENGTH) break;
+		if (CHANNEL_1P_NOTE_1 <= lane->notes[i].op && lane->notes[i].op <= CHANNEL_1P_NOTE_7) {
+			int t = cc->arr1[cc->arr3[(int)lane->notes[i].val].soundLoadID].side;
+			
+			if (t == 0) {}
+			else if (t == 1) {
+				lane->notes[i].op += 10;
+			}
+			else if (t == -1) {
+				lane->notes[i].op += 100;
+				ErrorLogFmtAdd("-1エラー\n");
+			}
+		}
+
+	}
+
+	if (cc->arr2[0].count >= 17 
+		|| (cc->arr2[0].count >= 16 && cc->playlevel <= 10) 
+		|| (cc->arr2[0].count >= 14 && cc->playlevel <= 9) 
+		|| (cc->arr2[0].count >= 12 && cc->playlevel <= 8)) {
+		DPsplit(lane, baseNoteID + 1, cc);
+	}
+	DPsplitLaneScratch(lane, baseNoteID + 1, cc);
+	return 1;
+}
+
+//TODO : rename variables
+//TOFIX : freq +12 autoplay endtime doesn't match (#STOP?)
+//TOFIX : nonstop mix retry volume issue
+int ParseBmsFile(gameplay *gp, CSTR filename, AUDIO *aud, ConfigStruct* cfg, BMSMETA *meta, int bgaFlag, int scratchSide) {
+	ErrorLogFmtAdd("ParseBmsFile(%s)\n", filename.c_str());
+
+	std::unordered_map<double, int> notesPerBpm{};
+	double avgBPM_bpmsum{};
+	float prevStageLastNoteTime{};
+	int avgBPM_notes{};
+	int noteRandomTable[2][10]{};
+	FILE* hFile{};
+
+	int randomVal{};
+	bool ifOn{};
+	int channel{};
+
+	double endtime{};
+	double nowBPM{};
+
+	int rank{};
+
+	int stages{};
+
+	LaneStruct tmpLane[10]{};
+	double BPMslot[SINGLESLOTS]{}, STOPslot[SINGLESLOTS]{}, SCROLLslot[SINGLESLOTS]{};
+	int bmsobj_stageFirst{};
+	double oldSpeedMultiplier{};
+		
+	char mapAdded[2][10]{};
+	double prevStageTime = -1.0;
+	double meaLength{};
+
+
+	if (cfg->play.random[PLAYER_1] == OPTION_RANDOM_CONVERGE && cfg->play.assist[PLAYER_1] == 1) {
+		cfg->play.assist[PLAYER_1] = 0;
+	}
+	if (cfg->play.random[PLAYER_2] == OPTION_RANDOM_CONVERGE && cfg->play.assist[PLAYER_2] == 1) {
+		cfg->play.assist[PLAYER_2] = 0;
+	}
+	gp->keymode = meta->keymode;
+	if (cfg->play.assist[PLAYER_1] == 1) {
+		gp->bmsobj_note[0].autoplay = 1;
+	}
+	if (cfg->play.assist[PLAYER_2] == 1) {
+		gp->bmsobj_note[10].autoplay = 1;
+	}
+	gp->freqSpeedMultiplier = 1.0;
+
+	if (aud->param.pitch_on && (aud->param.pitch_type == 0 || aud->param.pitch_type == 2)) {
+		if (aud->param.pitch_amount > 0) {
+			for (int i = aud->param.pitch_amount; i; i--) gp->freqSpeedMultiplier *= 1.059463094359; //0x3ff0f38f92d97431 same as origianl
+		}
+		else if (aud->param.pitch_amount < 0) {
+			for (int i = -aud->param.pitch_amount; i; i--) gp->freqSpeedMultiplier /= 1.059463094359;
+		}
+	}
+
+	oldSpeedMultiplier = gp->freqSpeedMultiplier;
+
+	//TOFIX: 0 is a valid seed. Note that LR2IR also returned randomseed=0 on missing ghosts.
+	if (gp->randomseed != 0) {
+		ErrorLogFmtAdd("RANDSEEDを引き継ぎます\n");
+	}
+	else if (gp->replay.status != 2) {
+		gp->randomseed = 0xFFFF;
+		if (cfg->play.random[PLAYER_1] == OPTION_RANDOM_RANDOM && gp->forceRandomLayout != 0) {
+			ErrorLogFmtAdd("Force random layout %d for keymode %d\n", gp->forceRandomLayout, gp->keymode);
+			switch (gp->keymode) {
+			case 5: gp->randomseed = GetSeed5K(gp->forceRandomLayout); break;
+			case 7: gp->randomseed = GetSeed7K(gp->forceRandomLayout); break;
+			default: ErrorLogAdd("Unsupported keymode for forcing random layout\n"); break;
+			}
+			if (gp->randomseed == 0xFFFF) {
+				ErrorLogAdd("Impossible random layout\n");
+			}
+		}
+		if (gp->randomseed == 0xFFFF) {
+			gp->randomseed = GetRand(0x7ffe);
+		}
+	}
+	if (gp->replay.status == 1) {
+		AddReplayData(&gp->replay, 0, 200, static_cast<short>(gp->randomseed));
+	}
+	ErrorLogFmtAdd("RANDOMSEEDは%dです。\n", gp->randomseed);
+	SRand(gp->randomseed);
+
+	for (int i = 0; i < SINGLESLOTS; i++) BPMslot[i] = -1.0;
+	for (int i = 0; i < SINGLESLOTS; i++) STOPslot[i] = -1.0;
+	for (int i = 0; i < SINGLESLOTS; i++) SCROLLslot[i] = -1.0;
+
+	int isDSC = 0, isPMS = 0;
+	bool is5key = 0, is7key = 0, is9key = 0;
+
+	if (cfg->select.control) {
+		if (meta->keymode == 5) is5key = 1;
+		if (meta->keymode == 7) is7key = 1;
+	}
+
+	rank = 2;
+	ifOn = 1;
+	randomVal = -1;
+
+	std::ranges::fill(aud->param.stagePitch, 1.0);
+	aud->param.stageBgmVolume[0] = 1.0;
+	std::ranges::fill(std::views::drop(aud->param.stageBgmVolume, 1), 0.0);
+	std::ranges::fill(aud->param.stageKeyVolume, 1.0);
+	std::ranges::fill(gp->fadeinSOUNDstart, -1);
+	std::ranges::fill(gp->fadeinSOUNDend, -1);
+	std::ranges::fill(gp->fadeoutSOUNDstart, -1);
+	std::ranges::fill(gp->fadeoutSOUNDend, -1);
+	int total[2] = { 0, 0 }; 
+	int noteCount[2] = { 0, 0 };
+	CHARTCONVERTER cc;
+	cc.assist[PLAYER_1] = cfg->play.assist[PLAYER_1];
+	cc.assist[PLAYER_2] = cfg->play.assist[PLAYER_2];
+	cc.arr1count = 0;
+	cc.unk14428 = 0;
+	cc.unk14430 = 0;
+	cc.flagSplit = 0;
+	cc.playlevel = 0;
+	cc.flagSplitScratch = 0;
+	cc.unk14438 = -1;
+	cc.RealTimingSplitScratch = -1;
+	cc.flagSplitUnknown = 0;
+	for (int i = 0; i < SINGLESLOTS; i++) {
+		cc.arr1[i].ID = i;
+		cc.arr1[i].filenameHead.fillzero();
+		cc.arr1[i].count = 0;
+		cc.arr1[i].side = -1;
+		cc.arr1[i].field4_0x10 = 0;
+
+		cc.arr2[i].ID = i;
+		cc.arr2[i].filenameHead.fillzero();
+		cc.arr2[i].count = 0;
+		cc.arr2[i].side = -1;
+
+		cc.arr3[i].soundLoadID = 0;
+		cc.arr3[i].field1_0x4 = 0;
+		cc.arr3[i].field2_0x8 = i;
+		cc.arr3[i].field3_0xc = -1;
+	}
+	uint lastMeasure = 0;
+	uint b2lastMeasure = 0;
+	if (gp->courseStageCount <= 0) gp->courseStageCount = 1;
+	if (gp->courseStageCount > 5) gp->courseStageCount = 5;
+	avgBPM_notes = 0;
+	double bpmt_realtime = 0.0;
+	double bpmt_bmstime = 0.0;
+	double bpmt_rendertime = 0.0;
+	double bpmt_scMultiplier = 1.0;
+	double prevNoteBmstime = 0.0;
+	nowBPM = 0.0;
+	endtime = 0.0;
+	avgBPM_bpmsum = 0.0;
+	float lastNoteTime = 0.0;
+	prevStageTime = -1.0;
+	if (gp->bpmt_buffersize == 0) {
+		gp->bpmt_buffersize = 100;
+		gp->bpmt_data = (BPMtiming*)malloc(sizeof(BPMtiming) * 100);
+	}
+	gp->bpmt_count = 0;
+	memset(gp->bpmt_data, 0, gp->bpmt_buffersize * sizeof(BPMtiming));
+	if (gp->courseType != 1) {
+		gp->courseConnection[0] = 0;
+		gp->courseConnection[1] = 0;
+		gp->courseConnection[2] = 0;
+		gp->courseConnection[3] = 0;
+		gp->courseConnection[4] = 0;
+	}
+	stages = gp->courseStageCount;
+	if (gp->courseType != 1 || gp->isCourse == 0) {
+		stages = 1;
+	}
+	endtime = 0.0;
+
+	int key = 7;
+	if (meta->keymode == 5 || meta->keymode == 10) key = 5;
+	else if (meta->keymode == 9) key = 9;
+
+	//TOFIX : in nonstop mode(courseType==1), gp->courseConnection[stage - 1] doesn't check if stage >= 1. It can affects at #BPM
+	/* start of stage loop */
+	for (int stage = 0; stage < stages; stage++) {
+		
+		bool isBase62 = false;
+
+		int oldbpmtCount = gp->bpmt_count;
+		float firstNoteTime = -1.0;
+		bmsobj_stageFirst = gp->bmsobj.count;
+		prevStageLastNoteTime = (int)lastNoteTime;
+		lastNoteTime = lastMeasure;
+		gp->freqSpeedMultiplier = oldSpeedMultiplier;
+		int stageStartMeasure = lastMeasure;
+		if (gp->isCourse) {
+			if (gp->courseType == 1) {
+				filename = gp->courseFilepath[stage];
+				if (gp->courseConnection[stage - 1] == 4 || gp->courseConnection[stage - 1] == 5) { //BLANK1, BLANK2
+					gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = lastMeasure;
+					gp->bmsobj.notes[gp->bmsobj.count].val = stage;
+					gp->bmsobj.notes[gp->bmsobj.count].op = 1002;
+					gp->bmsobj.count++;
+					if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+				}
+				gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = lastMeasure;
+				gp->bmsobj.notes[gp->bmsobj.count].val = stage;
+				gp->bmsobj.notes[gp->bmsobj.count].op = 1003;
+				gp->bmsobj.count++;
+				if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+			}
+			else {
+				filename = gp->courseFilepath[gp->courseStageNow];
+				ErrorLogFmtAdd("エキスパ:ステージ=%d、フルパス=%s\n", gp->courseStageNow, filename.body);
+			}
+		}
+		hFile = fopen(filename.body, "r");
+		if (hFile == NULL) {
+			ErrorLogAdd("BMSを開けません。\n");
+			return -1;
+		}
+		const auto textCodepage = DetectTextCodepage(hFile, BmsTextCodepage());
+		if (isPMS = filename.right(4).lower().isSame(".pms"); isPMS) {
+			is9key = 1;
+		}
+		else if (meta->keymode == 9) {
+			is7key = 1;
+		}
+		CSTR directory = filename.getDirectory();
+		double measureLength[5000];
+		for (int i = 0; i < 5000; i++) {
+			measureLength[i] = 1.0;
+		}
+		int lnobj = -1;
+
+		/* parse BMS file */
+		CSTR fBuf(102401);
+		CSTR fBufOrg(102401);
+		char* pFbuf;
+		pFbuf = fBuf.outstr();
+		for (pFbuf = fgets(pFbuf, 102400, hFile); pFbuf; pFbuf = fgets(pFbuf, 102400, hFile)) {
+			fBuf = DecodeTextLine(pFbuf, textCodepage).c_str();
+			pFbuf = fBuf.outstr();
+			fBuf.trimWhiteSpace();
+			DealWhiteSpace(&fBuf);
+			if (*fBuf.atPos(0) != '#') {
+				*fBuf.atPos(0) = '\0';
+				continue;
+			}
+			pFbuf = fBuf.outstr();
+			fBufOrg = fBuf;
+			fBuf.upper();
+
+			if (fBuf.left(7).isSame("#RANDOM")) {
+				randomVal = GetRand(atol(fBuf.right(fBuf.length() - 8)) - 1);
+				randomVal++;
+				ifOn = 0;
+			}
+			else if (fBuf.left(6).isSame("#ENDIF")) {
+				ifOn = 1;
+			}
+			else if (fBuf.left(3).isSame("#IF")) {
+				ifOn = (atol(fBuf.right(fBuf.length() - 4)) == randomVal);
+			}
+
+			if (!ifOn) {
+				*fBuf.atPos(0) = '\0';
+				continue;
+			}
+
+
+			if (isdigit(*fBuf.atPos(1)) && isdigit(*fBuf.atPos(2)) && isdigit(*fBuf.atPos(3)) && (isdigit(*fBuf.atPos(5)) || (*fBuf.atPos(4) == 'S' && *fBuf.atPos(5) == 'C'))) {
+				uint thisMeasure = atol(fBuf.getSliced(1, 3)) + stageStartMeasure;
+				
+				if (*fBuf.atPos(4) == 'S' && *fBuf.atPos(5) == 'C') {
+					channel = CHANNEL_SCROLL;
+				} else {
+					channel = *fBuf.atPos(5) - 0x30 + HEXcharToInt('0', *fBuf.atPos(4)) * 10;
+				}
+				if (channel == CHANNEL_BGABASE || channel == CHANNEL_BGALAYER) gp->soundonly = 0;
+				channel = channelConvert(channel, isDSC, isPMS);
+
+				if (gp->lastMeasure < thisMeasure) {
+					gp->lastMeasure = thisMeasure;
+				}
+
+				if (channel == CHANNEL_MEASURE_LENGTH) { //Length of #xxx 	(1 corresponds to 4/4 meter) // specify integer or decimal fraction
+					if (atof(fBuf.getSliced(7, fBuf.length() - 7)) > 0.0 && thisMeasure <= 4999) {
+						measureLength[thisMeasure] = atof(fBuf.getSliced(7, fBuf.length() - 7));
+					}
+				}
+				else if (channel == CHANNEL_BPM) { //Change of BPM 	BPM 1 ? [01-FF] ? BPM 255
+					int div = (fBuf.length() - 7) / 2;
+					for (int i = 0; i < div; i++) {
+						int ii = i * 2 + 7;
+						if (HEXcharToInt(*fBuf.atPos(ii), *fBuf.atPos(ii + 1))) {
+							double notepos = i / (double)div;
+							gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = (int)thisMeasure + notepos;
+							gp->bmsobj.notes[gp->bmsobj.count].val = HEXcharToInt(*fBuf.atPos(ii), *fBuf.atPos(ii + 1)) * gp->freqSpeedMultiplier;
+							gp->bmsobj.notes[gp->bmsobj.count].op = CHANNEL_BPM;
+							gp->bmsobj.count++;
+							if (gp->bmsobj.count == gp->bmsobj.size) {
+								ExpandNoteBuffer(&gp->bmsobj, 1000);
+							}
+						}
+					}
+				}
+				else if (channel > 0) {
+					int div = (fBuf.length() - 7) / 2;
+					for (int i = 0; i < div; i++) {
+						int ii = i * 2 + 7;
+						if (Base36or62ToInt(*fBufOrg.atPos(ii), *fBufOrg.atPos(ii + 1),isBase62)) {
+							double notepos = i / (double)div;
+							gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = (int)thisMeasure + notepos;
+							if (isVisibleNote(channel)) {
+								if (lastMeasure <= thisMeasure) {
+									lastMeasure = thisMeasure;
+								}
+							}
+
+							if (isVisibleNote(channel) && firstNoteTime == -1.0) {
+								firstNoteTime = gp->bmsobj.notes[gp->bmsobj.count].bmsTiming;
+							}
+							else if (gp->bmsobj.notes[gp->bmsobj.count].bmsTiming < firstNoteTime) { //visible no check?
+								firstNoteTime = gp->bmsobj.notes[gp->bmsobj.count].bmsTiming;
+							}
+
+							if (isVisibleNote(channel) && lastNoteTime < gp->bmsobj.notes[gp->bmsobj.count].bmsTiming) {
+								lastNoteTime = gp->bmsobj.notes[gp->bmsobj.count].bmsTiming;
+							}
+
+							if (channel == CHANNEL_EXBPM || channel == CHANNEL_STOP || channel == CHANNEL_SCROLL) {
+								gp->bmsobj.notes[gp->bmsobj.count].val = Base36or62ToInt(*fBufOrg.atPos(ii), *fBufOrg.atPos(ii + 1), isBase62);
+							}
+							else {
+								gp->bmsobj.notes[gp->bmsobj.count].val = Base36or62ToInt(*fBufOrg.atPos(ii), *fBufOrg.atPos(ii + 1), isBase62) + stage * SINGLESLOTS;
+							}
+							gp->bmsobj.notes[gp->bmsobj.count].op = channel;
+							gp->bmsobj.count++;
+							if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+
+							if (
+					(
+					 (CHANNEL_1P_NOTE_SC <= channel && channel <= CHANNEL_1P_NOTE_END)
+						|| (CHANNEL_1P_HIDDEN_SC <= channel && channel <= CHANNEL_1P_HIDDEN_END)
+						|| (CHANNEL_1P_LN_SC <= channel && channel <= CHANNEL_1P_LN_END)
+					)
+								&& (meta->keymode < 10 && ((cfg->play.battle == OPTION_BATTLE_BATTLE && (cfg->play.random[PLAYER_1] != cfg->play.random[PLAYER_2])) || cfg->play.battle == OPTION_BATTLE_DBATTLE))) {
+								gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = (int)thisMeasure + notepos;
+								gp->bmsobj.notes[gp->bmsobj.count].val = Base36or62ToInt(*fBufOrg.atPos(ii), *fBufOrg.atPos(ii + 1), isBase62) + stage * SINGLESLOTS;
+								gp->bmsobj.notes[gp->bmsobj.count].op = channel + 10;
+								gp->bmsobj.count++;
+								if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+							}
+						}
+					}
+				}
+				*fBuf.atPos(0) = '\0';
+				isPMS = is9key;
+			}
+			else if (fBuf.left(5).isSame("#BPM ")) {
+				double val = atof(fBuf.right(fBuf.length() - 5));
+				if (gp->BPM_fix <= 0.0) {
+					gp->BPM_fix = val * gp->freqSpeedMultiplier;
+				}
+				if (stage > 0 && (gp->courseConnection[stage - 1] == 1 || gp->courseConnection[stage - 1] == 3)) { //FIT
+					gp->freqSpeedMultiplier *= nowBPM / val;
+					aud->param.stagePitch[stage] = nowBPM / val;
+					ErrorLogFmtAdd("BPMを前の曲に合わせました。 stagepitch %d\n", nowBPM / val * 100.0);
+				}
+				nowBPM = val * gp->freqSpeedMultiplier;
+				if (stage > 0) {
+					gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = (double)stageStartMeasure;
+					gp->bmsobj.notes[gp->bmsobj.count].val = val * gp->freqSpeedMultiplier;
+					gp->bmsobj.notes[gp->bmsobj.count].op = CHANNEL_BPM;
+					gp->bmsobj.count++;
+				}
+				if (stage == 0) {
+					gp->bpmt_data[gp->bpmt_count].BPM = gp->BPM_fix;
+					gp->bpmt_data[gp->bpmt_count].converted = 0.0;
+					gp->bpmt_data[gp->bpmt_count].render_converted = 0.0;
+					gp->bpmt_data[gp->bpmt_count].realtime = 0.0;
+					gp->maxBPM = gp->BPM_fix;
+					gp->minBPM = gp->BPM_fix;
+				}
+				else {
+					gp->bpmt_data[gp->bpmt_count].BPM = gp->BPM;
+					gp->bpmt_data[gp->bpmt_count].converted = (double)stageStartMeasure;
+					gp->bpmt_data[gp->bpmt_count].render_converted = (double)stageStartMeasure;
+					gp->bpmt_data[gp->bpmt_count].realtime = 0.0;
+				}
+				gp->bpmt_count++; //TOFIX: possibility of writing over allocated memory
+				if (gp->bmsobj.count == gp->bmsobj.size) {
+					ExpandNoteBuffer(&gp->bmsobj, 1000);
+				}
+			}
+			else if (fBuf.left(7).isSame("#FP/DSC")) {
+				isDSC = 1; //TOFIX: isDSC and isPMS are not interlocked
+				is9key = 1;
+			}
+			else if (fBuf.left(7).isSame("#LNOBJ ")) {
+				lnobj = Base36or62ToInt(*fBufOrg.atPos(7), *fBufOrg.atPos(8), isBase62) + stage * SINGLESLOTS;
+			}
+			else if (fBuf.left(7).isSame("#TOTAL ")) {
+				total[1] = total[0] = atol(fBuf.right(fBuf.length() - 7));
+			}
+			else if (fBuf.left(8).isSame("#BASE 62")) {
+				isBase62 = true;
+			}
+			else if (fBuf.left(6).isSame("#RANK ")) {
+				if (stage == 0) {
+					rank = atol(fBuf.right(fBuf.length() - 6));
+				}
+				else {
+					gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = stageStartMeasure;
+					gp->bmsobj.notes[gp->bmsobj.count].val = atof(fBuf.right(fBuf.length() - 6));
+					gp->bmsobj.notes[gp->bmsobj.count].op = 1001;
+					gp->bmsobj.count++;
+					if (gp->bmsobj.count == gp->bmsobj.size) {
+						ExpandNoteBuffer(&gp->bmsobj, 1000);
+					}
+				}
+			}
+			else if (fBuf.left(4).isSame("#BPM")) {
+				int param1;
+				double param2;
+				param1 = Base36or62ToInt(*fBufOrg.atPos(4), *fBufOrg.atPos(5),isBase62);
+				param2 = atof(fBuf.right(fBuf.length() - 7));
+				if (1 <= param1 && param1 < SINGLESLOTS) {
+					BPMslot[param1] = param2 * gp->freqSpeedMultiplier;
+				}
+			}
+			else if (fBuf.left(5).isSame("#STOP")) {
+				int param1, param2;
+				param1 = Base36or62ToInt(*fBufOrg.atPos(5), *fBufOrg.atPos(6),isBase62);
+				param2 = atol(fBuf.right(fBuf.length() - 8));
+				if (1 <= param1 && param1 < SINGLESLOTS && param2 > 0) {
+					STOPslot[param1] = param2;
+				}
+			}
+			else if (fBuf.left(7).isSame("#SCROLL")) {
+				int param1;
+				double param2;
+				param1 = Base36or62ToInt(*fBufOrg.atPos(7), *fBufOrg.atPos(8),isBase62);
+				param2 = atof(fBuf.right(fBuf.length() - 10));
+				if (1 <= param1 && param1 < SINGLESLOTS) {
+					SCROLLslot[param1] = param2;
+				}
+			}
+			else if (fBuf.left(4).isSame("#WAV") && cfg->play.autojudge != 2) {
+				int param1;
+				param1 = Base36or62ToInt(*fBufOrg.atPos(4), *fBufOrg.atPos(5),isBase62);
+				gp->loadObject_total++;
+				if (param1 < SINGLESLOTS) {
+					if (gp->isCourse == 0 && stage * SINGLESLOTS + param1 < SINGLESLOTS) {
+						CSTR filename = fBuf.right(fBuf.length() - 7);
+						filename.nullAtPos(2);
+						for (int i = 0; true; i++) {
+							if (i == cc.arr1count) {
+								cc.arr1[i].filenameHead = filename;
+								cc.arr3[stage * SINGLESLOTS + param1].soundLoadID = i;
+								cc.arr1count++;
+								break;
+							}
+							if (filename.isSame(cc.arr1[i].filenameHead)) {
+								cc.arr3[stage * SINGLESLOTS + param1].soundLoadID = i;
+								break;
+							}
+						}
+					}
+					fBuf = fBufOrg;
+					*fBufOrg.atPos(0) = 0;
+					int wavNum = Base36or62ToInt(*fBufOrg.atPos(4), *fBufOrg.atPos(5),isBase62);
+					if (wavNum < SINGLESLOTS) {
+						fBuf.lastCut(fBuf.length() - 7);
+						FindAltSound(fBuf, directory, &gp->keysound_filename[stage * SINGLESLOTS + wavNum]);
+					}
+				}
+			}
+			else if (fBuf.left(4).isSame("#BMP") && (cfg->play.bga == 3 || cfg->play.bga == 1 || (cfg->play.bga == 2 && gp->isAutoplay == 1) || gp->replay.status == 2) && cfg->play.autojudge != 2) {
+				int param1;
+				gp->loadObject_total++;
+				param1 = Base36or62ToInt(*fBufOrg.atPos(4), *fBufOrg.atPos(5),isBase62);
+				fBuf = fBufOrg;
+				*fBufOrg.atPos(0) = 0;
+				if (param1 < SINGLESLOTS) {
+					fBuf.lastCut(fBuf.length() - 7);
+					FindAltImage(fBuf, directory, &gp->BMP_filename[stage* SINGLESLOTS + param1]);
+				}
+			}
+			else {
+				GetStringBodyInt(&fBuf, "#PLAYLEVEL", &cc.playlevel);
+			}
+			*fBuf.atPos(0) = '\0';
+		}
+		fclose(hFile);
+		/* parse BMS file end*/
+
+		if (gp->soundonly && gp->isCourse == 0) {
+			gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = stageStartMeasure;
+			gp->bmsobj.notes[gp->bmsobj.count].val = 1295.0;
+			gp->bmsobj.notes[gp->bmsobj.count].op = CHANNEL_BGABASE;
+			gp->bmsobj.count++;
+			if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+		}
+		for (int i = stageStartMeasure; i < stageStartMeasure + 1000; i++) {
+			gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = i;
+			gp->bmsobj.notes[gp->bmsobj.count].val = measureLength[i];
+			gp->bmsobj.notes[gp->bmsobj.count].op = CHANNEL_MEASURE_LENGTH;
+			gp->bmsobj.count++;
+			if (gp->bmsobj.count == gp->bmsobj.size) ExpandNoteBuffer(&gp->bmsobj, 1000);
+		}
+
+		if (bmsobj_stageFirst < gp->bmsobj.count) {
+			qsort(&gp->bmsobj.notes[bmsobj_stageFirst], gp->bmsobj.count - bmsobj_stageFirst, sizeof(NoteStruct), CMP_NotesByBmsTiming);
+		}
+
+		for (int i = 0; i < gp->bmsobj.count && gp->bmsobj.notes[i].bmsTiming == 0; i++) {
+			if ((CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op < CHANNEL_2P_NOTE_END) || (CHANNEL_1P_HIDDEN_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op < CHANNEL_2P_HIDDEN_END)) { //TOFIX: <CHANNEL_2P_HIDDEN_END instead of <=?
+				for (int j = 0; j < gp->bmsobj.count; j++) {
+					gp->bmsobj.notes[j].bmsTiming += 1.0;
+				}
+				break;
+			}
+		}
+		double meaMultiplier = measureLength[stageStartMeasure];
+		meaLength = measureLength[stageStartMeasure];
+		double stopRealtime = 0.0;
+		double stopVal = 0.0;
+		double scrollSpeed = 1.0;
+
+		double unk23484_bmstime = -1.0;
+		double unk2346c_realtime = -1.0;
+		double unk_rendertime = -1.0;
+		double _bPrevNoteTime = -1.0;
+
+		double b2bmsTime = -1.0;
+		double b2realTime = -1.0;
+		double b2prevNoteTime = -1.0;
+
+		int intArr2[30];
+		for (int i = 0; i < 30; i++) intArr2[i] = -1;
+
+		int bpmt_count = -1;
+		int unk23538_objNum = -1;
+		int b2bpmt_last = -1;
+
+		int objNumLastNote = 0;
+		for (int i = gp->bmsobj.count - 1; bmsobj_stageFirst <= i; i--) {
+			if ((CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) || (CHANNEL_1P_LN_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_LN_END)) {
+				objNumLastNote = i;
+				break;//i = 0;
+			}
+		}
+		int objNumLastMeasureLate = -1;
+		for (int i = objNumLastNote; bmsobj_stageFirst <= i; i--) {
+			if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH) {
+				objNumLastMeasureLate = i;
+				break; //i = 0;
+			}
+		}
+		int objNumLastMeasureEarly = -1;
+		for (int i = objNumLastNote; i < gp->bmsobj.count; i++) {
+			if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH) {
+				objNumLastMeasureEarly = i;
+				break; //i = gp->bmsobj.count;
+			}
+		}
+		int objNumLastMeasure;
+		if (gp->bmsobj.notes[objNumLastMeasureEarly].bmsTiming - gp->bmsobj.notes[objNumLastNote].bmsTiming < gp->bmsobj.notes[objNumLastNote].bmsTiming - gp->bmsobj.notes[objNumLastMeasureLate].bmsTiming) {
+			lastNoteTime = gp->bmsobj.notes[objNumLastMeasureEarly].bmsTiming;
+			objNumLastMeasure = objNumLastMeasureEarly;
+		}
+		else {
+			lastNoteTime = gp->bmsobj.notes[objNumLastMeasureLate].bmsTiming;
+			objNumLastMeasure = objNumLastMeasureLate;
+		}
+
+		int objNumFirstNote = bmsobj_stageFirst;
+		for (int i = bmsobj_stageFirst; i < gp->bmsobj.count; i++) {
+			if ((CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) || (CHANNEL_1P_LN_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_LN_END)) {
+				objNumFirstNote = i;
+				break;//i = 0;
+			}
+		}
+		int objNumFirstMeasureLate = -1;
+		for (int i = objNumFirstNote; bmsobj_stageFirst <= i; i--) {
+			if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH) {
+				objNumFirstMeasureLate = i;
+				break; //i = 0;
+			}
+		}
+		int objNumFirstMeasureEarly = -1;
+		for (int i = objNumFirstNote; i < gp->bmsobj.count; i++) {
+			if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH) {
+				objNumFirstMeasureEarly = i;
+				break; //i = gp->bmsobj.count;
+			}
+		}
+		int objNumFirstMeasure = objNumFirstMeasureLate;
+		if (gp->bmsobj.notes[objNumFirstMeasureEarly].bmsTiming - gp->bmsobj.notes[objNumFirstNote].bmsTiming < gp->bmsobj.notes[objNumFirstNote].bmsTiming - gp->bmsobj.notes[objNumFirstMeasureLate].bmsTiming) {
+			objNumFirstMeasure = objNumFirstMeasureEarly;
+		}
+
+
+		/* start of setting notes on time*/
+		for (int i = bmsobj_stageFirst; i < gp->bmsobj.count; i++) {
+			if (stage != 0 && gp->bmsobj.notes[i].bmsTiming <= 0) {
+				ErrorLogFmtAdd("エラーノートを発見しました ch=%d\n", gp->bmsobj.notes[i].op);
+			}
+
+			if (gp->bmsobj.notes[i].bmsTiming != prevNoteBmstime) {
+				if (stopRealtime) {
+					stopRealtime = (stopVal / 192.0) * (240000.0 / nowBPM); // STOP * 1/192 bar real millisec (240BPM 1bar = 1sec)
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+							gp->bpmt_data[i].BPM = 0;
+							gp->bpmt_data[i].converted = 0;
+							gp->bpmt_data[i].render_converted = 0;
+							gp->bpmt_data[i].BPM = 0;
+						}
+					}
+					gp->bpmt_data[gp->bpmt_count].BPM = 0;
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+							gp->bpmt_data[i].BPM = 0;
+							gp->bpmt_data[i].converted = 0;
+							gp->bpmt_data[i].render_converted = 0;
+							gp->bpmt_data[i].BPM = 0;
+						}
+					}
+					gp->bpmt_data[gp->bpmt_count].BPM = nowBPM;
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime + stopRealtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+				}
+				
+				double addRealtime = (240.0 / nowBPM * meaLength * (gp->bmsobj.notes[i].bmsTiming - prevNoteBmstime) * 1000.0);
+				bpmt_realtime += addRealtime + stopRealtime;
+				
+				if (cfg->play.hsfix == OPTION_HSFIX_CONSTANT || (gp->isCourse && gp->courseType == 1)) {
+					double delta = addRealtime * 1.2;
+					bpmt_bmstime += delta;
+					bpmt_rendertime += delta;
+					prevNoteBmstime = gp->bmsobj.notes[i].bmsTiming;
+					stopRealtime = 0.0;
+				}
+				else {
+					double delta = meaLength * 1920.0 * (gp->bmsobj.notes[i].bmsTiming - prevNoteBmstime);
+					bpmt_bmstime += delta;
+					bpmt_rendertime += delta * bpmt_scMultiplier;
+					prevNoteBmstime = gp->bmsobj.notes[i].bmsTiming;
+					stopRealtime = 0.0;
+				}
+			}
+
+			if (objNumLastMeasure == i) {
+				lastMeasure = gp->bmsobj.notes[i].bmsTiming;
+				unk23484_bmstime = bpmt_bmstime;
+				unk2346c_realtime = bpmt_realtime;
+				_bPrevNoteTime = gp->bmsobj.notes[i].bmsTiming;
+				bpmt_count = gp->bpmt_count - 1;
+				ErrorLogFmtAdd("リミット%d , %d\n", (int)bpmt_bmstime, (int)bpmt_realtime);
+			}
+			else if (unk23538_objNum == -1 && 0 < (int)unk23484_bmstime && gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH && unk2346c_realtime + 5000.0 < bpmt_realtime && gp->courseConnection[stage] == 5) { //BALNK2
+				b2lastMeasure = gp->bmsobj.notes[i].bmsTiming;
+				b2bmsTime = bpmt_bmstime;
+				b2realTime = bpmt_realtime;
+				b2prevNoteTime = gp->bmsobj.notes[i].bmsTiming;
+				b2bpmt_last = gp->bpmt_count - 1;
+				unk23538_objNum = i;
+				ErrorLogFmtAdd("リミット2 %d , %d\n", (int)bpmt_bmstime, (int)bpmt_realtime);
+			}
+
+			gp->bmsobj.notes[i].bmsTiming = bpmt_bmstime;
+			gp->bmsobj.notes[i].renderTiming = bpmt_rendertime;
+			gp->bmsobj.notes[i].realTiming = bpmt_realtime;
+			gp->bmsobj.notes[i].active = 0;
+			if (CHANNEL_1P_LN_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_LN_END) {
+				if (intArr2[gp->bmsobj.notes[i].op - 40] == -1) {
+					gp->bmsobj.notes[i].op -= 40;
+					intArr2[gp->bmsobj.notes[i].op] = i;
+				}
+				else {
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op - 40]].bmsTiming_ln = bpmt_bmstime;
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op - 40]].renderTiming_ln = bpmt_rendertime;
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op - 40]].realTiming_ln = bpmt_realtime;
+					intArr2[gp->bmsobj.notes[i].op - 40] = -1;
+				}
+			}
+			else if (lnobj != -1 && (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END)) {
+				if (gp->bmsobj.notes[i].val != lnobj || intArr2[gp->bmsobj.notes[i].op] == -1) { //CHECK: haha
+					intArr2[gp->bmsobj.notes[i].op] = i;
+				}
+				else {
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op]].bmsTiming_ln = bpmt_bmstime;
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op]].renderTiming_ln = bpmt_rendertime;
+					gp->bmsobj.notes[intArr2[gp->bmsobj.notes[i].op]].realTiming_ln = bpmt_realtime;
+					intArr2[gp->bmsobj.notes[i].op] = -1;
+					gp->bmsobj.notes[i].op = gp->bmsobj.notes[i].op + 40;
+				}
+			}
+
+			if (CHANNEL_1P_MINE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op < CHANNEL_2P_MINE_END) {//mine
+				gp->bmsobj.notes[i].op -= 120;
+				gp->bmsobj.notes[i].mine = gp->bmsobj.notes[i].val;
+				gp->bmsobj.notes[i].val = 0.0;
+			}
+
+			switch (gp->bmsobj.notes[i].op) {
+				case 2: //length of measure
+					if (cfg->play.m_softlanding == 0) {
+						scrollSpeed = 1.0;
+					}
+					else {
+						if (GetRand(1) == 0) {
+							scrollSpeed = (GetRand(100) + 100.0) / 100.0;
+						}
+						else {
+							scrollSpeed = 100.0 / (GetRand(100) + 100.0);
+						}
+					}
+					meaMultiplier = gp->bmsobj.notes[i].val;
+					meaLength = meaMultiplier * scrollSpeed;
+					nowBPM = nowBPM * scrollSpeed;
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+							gp->bpmt_data[i].BPM = 0;
+							gp->bpmt_data[i].converted = 0;
+							gp->bpmt_data[i].render_converted = 0;
+							gp->bpmt_data[i].BPM = 0;
+						}
+					}
+					gp->bpmt_data[gp->bpmt_count].BPM = nowBPM;
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+					break;
+
+				case 3: //change of BPM
+					if (gp->bmsobj.notes[i].val > 0) {
+						nowBPM = scrollSpeed * gp->bmsobj.notes[i].val;
+
+						if (gp->bpmt_count == gp->bpmt_buffersize) {
+							gp->bpmt_buffersize += 100;
+							gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+							assert(gp->bpmt_data != nullptr);
+							for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+								gp->bpmt_data[i].BPM = 0;
+								gp->bpmt_data[i].converted = 0;
+								gp->bpmt_data[i].render_converted = 0;
+								gp->bpmt_data[i].BPM = 0;
+							}
+						}
+						gp->bpmt_data[gp->bpmt_count].BPM = nowBPM;
+						gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+						gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+						gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+						gp->bpmt_count++;
+					}
+					break;
+
+				case 8: {
+					double BPM = BPMslot[(int)gp->bmsobj.notes[i].val];
+					if (BPM < 0.0) {
+						BPM *= -1.0;
+					}
+					nowBPM = BPM* scrollSpeed;
+					gp->bmsobj.notes[i].val = BPMslot[(int)gp->bmsobj.notes[i].val];
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+							gp->bpmt_data[i].BPM = 0;
+							gp->bpmt_data[i].converted = 0;
+							gp->bpmt_data[i].render_converted = 0;
+							gp->bpmt_data[i].BPM = 0;
+						}
+					}
+					gp->bpmt_data[gp->bpmt_count].BPM = nowBPM;
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+					break;
+				}
+				case 9:
+					stopVal = STOPslot[(int)gp->bmsobj.notes[i].val];
+					stopRealtime = stopVal / 192.0 * 240000.0 / nowBPM;
+					gp->bmsobj.notes[i].val = (240000.0 / nowBPM) * STOPslot[(int)gp->bmsobj.notes[i].val] / 192.0;
+					break;
+				case CHANNEL_SCROLL: {
+					bpmt_scMultiplier = SCROLLslot[(int)gp->bmsobj.notes[i].val];
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int j = gp->bpmt_buffersize - 100; j < gp->bpmt_buffersize; j++) {
+							gp->bpmt_data[j].BPM = 0;
+							gp->bpmt_data[j].converted = 0;
+							gp->bpmt_data[j].render_converted = 0;
+							gp->bpmt_data[j].realtime = 0;
+						}
+					}
+					
+					gp->bpmt_data[gp->bpmt_count].BPM = nowBPM; 
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+					break;
+				}
+			}
+
+			if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op < CHANNEL_2P_NOTE_END) {
+				notesPerBpm[nowBPM] += 1;
+				avgBPM_notes += 1;
+				avgBPM_bpmsum += nowBPM;
+				if (gp->maxBPM < nowBPM) gp->maxBPM = nowBPM;
+				if (gp->minBPM > nowBPM) gp->minBPM = nowBPM;
+
+				if (cfg->play.m_softlanding == 2) {
+					if (GetRand(1) == 0) {
+						scrollSpeed = (GetRand(100) + 100.0) / 100.0;
+					}
+					else {
+						scrollSpeed = 100.0 / (GetRand(100) + 100.0);
+					}
+
+					meaLength = meaMultiplier * scrollSpeed;
+					nowBPM = scrollSpeed * meaLength;
+
+					if (gp->bpmt_count == gp->bpmt_buffersize) {
+						gp->bpmt_buffersize += 100;
+						gp->bpmt_data = (BPMtiming*)realloc(gp->bpmt_data, gp->bpmt_buffersize * sizeof(BPMtiming));
+						assert(gp->bpmt_data != nullptr);
+						for (int i = gp->bpmt_buffersize - 100; i < gp->bpmt_buffersize; i++) {
+							gp->bpmt_data[i].BPM = 0;
+							gp->bpmt_data[i].converted = 0;
+							gp->bpmt_data[i].render_converted = 0;
+							gp->bpmt_data[i].BPM = 0;
+						}
+					}
+					gp->bpmt_data[gp->bpmt_count].BPM = nowBPM;
+					gp->bpmt_data[gp->bpmt_count].realtime = bpmt_realtime;
+					gp->bpmt_data[gp->bpmt_count].converted = bpmt_bmstime;
+					gp->bpmt_data[gp->bpmt_count].render_converted = bpmt_rendertime;
+					gp->bpmt_count++;
+				}
+			}
+		}
+		/* end of setting notes on time*/
+
+		//DEBUG : dump bmsobj
+		//dump(meta->title,gp->bmsobj.notes,sizeof(NoteStruct) * gp->bmsobj.count);
+
+		if (gp->courseConnection[stage] == 5 && unk23538_objNum != -1) { //BLANK2
+			unk23484_bmstime = b2bmsTime;
+			objNumLastMeasure = unk23538_objNum;
+			unk2346c_realtime = b2realTime;
+			bpmt_count = b2bpmt_last;
+			lastMeasure = b2lastMeasure;
+			_bPrevNoteTime = b2prevNoteTime;
+		}
+
+		if (cfg->play.battle == OPTION_BATTLE_SP2DP) {
+			if (cfg->play.battle == OPTION_BATTLE_SP2DP && meta->keymode == 9 && gp->isCourse == 0 && gp->isPreviewLoad == 0) {
+				ErrorLogFmtAdd("PMSTOSPマージを行います");
+				for (int cur = 0; cur < gp->bmsobj.count; cur++) {
+					gp->bmsobj.notes[cur].bmsTiming_ln = gp->bmsobj.notes[cur].bmsTiming;
+					gp->bmsobj.notes[cur].renderTiming_ln = gp->bmsobj.notes[cur].renderTiming;
+					gp->bmsobj.notes[cur].realTiming_ln = gp->bmsobj.notes[cur].realTiming;
+				}
+				PMStoSP(gp);
+			}
+			if (cfg->play.battle == OPTION_BATTLE_SP2DP && (meta->keymode == 10 || meta->keymode == 14) && gp->isCourse == 0 && gp->isPreviewLoad == 0) { //TOFIX: cfg->play.battle==OPTION_BATTLE_SP2DP duplicated
+				ErrorLogFmtAdd("DPTOSPマージを行います");
+				for (int cur = 0; cur < gp->bmsobj.count; cur++) {
+					gp->bmsobj.notes[cur].bmsTiming_ln = gp->bmsobj.notes[cur].bmsTiming;
+					gp->bmsobj.notes[cur].renderTiming_ln = gp->bmsobj.notes[cur].renderTiming;
+					gp->bmsobj.notes[cur].realTiming_ln = gp->bmsobj.notes[cur].realTiming;
+				}
+				DPtoSP(gp);
+			}
+		}
+		if (cfg->play.m_isExtra && gp->isCourse == 0 && gp->isPreviewLoad == 0) {
+			gp->extramode_level = cfg->play.m_extra;
+			for (int cur = 0; cur < gp->bmsobj.count; cur++) {
+				gp->bmsobj.notes[cur].bmsTiming_ln = gp->bmsobj.notes[cur].bmsTiming;
+				gp->bmsobj.notes[cur].renderTiming_ln = gp->bmsobj.notes[cur].renderTiming;
+				gp->bmsobj.notes[cur].realTiming_ln = gp->bmsobj.notes[cur].realTiming;
+			}
+			MakeExtraChart(gp, &cc);
+		}
+		if (cfg->play.m_addnote > 0 && gp->isCourse == 0 && gp->isPreviewLoad == 0) {
+
+			for (int i = 0; i < gp->bmsobj.count; i++) {
+				gp->bmsobj.notes[i].bmsTiming_ln = gp->bmsobj.notes[i].bmsTiming;
+				gp->bmsobj.notes[i].renderTiming_ln = gp->bmsobj.notes[i].renderTiming;
+				gp->bmsobj.notes[i].realTiming_ln = gp->bmsobj.notes[i].realTiming;
+			}
+			qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+
+			double l_realTiming = 0.0;
+			double t_realTiming = 0.0;
+			double t_renderTiming = 0.0;
+			double t_bmsTiming = 0.0;
+			for (auto& a : mapAdded) for (auto& v : a) v = 0;
+			int addNoteCount[2] = { 0, };
+
+			for (int i = 0; i < gp->bmsobj.count; i++) {
+				if (l_realTiming < gp->bmsobj.notes[i].realTiming) {
+					for (int p = 0; p < 2; p++) {
+						if (addNoteCount[p] > 0) {
+							for (int a = 0; a < addNoteCount[p]; a++) {
+								if (GetRand(100) <= cfg->play.m_addnote) {
+									int emptyCount = 0;
+
+									if (key > -1) {
+										for (int lane = 0; lane <= key; lane++) {
+											if (mapAdded[p][lane] == 0) emptyCount++;
+										}
+										if (emptyCount && emptyCount > 0) {
+											int addlane = GetRand(emptyCount - 1);
+
+											for (int lane = 0; lane <= key; lane++) {
+												if (mapAdded[p][lane] == 0) {
+													if (addlane == 0) {
+														gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = t_bmsTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].bmsTiming_ln = t_bmsTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].realTiming = t_realTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].realTiming_ln = t_realTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].renderTiming = t_renderTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].renderTiming_ln = t_renderTiming;
+														gp->bmsobj.notes[gp->bmsobj.count].val = 1294.0;
+														gp->bmsobj.notes[gp->bmsobj.count].op = p * 10 + 10 + lane;
+														gp->bmsobj.count++;
+														if (gp->bmsobj.count == gp->bmsobj.size) {
+															ExpandNoteBuffer(&gp->bmsobj, 1000);
+														}
+														mapAdded[p][lane] = 1;
+														lane += 100;
+													}
+													else {
+														addlane--;
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					t_bmsTiming = gp->bmsobj.notes[i].bmsTiming;
+					t_renderTiming = gp->bmsobj.notes[i].renderTiming;
+					t_realTiming = gp->bmsobj.notes[i].realTiming;
+					l_realTiming = gp->bmsobj.notes[i].realTiming;
+					for (auto& a : mapAdded) for (auto& v : a) v = 0;
+					addNoteCount[0] = 0;
+					addNoteCount[1] = 0;
+				}
+
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) {
+					addNoteCount[0]++;
+					mapAdded[0][gp->bmsobj.notes[i].op - 10] = 1;
+				}
+				else if (CHANNEL_2P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+					addNoteCount[1]++;
+					mapAdded[1][gp->bmsobj.notes[i].op - 20] = 1;
+				}
+			}
+			qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+		}
+		if (cfg->play.m_loudness > 0 && gp->isCourse == 0 && gp->isPreviewLoad == 0) {
+
+			for (int i = 0; i < gp->bmsobj.count; i++) {
+				gp->bmsobj.notes[i].bmsTiming_ln = gp->bmsobj.notes[i].bmsTiming;
+				gp->bmsobj.notes[i].realTiming_ln = gp->bmsobj.notes[i].realTiming;
+				gp->bmsobj.notes[i].renderTiming_ln = gp->bmsobj.notes[i].renderTiming;
+			}
+			qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+
+			double l_realTiming = 0.0;
+			double t_realTiming = 0.0;
+			double t_bmsTiming = 0.0;
+			double t_renderTiming = 0.0;
+			bool mapAdded[2][10]{};
+			int addNoteCount[2]{};
+
+			for (int i = 0; i < gp->bmsobj.count; i++) {
+				if (l_realTiming < gp->bmsobj.notes[i].realTiming) {
+					for (int p = 0; p < 2; p++) {
+						if (addNoteCount[p] != 0) {
+
+							if (GetRand(100) <= cfg->play.m_loudness) {
+								if (key > -1) {
+									for (int lane = 0; lane <= key; lane++) {
+										if (mapAdded[p][lane] == 0) {
+											gp->bmsobj.notes[gp->bmsobj.count].bmsTiming = t_bmsTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].bmsTiming_ln = t_bmsTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].realTiming = t_realTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].realTiming_ln = t_realTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].renderTiming = t_renderTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].renderTiming_ln = t_renderTiming;
+											gp->bmsobj.notes[gp->bmsobj.count].val = 1294.0;
+											gp->bmsobj.notes[gp->bmsobj.count].op = p * 10 + 10 + lane;
+											gp->bmsobj.count++;
+											if (gp->bmsobj.count == gp->bmsobj.size) {
+												ExpandNoteBuffer(&gp->bmsobj, 1000);
+											}
+										}
+									}
+								}
+							}
+
+						}
+					}
+					t_bmsTiming = gp->bmsobj.notes[i].bmsTiming;
+					t_realTiming = gp->bmsobj.notes[i].realTiming;
+					t_renderTiming = gp->bmsobj.notes[i].renderTiming;
+					l_realTiming = gp->bmsobj.notes[i].realTiming;
+					for (auto& a : mapAdded) for (auto& v : a) v = 0;
+					addNoteCount[0] = 0;
+					addNoteCount[1] = 0;
+				}
+
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) {
+					addNoteCount[0] = 1;
+					mapAdded[0][gp->bmsobj.notes[i].op - 10] = 1;
+				}
+				else if (CHANNEL_2P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+					addNoteCount[1] = 1;
+					mapAdded[1][gp->bmsobj.notes[i].op - 20] = 1;
+				}
+			}
+			qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTimingOp);
+		}
+
+		double realDiff = 0.0;
+		double bmsDiff = 0.0;
+		double renderDiff = 0.0;
+
+		if (stage >= 1) {
+			stageStartMeasure = (int)firstNoteTime - stageStartMeasure - 1;
+
+			if (gp->courseConnection[stage - 1] == 5) { //BLANK2
+				stageStartMeasure = 0;
+			}
+			else if (gp->courseConnection[stage - 1] == 4) { //BLANK1
+				while (firstNoteTime - stageStartMeasure - prevStageLastNoteTime > 1.5) {
+					stageStartMeasure++;
+				}
+			}
+			else {
+				while (firstNoteTime - stageStartMeasure - prevStageLastNoteTime > 0.5) {
+					stageStartMeasure++;
+				}
+			}
+
+			lastNoteTime -= stageStartMeasure;
+
+			int unk_start = stageStartMeasure;
+			int k = bmsobj_stageFirst;
+			/*
+			for (int k = bmsobj_stageFirst; true; k++){
+				if (gp->bmsobj.notes[k].op != 2) continue;
+				
+				if(unk_start == 0){
+					if (gp->bmsobj.notes[bmsobj_stageFirst].bmsTiming <= 0.0 || gp->bmsobj.notes[bmsobj_stageFirst].realTiming <= 0.0 || gp->courseConnection[stage - 1] == 5) {
+						//
+					}
+					else {
+						double realDiff = gp->bmsobj.notes[k].realTiming - gp->bmsobj.notes[bmsobj_stageFirst].realTiming;
+						double bmsDiff = gp->bmsobj.notes[k].bmsTiming - gp->bmsobj.notes[bmsobj_stageFirst].bmsTiming;
+						for (int i = bmsobj_stageFirst; i < gp->bmsobj.count; i++) {
+							gp->bmsobj.notes[i].bmsTiming -= bmsDiff;
+							gp->bmsobj.notes[i].realTiming -= realDiff;
+							gp->bmsobj.notes[i].bmsTiming_ln -= bmsDiff;
+							gp->bmsobj.notes[i].realTiming_ln -= realDiff;
+						}
+						bpmt_realtime = unk2346c_realtime - realDiff;
+						bpmt_bmstime = unk23484_bmstime - bmsDiff;
+						prevNoteTime = _bPrevNoteTime - stageStartMeasure;
+					}
+					break;
+				}
+				unk_start--;
+			}
+			*/
+			while (true) {
+				if (gp->bmsobj.notes[k].op == CHANNEL_MEASURE_LENGTH) {
+					if (unk_start == 0) break; 					
+					else unk_start--;
+				}
+				k++;
+			}
+			/* That cutting place*/
+			if (gp->bmsobj.notes[bmsobj_stageFirst].bmsTiming <= 0 || gp->bmsobj.notes[bmsobj_stageFirst].realTiming <= 0 || gp->courseConnection[stage - 1] == 5) { //BLANK2
+				bpmt_realtime = unk2346c_realtime;
+				bpmt_bmstime = unk23484_bmstime;
+				bpmt_rendertime = unk_rendertime;
+				prevNoteBmstime = _bPrevNoteTime;
+			}
+			else {
+				realDiff = gp->bmsobj.notes[k].realTiming - gp->bmsobj.notes[bmsobj_stageFirst].realTiming;
+				bmsDiff = gp->bmsobj.notes[k].bmsTiming - gp->bmsobj.notes[bmsobj_stageFirst].bmsTiming;
+				renderDiff = gp->bmsobj.notes[k].renderTiming - gp->bmsobj.notes[bmsobj_stageFirst].renderTiming;
+				for (int i = bmsobj_stageFirst; i < gp->bmsobj.count; i++) {
+					gp->bmsobj.notes[i].bmsTiming -= bmsDiff;
+					gp->bmsobj.notes[i].renderTiming -= renderDiff;
+					gp->bmsobj.notes[i].realTiming -= realDiff;
+					gp->bmsobj.notes[i].bmsTiming_ln -= bmsDiff;
+					gp->bmsobj.notes[i].renderTiming_ln -= renderDiff;
+					gp->bmsobj.notes[i].realTiming_ln -= realDiff;
+				}
+				bpmt_realtime = unk2346c_realtime - realDiff;
+				bpmt_bmstime = unk23484_bmstime - bmsDiff;
+				bpmt_rendertime = unk_rendertime - renderDiff;
+				prevNoteBmstime = _bPrevNoteTime - stageStartMeasure;
+			}
+		}
+		else {
+			//same with -22?line
+			bpmt_realtime = unk2346c_realtime;
+			bpmt_bmstime = unk23484_bmstime;
+			bpmt_rendertime = unk_rendertime;
+			prevNoteBmstime = _bPrevNoteTime;
+		}
+		// -2331 line
+		// 4033- line
+		if (gp->isCourse) {
+			if (stage != stages - 1) {
+				if (objNumLastMeasure > 0) {
+					for (int i = objNumLastMeasure; i < gp->bmsobj.count; i++) {
+						if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH || gp->bmsobj.notes[i].op == CHANNEL_BPM || gp->bmsobj.notes[i].op == CHANNEL_EXBPM ) {
+							gp->bmsobj.notes[i].op = -1;
+						}
+					}
+				}
+				if (bpmt_count > 0) gp->bpmt_count = bpmt_count;
+			}
+			if (gp->isCourse && stage && objNumFirstMeasure > 0) {
+				for (int i = bmsobj_stageFirst; i < objNumFirstMeasure; i++) {
+					if (gp->bmsobj.notes[i].op == CHANNEL_MEASURE_LENGTH) {
+						gp->bmsobj.notes[i].op = -1;
+					}
+				}
+			}
+		}
+		if (stage != 0) {
+			double t = 100.0 + prevStageTime;
+			for (int i = bmsobj_stageFirst; gp->bmsobj.notes[i].realTiming <= t; i++) {
+				if (i == gp->bmsobj.count) break;
+				if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+					if (abs((int)gp->bmsobj.notes[i].realTiming - (int)prevStageTime) < 100) {
+						for (int j = bmsobj_stageFirst - 1; j >= 0; j--) {
+							if (gp->bmsobj.notes[j].realTiming < prevStageTime - 100.0) break; //need check float calc
+							if (gp->bmsobj.notes[i].op == gp->bmsobj.notes[j].op) {
+								gp->bmsobj.notes[i].op = 1;
+								break;
+							}
+						}
+					}
+					else {
+						gp->bmsobj.notes[i].op = 1;
+					}
+				}
+			}
+		}
+
+		for (int i = bmsobj_stageFirst; i < gp->bmsobj.size; i++) {
+			gp->bmsobj.notes[i].stage = stage;
+			if (!(0 <= gp->bmsobj.notes[i].stage && gp->bmsobj.notes[i].stage <= 4)) {
+				gp->bmsobj.notes[i].stage = 0;
+			}
+		}
+
+		prevStageTime = -1.0;
+		for (int i = gp->bmsobj.count - 1; i != bmsobj_stageFirst; i--) {
+			if (CHANNEL_1P_NOTE_SC <= gp->bmsobj.notes[i].op && gp->bmsobj.notes[i].op <= CHANNEL_2P_NOTE_END) {
+				prevStageTime = gp->bmsobj.notes[i].realTiming;
+				break;
+			}
+		}
+
+		if ((gp->courseConnection[stage] == 2 || gp->courseConnection[stage] == 3) && stage < stages - 1) { //CUT, CUT+FIT
+			gp->fadeoutSOUNDstart[stage] = bpmt_realtime;
+			gp->fadeoutSOUNDend[stage] = bpmt_realtime + 200.0;
+			gp->fadeinSOUNDstart[stage+1] = bpmt_realtime - 200.0;
+			gp->fadeinSOUNDend[stage+1] = bpmt_realtime;
+		}
+		else{
+			if ((gp->courseConnection[stage] == 1 || gp->courseConnection[stage] == 0) && stage < stages - 1) { //FADE, FADE+FIT
+				if (gp->courseConnection[stage] != 1) {
+					gp->fadeoutSOUNDstart[stage] = bpmt_realtime;
+					gp->fadeoutSOUNDend[stage] = bpmt_realtime + 10000.0;
+				}
+				gp->fadeinSOUNDstart[stage+1] = bpmt_realtime - 5000.0;
+				gp->fadeinSOUNDend[stage+1] = bpmt_realtime;
+			}
+			else if (gp->courseConnection[stage] == 4 && stage < stages - 1) { //BLANK1
+				gp->fadeinSOUNDstart[stage+1] = bpmt_realtime - 5000.0;
+				gp->fadeinSOUNDend[stage+1] = bpmt_realtime;
+			}	
+		}
+
+		gp->fadeoutBGAstart[stage] = bpmt_realtime;
+		gp->fadeoutBGAend[stage] = bpmt_realtime + 3000.0;
+		if (stage < stages - 1) {
+			gp->fadeinBGAstart[stage + 1] = bpmt_realtime - 3000.0;
+			gp->fadeinBGAend[stage + 1] = bpmt_realtime;
+		}
+
+		if (stage != 0 && oldbpmtCount > 0  && realDiff != 0.0) { 
+			for (int i = oldbpmtCount; i < gp->bpmt_count; i++) {
+				if (gp->bpmt_data[oldbpmtCount - 1].realtime <= gp->bpmt_data[i].realtime - realDiff) { //TOFIX : nonstop mix sink mismatch after stop (stage 2-) related code
+					gp->bpmt_data[i].realtime -= realDiff;
+					gp->bpmt_data[i].converted -= bmsDiff;
+					gp->bpmt_data[i].render_converted -= bmsDiff;
+				}
+			}
+		}
+	}
+	/* end of stage loop */
+	//2345- line
+	gp->freqSpeedMultiplier = oldSpeedMultiplier;
+	qsort(gp->bmsobj.notes, gp->bmsobj.count, sizeof(NoteStruct), CMP_NotesByRealTiming);
+
+	if (gp->isCourse == 1 && gp->courseType == 1) gp->speedmultiplier = 1.0;
+	else if (cfg->play.hsfix == OPTION_HSFIX_MAINBPM) {
+		double mainBpm = 0;
+		int highestCount = 0;
+		for (auto& [bpm, count] : notesPerBpm) {
+			if (count > highestCount) {
+				highestCount = count;
+				mainBpm = bpm;
+			}
+		}
+		if (mainBpm > 0.) gp->speedmultiplier = 150. / mainBpm; // calculate speed mult against bpm with most notes.
+		else gp->speedmultiplier = 1.0;
+	}
+	else if (avgBPM_notes > 0 && cfg->play.hsfix == OPTION_HSFIX_AVERAGE) gp->speedmultiplier = 150.0 / (avgBPM_bpmsum / avgBPM_notes);
+	else if (gp->maxBPM > 0.0 && cfg->play.hsfix == OPTION_HSFIX_MAXBPM) gp->speedmultiplier = 150.0 / gp->maxBPM;
+	else if (gp->minBPM > 0.0 && cfg->play.hsfix == OPTION_HSFIX_MINBPM) gp->speedmultiplier = 150.0 / gp->minBPM;
+	else gp->speedmultiplier = 1.0;
+
+	if (cfg->play.m_loudness > 0 || cfg->play.m_isExtra || cfg->play.assist[PLAYER_1] > 0 || cfg->play.assist[PLAYER_2] > 0 || cfg->play.battle || cfg->play.m_addnote > 0)
+		gp->isGhostDisabled = 1;
+	if (0 < cfg->play.m_loudness)
+		gp->isNosave = 1;
+	if (gp->freqSpeedMultiplier < 1.0)
+		gp->isNosave = 1;
+	if (0 < cfg->play.m_addnote)
+		gp->isNosave = 1;
+	if (cfg->play.battle == OPTION_BATTLE_BATTLE && gp->ghostBattle == 0)
+		gp->isNosave = 1;
+	if (gp->replay.status == 2)
+		gp->isNosave = 1;
+	if (cfg->play.hsfix == OPTION_HSFIX_CONSTANT && gp->minBPM != gp->maxBPM)
+		gp->isForceEasy = 1;
+	if (cfg->play.random[PLAYER_1] == OPTION_RANDOM_SCATTER || cfg->play.random[PLAYER_2] == OPTION_RANDOM_SCATTER)
+		gp->isForceEasy = 1;
+	if ((cfg->play.assist[PLAYER_1] == 1 || cfg->play.assist[PLAYER_2] == 1) && (7 < meta->keymode || cfg->play.battle != OPTION_BATTLE_DBATTLE))
+		gp->isForceEasy = 1;
+	if (cfg->play.m_isLunaris)
+		gp->isNosave = 1;
+
+	for (int i = 0; i < 10; i++) {
+		noteRandomTable[0][i] = i;
+		noteRandomTable[1][i] = i + 10;
+	}
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		if (cfg->play.random[p] == OPTION_RANDOM_MIRROR) {
+			if (meta->keymode == 7 || meta->keymode == 14) {
+				if (cfg->play.randSC[p] == 0) {
+					for (int i = 1; i <= 7; i++)
+						noteRandomTable[p][i] = (8 - i) + p * 10;
+				}
+				else {
+					for (int i = 0; i <= 7; i++)
+						noteRandomTable[p][i] = (7 - i) + p * 10;
+				}
+			}
+			else if (meta->keymode == 5 || meta->keymode == 10) {
+				if (cfg->play.randSC[p] == 0) {
+					for (int i = 1; i <= 5; i++)
+						noteRandomTable[p][i] = (6 - i) + p * 10;
+				}
+				else {
+					for (int i = 0; i <= 5; i++)
+						noteRandomTable[p][i] = (5 - i) + p * 10;
+				}
+			}
+			else if (meta->keymode == 9) {
+				for (int i = 1; i <= 9; i++)
+					noteRandomTable[0][i] = 10 - i;
+			}
+		}
+		else if (cfg->play.random[p] == OPTION_RANDOM_RANDOM) {
+			if (meta->keymode == 9) {
+				for (int c = 1; c < 9; c++) {
+					int a = c + GetRand(9 - c);
+					int tmp = noteRandomTable[0][c];
+					noteRandomTable[0][c] = noteRandomTable[0][a];
+					noteRandomTable[0][a] = tmp;
+				}
+			}
+			else if (meta->keymode == 7 || meta->keymode == 14) {
+				if (cfg->play.randSC[p] == 0) {
+					for (int c = 1; c < 7; c++) {
+						int a = c + GetRand(7 - c);
+						int tmp = noteRandomTable[p][c];
+						noteRandomTable[p][c] = noteRandomTable[p][a];
+						noteRandomTable[p][a] = tmp;
+					}
+
+					if (0 < cfg->play.randFix[p] && cfg->play.randFix[p] < 8) {
+						for (int c = 1; c <= 7; c++) {
+							if (noteRandomTable[p][c] == cfg->play.randFix[p]) {
+								noteRandomTable[p][c] = noteRandomTable[p][1];
+								noteRandomTable[p][1] = cfg->play.randFix[p];
+							}
+						}
+					}
+				}
+				else {
+					for (int c = 0; c < 7; c++) {
+						int a = c + GetRand(7 - c);
+						int tmp = noteRandomTable[p][c];
+						noteRandomTable[p][c] = noteRandomTable[p][a];
+						noteRandomTable[p][a] = tmp;
+					}
+
+					if (0 < cfg->play.randFix[p] && cfg->play.randFix[p] < 8) {
+						for (int c = 1; c <= 7; c++) {
+							if (noteRandomTable[p][c] == 0) {
+								noteRandomTable[p][c] = noteRandomTable[p][cfg->play.randFix[p]];
+								noteRandomTable[p][cfg->play.randFix[p]] = 0;
+							}
+						}
+					}
+				}
+			}
+			else if (meta->keymode == 5 || meta->keymode == 10) {
+				if (cfg->play.randSC[p] == 0) {
+					for (int c = 1; c < 5; c++) {
+						int a = c + GetRand(5 - c);
+						int tmp = noteRandomTable[p][c];
+						noteRandomTable[p][c] = noteRandomTable[p][a];
+						noteRandomTable[p][a] = tmp;
+					}
+
+					if (0 < cfg->play.randFix[p] && cfg->play.randFix[p] < 6) {
+						for (int c = 1; c <= 5; c++) {
+							if (noteRandomTable[p][c] == cfg->play.randFix[p]) {
+								noteRandomTable[p][c] = noteRandomTable[p][1];
+								noteRandomTable[p][1] = cfg->play.randFix[p];
+							}
+						}
+					}
+				}
+				else {
+					for (int c = 0; c < 5; c++) {
+						int a = c + GetRand(5 - c);
+						int tmp = noteRandomTable[p][c];
+						noteRandomTable[p][c] = noteRandomTable[p][a];
+						noteRandomTable[p][a] = tmp;
+					}
+
+					if (0 < cfg->play.randFix[p] && cfg->play.randFix[p] < 6) {
+						for (int c = 1; c <= 5; c++) {
+							if (noteRandomTable[p][c] == 0) {
+								noteRandomTable[p][c] = noteRandomTable[p][cfg->play.randFix[p]];
+								noteRandomTable[p][cfg->play.randFix[p]] = 0;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		gp->randomLayoutForDisplay[p] = 0;
+		for (int i = 1; i < 1 + key; ++i) gp->randomLayoutForDisplay[p] += std::pow(10, p * 10 + key - noteRandomTable[p][i]) * i;
+	}
+
+	double p1LastTiming = 0.0, p2LastTiming = 0.0;
+	int intArr[30] = { -1, };
+	for (int i = 0; i < 30; i++) intArr[i] = -1;
+	for (auto& a : mapAdded) for (auto& v : a) v = 0;
+	char chArr[20] = { 0, };
+	int isBattle = 0;
+
+
+	//TOFIX : mine on p2
+	
+	//shuffle notes
+	for (int i = 0; i < gp->bmsobj.count; i++) {
+		int optemp = gp->bmsobj.notes[i].op;
+		if (optemp < CHANNEL_1P_NOTE_SC || optemp >= CHANNEL_1P_HIDDEN_SC) {
+			if (optemp == CHANNEL_MEASURE_LENGTH) {
+				if (cfg->play.battle == OPTION_BATTLE_SP2DP && (meta->keymode == 5 || meta->keymode == 7) && gp->isCourse == 0) {
+					SPtoDP(&gp->bmsobj, i, &cc);
+				}
+
+				memcpy(&gp->bmsobj_line.notes[gp->bmsobj_line.count], &gp->bmsobj.notes[i], sizeof(NoteStruct));
+				gp->bmsobj_line.count++;;
+
+				if (gp->bmsobj_line.count == gp->bmsobj_line.size) {
+					ExpandNoteBuffer(&gp->bmsobj_line, 100);
+				}
+			}
+			else if (optemp == CHANNEL_BGM && gp->bmsobj.notes[i].realTiming > endtime) {
+				endtime = gp->bmsobj.notes[i].realTiming;
+			}
+		}
+		else {
+			if (optemp <= CHANNEL_1P_NOTE_END) {
+				isBattle = 0;
+				if (p1LastTiming < gp->bmsobj.notes[i].realTiming) {
+					p1LastTiming = gp->bmsobj.notes[i].realTiming;
+					for (int lane = 0; lane < 10; lane++) {
+						if (cfg->play.random[PLAYER_1] == OPTION_RANDOM_SCATTER) {
+							mapAdded[0][lane] = chArr[lane];
+						}
+						else {
+							mapAdded[0][lane] = 0;
+						}
+
+						if (intArr[lane] == -1 || gp->bmsobj.notes[intArr[lane]].realTiming_ln < gp->bmsobj.notes[i].realTiming) {
+							chArr[lane] = 0;
+						}
+					}
+				}
+			}
+			else {
+				isBattle = (cfg->play.battle == OPTION_BATTLE_BATTLE);
+				if (p2LastTiming < gp->bmsobj.notes[i].realTiming) {
+					p2LastTiming = gp->bmsobj.notes[i].realTiming;
+					for (int lane = 0; lane < 10; lane++) {
+						if (cfg->play.random[PLAYER_2] == OPTION_RANDOM_SCATTER) {
+							mapAdded[1][lane] = chArr[10 + lane];
+						}
+						else {
+							mapAdded[1][lane] = 0;
+						}
+
+						if (intArr[10 + lane] == -1 || gp->bmsobj.notes[intArr[10 + lane]].realTiming_ln < gp->bmsobj.notes[i].realTiming) {
+							chArr[10 + lane] = 0;
+						}
+					}
+				}
+			}
+
+			if ((meta->keymode == 10 || meta->keymode == 14) && cfg->play.dpFlip) {
+				if (gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) gp->bmsobj.notes[i].op += 10;
+				else gp->bmsobj.notes[i].op -= 10;
+			}
+
+			if ( (cfg->play.random[PLAYER_1] >= OPTION_RANDOM_SRANDOM && gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) || (cfg->play.random[PLAYER_2] >= OPTION_RANDOM_SRANDOM && gp->bmsobj.notes[i].op >= CHANNEL_2P_NOTE_SC) ) {
+				if (meta->keymode == 5 || meta->keymode == 10) {
+					if (cfg->play.randFix[PLAYER_1] >= 6) cfg->play.randFix[PLAYER_1] = 0;
+					if (cfg->play.randFix[PLAYER_2] >= 6) cfg->play.randFix[PLAYER_2] = 0;
+				}
+				else if (meta->keymode == 7 || meta->keymode == 14) {
+					if (cfg->play.randFix[PLAYER_1] >= 8) cfg->play.randFix[PLAYER_1] = 0;
+					if (cfg->play.randFix[PLAYER_2] >= 8) cfg->play.randFix[PLAYER_2] = 0;
+				}
+				else if (meta->keymode == 9) {
+					if (cfg->play.randFix[PLAYER_1] == 0) cfg->play.randFix[PLAYER_1] = 5;
+					if (cfg->play.randFix[PLAYER_2] == 0) cfg->play.randFix[PLAYER_2] = 5;
+				}
+
+				int assist = 0;
+				if (cfg->play.random[PLAYER_1] >= OPTION_RANDOM_SRANDOM && gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) assist = (cfg->play.randSC[PLAYER_1] != 0);
+				else if (cfg->play.random[PLAYER_2] >= OPTION_RANDOM_SRANDOM && gp->bmsobj.notes[i].op >= CHANNEL_2P_NOTE_SC) assist = (cfg->play.randSC[PLAYER_2] != 0);
+
+				int randLanes{};
+				switch (meta->keymode) {
+					case 5:
+					case 10:
+						randLanes = 4 + assist;
+						break;
+
+					case 7:
+					case 14:
+						randLanes = 6 + assist;
+						break;
+
+					case 9:
+						randLanes = 9;
+						break;
+				}
+
+				int startlane;
+				if (gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END) {
+					startlane = 1 - assist;
+				}
+				else {
+					startlane = 11 - assist;
+				}
+
+				int lane = gp->bmsobj.notes[i].op - 10;
+				if (startlane <= lane && lane <= startlane + randLanes) {
+					const int side = (startlane >= 10) ? 1 : 0;
+					const int endlane = startlane + randLanes;
+					bool pass = 1, pass2 = 1;
+					while(pass2){
+						lane = startlane + GetRand(randLanes);
+						if (pass) {
+							if (gp->bmsobj.notes[i].op <= CHANNEL_1P_NOTE_END && cfg->play.random[PLAYER_1] == OPTION_RANDOM_CONVERGE) {
+								lane = cfg->play.randFix[PLAYER_1];
+								pass = 0;
+							}
+							if (gp->bmsobj.notes[i].op >= CHANNEL_2P_NOTE_SC && cfg->play.random[PLAYER_2] == OPTION_RANDOM_CONVERGE) {
+								lane = cfg->play.randFix[PLAYER_2] + startlane;
+								pass = 0;
+							}
+						}
+
+						const int mapLane = lane - side * 10;
+						if (intArr[lane] == -1) {
+							
+							if (mapAdded[side][mapLane] == 0) break;
+							pass2 = 0;
+							for (int j = startlane; j <= endlane; j++) {
+								if (mapAdded[side][j - side * 10] == 0) pass2 = 1;
+							}
+						}
+						else {
+							if(gp->bmsobj.notes[i].realTiming <= gp->bmsobj.notes[intArr[lane]].realTiming_ln || gp->bmsobj.notes[i].realTiming == gp->bmsobj.notes[intArr[lane]].realTiming) 
+								continue;
+
+							
+							if (mapAdded[side][mapLane] == 0) break;
+							pass2 = 0;
+							for (int j = startlane; j <= endlane; j++) {
+								if (mapAdded[side][j - side * 10] == 0) pass2 = 1;
+							}
+						}
+					}
+					mapAdded[side][lane - side * 10] = 1;
+					gp->bmsobj.notes[i].op = lane + 10;
+				}
+			}
+			
+			chArr[gp->bmsobj.notes[i].op - 10] = 1;
+			if (meta->keymode == 14) {
+				if (gp->bmsobj.notes[i].op == CHANNEL_1P_NOTE_SC) {
+					mapAdded[0][4] = 1;
+					mapAdded[0][5] = 1;
+					mapAdded[0][6] = 1;
+					mapAdded[0][7] = 1;
+				}
+				else if (gp->bmsobj.notes[i].op == CHANNEL_2P_NOTE_SC) {
+					mapAdded[1][1] = 1;
+					mapAdded[1][2] = 1;
+					mapAdded[1][3] = 1;
+					mapAdded[1][4] = 1;
+				}
+			}
+			bool chnValid = (gp->bmsobj.notes[i].mine > 0);//
+			if (gp->bmsobj.notes[i].realTiming_ln + 2000.0 > endtime) {
+				endtime = gp->bmsobj.notes[i].realTiming_ln + 2000.0;
+			}
+			else if (gp->bmsobj.notes[i].realTiming + 2000.0 > endtime) {
+				endtime = gp->bmsobj.notes[i].realTiming + 2000.0;
+			}
+
+			int lane = noteRandomTable[0][gp->bmsobj.notes[i].op - 10];
+			if (cfg->play.battle == OPTION_BATTLE_DBATTLE && cfg->play.randSC[PLAYER_1] == 0 && cfg->play.randSC[PLAYER_2] == 0 && gp->bmsobj.notes[i].op == CHANNEL_1P_NOTE_SC) {
+				gp->bmsobj.notes[i].op = 1;
+			}
+			else if (cfg->play.battle == OPTION_BATTLE_DBATTLE && cfg->play.randSC[PLAYER_1] == 0 && cfg->play.randSC[PLAYER_2] == 0 && gp->bmsobj.notes[i].op == CHANNEL_2P_NOTE_SC) {
+				gp->bmsobj.notes[i].op = 1;
+			}
+			else {
+				if (intArr[lane] == -1) { //case first note of lane
+					memcpy(&gp->bmsobj_note[lane].notes[gp->bmsobj_note[lane].count], &gp->bmsobj.notes[i], sizeof(NoteStruct));
+					gp->bmsobj_note[lane].count++;
+					intArr[lane] = i;
+					if (chnValid == 0) noteCount[isBattle]++;
+				}
+				else if (gp->bmsobj.notes[i].realTiming > gp->bmsobj.notes[intArr[lane]].realTiming_ln) {
+					if (gp->bmsobj.notes[i].realTiming != gp->bmsobj.notes[intArr[lane]].realTiming) {
+						memcpy(&gp->bmsobj_note[lane].notes[gp->bmsobj_note[lane].count], &gp->bmsobj.notes[i], sizeof(NoteStruct));
+						gp->bmsobj_note[lane].count++;
+						intArr[lane] = i;
+						if (chnValid == 0) noteCount[isBattle]++;
+					}
+
+					else if (gp->bmsobj.notes[i].realTiming < gp->bmsobj.notes[i].realTiming_ln) { //case single note and longnote start conflicts, longnote overwrites it
+						noteCount[isBattle]--;
+						gp->bmsobj_note[lane].count--;
+						
+						memcpy(&gp->bmsobj_note[lane].notes[gp->bmsobj_note[lane].count], &gp->bmsobj.notes[i], sizeof(NoteStruct));
+						gp->bmsobj_note[lane].count++;
+						intArr[lane] = i;
+						if (chnValid == 0) noteCount[isBattle]++;
+					}
+				}
+				if (gp->bmsobj_note[lane].count == gp->bmsobj_note[lane].size) {
+					ExpandNoteBuffer(&gp->bmsobj_note[lane], 100);
+				}
+			}
+		}
+	}
+
+	//duplicate notes for battle
+	if (cfg->play.battle == OPTION_BATTLE_BATTLE && cfg->play.random[PLAYER_1] == cfg->play.random[PLAYER_2] && (meta->keymode == 5 || meta->keymode == 7 || meta->keymode == 9)) {
+
+		for (int i = 0; i < 10; i++) {
+			if (gp->bmsobj_note[0 + i].size > gp->bmsobj_note[10 + i].size) {
+				ExpandNoteBuffer(&gp->bmsobj_note[10 + i], gp->bmsobj_note[0 + i].size - gp->bmsobj_note[10 + i].size);
+			}
+			gp->bmsobj_note[10 + i].count = gp->bmsobj_note[0 + i].count;
+			for (int j = 0; j < gp->bmsobj_note[0 + i].count; j++) {
+				gp->bmsobj_note[10 + i].notes[j].op = gp->bmsobj_note[0 + i].notes[j].op + 10;
+				gp->bmsobj_note[10 + i].notes[j].bmsTiming_ln = gp->bmsobj_note[0 + i].notes[j].bmsTiming_ln;
+				gp->bmsobj_note[10 + i].notes[j].realTiming_ln = gp->bmsobj_note[0 + i].notes[j].realTiming_ln;
+				gp->bmsobj_note[10 + i].notes[j].renderTiming_ln = gp->bmsobj_note[0 + i].notes[j].renderTiming_ln;
+				gp->bmsobj_note[10 + i].notes[j].active = gp->bmsobj_note[0 + i].notes[j].active;
+				gp->bmsobj_note[10 + i].notes[j].mine = gp->bmsobj_note[0 + i].notes[j].mine;
+				gp->bmsobj_note[10 + i].notes[j].val = gp->bmsobj_note[0 + i].notes[j].val;
+				gp->bmsobj_note[10 + i].notes[j].bmsTiming = gp->bmsobj_note[0 + i].notes[j].bmsTiming;
+				gp->bmsobj_note[10 + i].notes[j].realTiming = gp->bmsobj_note[0 + i].notes[j].realTiming;
+				gp->bmsobj_note[10 + i].notes[j].renderTiming = gp->bmsobj_note[0 + i].notes[j].renderTiming;
+			}
+		}
+		noteCount[1] = noteCount[0];
+	}
+
+	gp->scratchSide = scratchSide;
+	if (scratchSide == 1 || scratchSide == 3) {
+		memcpy(&tmpLane[3], &gp->bmsobj_note[1], sizeof(LaneStruct));
+		memcpy(&tmpLane[4], &gp->bmsobj_note[2], sizeof(LaneStruct));
+		memcpy(&tmpLane[5], &gp->bmsobj_note[3], sizeof(LaneStruct));
+		memcpy(&tmpLane[6], &gp->bmsobj_note[4], sizeof(LaneStruct));
+		memcpy(&tmpLane[7], &gp->bmsobj_note[5], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[1], &gp->bmsobj_note[6], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[2], &gp->bmsobj_note[7], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[3], &tmpLane[3], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[4], &tmpLane[4], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[5], &tmpLane[5], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[6], &tmpLane[6], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[7], &tmpLane[7], sizeof(LaneStruct));
+	}
+	if (scratchSide == 2 || scratchSide == 3) {
+		memcpy(&tmpLane[3], &gp->bmsobj_note[11], sizeof(LaneStruct));
+		memcpy(&tmpLane[4], &gp->bmsobj_note[12], sizeof(LaneStruct));
+		memcpy(&tmpLane[5], &gp->bmsobj_note[13], sizeof(LaneStruct));
+		memcpy(&tmpLane[6], &gp->bmsobj_note[14], sizeof(LaneStruct));
+		memcpy(&tmpLane[7], &gp->bmsobj_note[15], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[11], &gp->bmsobj_note[16], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[12], &gp->bmsobj_note[17], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[13], &tmpLane[3], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[14], &tmpLane[4], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[15], &tmpLane[5], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[16], &tmpLane[6], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[17], &tmpLane[7], sizeof(LaneStruct));
+	}
+	if (is5key) {
+		memcpy(&tmpLane[3], &gp->bmsobj_note[1], sizeof(LaneStruct));
+		memcpy(&tmpLane[4], &gp->bmsobj_note[2], sizeof(LaneStruct));
+		memcpy(&tmpLane[5], &gp->bmsobj_note[3], sizeof(LaneStruct));
+		memcpy(&tmpLane[6], &gp->bmsobj_note[4], sizeof(LaneStruct));
+		memcpy(&tmpLane[7], &gp->bmsobj_note[5], sizeof(LaneStruct));
+		memcpy(&tmpLane[8], &gp->bmsobj_note[6], sizeof(LaneStruct));
+		memcpy(&tmpLane[9], &gp->bmsobj_note[0], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[0], &gp->bmsobj_note[9], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[1], &gp->bmsobj_note[7], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[2], &gp->bmsobj_note[8], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[3], &tmpLane[3], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[4], &tmpLane[4], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[5], &tmpLane[5], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[6], &tmpLane[6], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[7], &tmpLane[7], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[8], &tmpLane[8], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[9], &tmpLane[9], sizeof(LaneStruct));
+	}
+	if (is7key && !isDSC) {
+		memcpy(&tmpLane[1], &gp->bmsobj_note[1], sizeof(LaneStruct));
+		memcpy(&tmpLane[2], &gp->bmsobj_note[2], sizeof(LaneStruct));
+		memcpy(&tmpLane[3], &gp->bmsobj_note[3], sizeof(LaneStruct));
+		memcpy(&tmpLane[4], &gp->bmsobj_note[4], sizeof(LaneStruct));
+		memcpy(&tmpLane[5], &gp->bmsobj_note[5], sizeof(LaneStruct));
+		memcpy(&tmpLane[6], &gp->bmsobj_note[6], sizeof(LaneStruct));
+		memcpy(&tmpLane[7], &gp->bmsobj_note[7], sizeof(LaneStruct));
+		memcpy(&tmpLane[8], &gp->bmsobj_note[8], sizeof(LaneStruct));
+		memcpy(&tmpLane[9], &gp->bmsobj_note[0], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[0], &gp->bmsobj_note[9], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[1], &tmpLane[1], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[2], &tmpLane[2], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[3], &tmpLane[3], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[4], &tmpLane[4], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[5], &tmpLane[5], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[6], &tmpLane[6], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[7], &tmpLane[7], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[8], &tmpLane[8], sizeof(LaneStruct));
+		memcpy(&gp->bmsobj_note[9], &tmpLane[9], sizeof(LaneStruct));
+	}
+
+	//set judgetime and judgedamage
+	for (int p = 0; p < 2; p++) {
+		if (total[p] < 1) {
+			int notes = noteCount[p];
+			double newtotalCalc;
+			if (notes < 400) {
+				newtotalCalc = notes / 5.0 + 200.0;
+			}
+			else if (notes < 600) {
+				newtotalCalc = (notes - 400) / 2.5 + 280.0;
+			}
+			else {
+				newtotalCalc = (notes - 600) / 5.0 + 360.0;
+			}
+			total[p] = newtotalCalc * 0.8;
+		}
+	}
+	for (int p : { PLAYER_1, PLAYER_2 }) {
+		double dmg_notebase;
+		int notes = noteCount[p];
+		if (notes) {
+			switch (rank) {
+			case 0:
+				gp->player[p].judgetime[5] = 8;
+				gp->player[p].judgetime[4] = 24;
+				gp->player[p].judgetime[3] = 40;
+				break;
+			case 1:
+				gp->player[p].judgetime[5] = 15;
+				gp->player[p].judgetime[4] = 30;
+				gp->player[p].judgetime[3] = 60;
+				break;
+			default:
+				gp->player[p].judgetime[5] = 18;
+				gp->player[p].judgetime[4] = 40;
+				gp->player[p].judgetime[3] = 100;
+				break;
+			case 3:
+				gp->player[p].judgetime[5] = 21;
+				gp->player[p].judgetime[4] = 60;
+				gp->player[p].judgetime[3] = 120;
+				break;
+
+			}
+			gp->player[p].judgetime[2] = 200;
+			gp->player[p].judgetime[1] = 1000;
+
+			if (cfg->play.m_gambol == 1) {
+				gp->player[p].judgetime[5] = 8;
+				gp->player[p].judgetime[4] = 24;
+				gp->player[p].judgetime[3] = 40;
+				gp->player[p].judgetime[2] = 200;
+				gp->player[p].judgetime[1] = 1000;
+			}
+			else  if (cfg->play.m_gambol == 2) {
+				gp->player[p].judgetime[5] = 8;
+				gp->player[p].judgetime[4] = 12;
+				gp->player[p].judgetime[3] = 12;
+				gp->player[p].judgetime[2] = 200;
+				gp->player[p].judgetime[1] = 1000;
+			}
+
+			gp->player[p].totalnotes = notes;
+
+			//TODO : check damage
+			if (notes < 20)
+				dmg_notebase = 10.0;
+			else if (notes < 30)
+				dmg_notebase = 10.0 - (notes - 20.0) / 10.0 * 2.0;
+			else if (notes < 45)
+				dmg_notebase = 7.0 - (notes - 30.0) / 15.0;
+			else if (notes < 60)
+				dmg_notebase = 6.0 - (notes - 45.0) / 15.0;
+			else if (notes < 125)
+				dmg_notebase = 5.0 - (notes - 60.0) / 65.0;
+			else if (notes < 250)
+				dmg_notebase = 4.0 - (notes - 125.0) / 125.0;
+			else if (notes < 500)
+				dmg_notebase = 3.0 - (notes - 250.0) / 250.0;
+			else if (notes < 1000)
+				dmg_notebase = 2.0 - (notes - 500.0) / 500.0;
+			else
+				dmg_notebase = 1;
+			//TODO: recheck twice below.
+			int recover = (total[p] - 80.0)*0.125 / 2;
+			if (recover <= 0) recover = 1;
+
+			double dmg_totalbase = 100.0 / (double)recover;
+			double dmg = std::max(dmg_notebase * 10, dmg_totalbase) / 10.0;
+
+			if (!gp->isCourse) {
+				gp->player[p].judge_damage[0][5] = total[p] / (float)notes;
+				gp->player[p].judge_damage[0][4] = total[p] / (float)notes;
+				gp->player[p].judge_damage[0][3] = total[p] / (float)(notes + notes);
+				gp->player[p].judge_damage[0][2] = -4.0;
+				gp->player[p].judge_damage[0][1] = -6.0;
+				gp->player[p].judge_damage[0][0] = -2.0;
+
+				gp->player[p].judge_damage[1][5] = 0.1;
+				gp->player[p].judge_damage[1][4] = 0.1;
+				gp->player[p].judge_damage[1][3] = 0.05;
+				gp->player[p].judge_damage[1][2] = dmg * (-6.0);
+				gp->player[p].judge_damage[1][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[1][0] = dmg * (-2.0);
+
+				gp->player[p].judge_damage[2][5] = 0.0;
+				gp->player[p].judge_damage[2][4] = 0.0;
+				gp->player[p].judge_damage[2][3] = 0.0;
+				gp->player[p].judge_damage[2][2] = -100.0;
+				gp->player[p].judge_damage[2][1] = -100.0;
+				gp->player[p].judge_damage[2][0] = 0.0;
+
+				gp->player[p].judge_damage[3][5] = (total[p] / (float)notes) * 1.2;
+				gp->player[p].judge_damage[3][4] = (total[p] / (float)notes) * 1.2;
+				gp->player[p].judge_damage[3][3] = (total[p] / (float)(notes + notes)) * 1.2;
+				gp->player[p].judge_damage[3][2] = -3.2;
+				gp->player[p].judge_damage[3][1] = -4.800000000000001;
+				gp->player[p].judge_damage[3][0] = -1.6;
+
+				gp->player[p].judge_damage[4][5] = 0.1;
+				gp->player[p].judge_damage[4][4] = -1.0;
+				gp->player[p].judge_damage[4][3] = -100.0;
+				gp->player[p].judge_damage[4][2] = -100.0;
+				gp->player[p].judge_damage[4][1] = -100.0;
+				gp->player[p].judge_damage[4][0] = -100.0;
+
+				gp->player[p].judge_damage[5][5] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][4] = -1.0;
+				gp->player[p].judge_damage[5][3] = 0.1;
+				gp->player[p].judge_damage[5][2] = -6.0;
+				gp->player[p].judge_damage[5][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][0] = dmg * (-2.0);
+			}
+			else if (gp->courseType == 2) {
+				gp->player[p].judge_damage[0][5] = 0.1;
+				gp->player[p].judge_damage[0][4] = 0.1;
+				gp->player[p].judge_damage[0][3] = 0.04;
+				gp->player[p].judge_damage[0][2] = -2.0;
+				gp->player[p].judge_damage[0][1] = -3.0;
+				gp->player[p].judge_damage[0][0] = -2.0;
+
+				gp->player[p].judge_damage[1][5] = 0.1;
+				gp->player[p].judge_damage[1][4] = 0.1;
+				gp->player[p].judge_damage[1][3] = 0.04;
+				gp->player[p].judge_damage[1][2] = dmg * (-6.0);
+				gp->player[p].judge_damage[1][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[1][0] = dmg * (-2.0);
+
+				gp->player[p].judge_damage[2][5] = 0.0;
+				gp->player[p].judge_damage[2][4] = 0.0;
+				gp->player[p].judge_damage[2][3] = 0.0;
+				gp->player[p].judge_damage[2][2] = -100.0;
+				gp->player[p].judge_damage[2][1] = -100.0;
+				gp->player[p].judge_damage[2][0] = 0.0;
+
+				gp->player[p].judge_damage[3][5] = 0.1;
+				gp->player[p].judge_damage[3][4] = 0.1;
+				gp->player[p].judge_damage[3][3] = 0.04;
+				gp->player[p].judge_damage[3][2] = -2.0;
+				gp->player[p].judge_damage[3][1] = -3.0;
+				gp->player[p].judge_damage[3][0] = -2.0;
+
+				gp->player[p].judge_damage[4][5] = 0.1;
+				gp->player[p].judge_damage[4][4] = -1.0;
+				gp->player[p].judge_damage[4][3] = -100.0;
+				gp->player[p].judge_damage[4][2] = -100.0;
+				gp->player[p].judge_damage[4][1] = -100.0;
+				gp->player[p].judge_damage[4][0] = -100.0;
+
+				gp->player[p].judge_damage[5][5] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][4] = -1.0;
+				gp->player[p].judge_damage[5][3] = 0.1;
+				gp->player[p].judge_damage[5][2] = -6.0;
+				gp->player[p].judge_damage[5][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][0] = dmg * (-2.0);
+			}
+			else {
+				gp->player[p].judge_damage[0][5] = 0.1;
+				gp->player[p].judge_damage[0][4] = 0.1;
+				gp->player[p].judge_damage[0][3] = 0.04;
+				gp->player[p].judge_damage[0][2] = -1.5;
+				gp->player[p].judge_damage[0][1] = -2.0;
+				gp->player[p].judge_damage[0][0] = -1.5;
+
+				gp->player[p].judge_damage[1][5] = 0.1;
+				gp->player[p].judge_damage[1][4] = 0.1;
+				gp->player[p].judge_damage[1][3] = 0.05;
+				gp->player[p].judge_damage[1][2] = dmg * (-6.0);
+				gp->player[p].judge_damage[1][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[1][0] = dmg * (-2.0);
+
+				gp->player[p].judge_damage[2][5] = 0.0;
+				gp->player[p].judge_damage[2][4] = 0.0;
+				gp->player[p].judge_damage[2][3] = 0.0;
+				gp->player[p].judge_damage[2][2] = -100.0;
+				gp->player[p].judge_damage[2][1] = -100.0;
+				gp->player[p].judge_damage[2][0] = 0.0;
+
+				gp->player[p].judge_damage[3][5] = 0.12;
+				gp->player[p].judge_damage[3][4] = 0.12;
+				gp->player[p].judge_damage[3][3] = 0.048;
+				gp->player[p].judge_damage[3][2] = -1.2;
+				gp->player[p].judge_damage[3][1] = -1.6;
+				gp->player[p].judge_damage[3][0] = -1.2;
+
+				gp->player[p].judge_damage[4][5] = 0.1;
+				gp->player[p].judge_damage[4][4] = -1.0;
+				gp->player[p].judge_damage[4][3] = -100.0;
+				gp->player[p].judge_damage[4][2] = -100.0;
+				gp->player[p].judge_damage[4][1] = -100.0;
+				gp->player[p].judge_damage[4][0] = -100.0;
+
+				gp->player[p].judge_damage[5][5] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][4] = -1.0;
+				gp->player[p].judge_damage[5][3] = 0.1;
+				gp->player[p].judge_damage[5][2] = -6.0;
+				gp->player[p].judge_damage[5][1] = dmg * (-10.0);
+				gp->player[p].judge_damage[5][0] = dmg * (-2.0);
+			}
+		}
+	}
+
+	//set first lane keysound
+	for (int i = 0; i < 20; i++) {
+		if (gp->bmsobj_note[i].count <= 0) gp->bmsobj_note[i].noteVal = -1;
+		else gp->bmsobj_note[i].noteVal = gp->bmsobj_note[i].notes[0].val;
+	}
+
+	//add notes for maniac options
+	if (cfg->play.m_addlong > 0) {
+		for (int i = 0; i < 20; i++) {
+			if (i != 0 && i != 10) {
+				for (int j = 0; j < gp->bmsobj_note[i].count - 1; j++) {
+					if (GetRand(100) < cfg->play.m_addlong) {
+						double e = (gp->bmsobj_note[i].notes[j].realTiming + gp->bmsobj_note[i].notes[j + 1].realTiming) * 0.5;
+						if (gp->bmsobj_note[i].notes[j].realTiming_ln < e) {
+							gp->bmsobj_note[i].notes[j].realTiming_ln = e;
+							gp->bmsobj_note[i].notes[j].bmsTiming_ln = RealTimeToBMSTime(gp, gp->bmsobj_note[i].notes[j].realTiming_ln);
+							gp->bmsobj_note[i].notes[j].renderTiming_ln = RealTimeToRenderTime(gp, gp->bmsobj_note[i].notes[j].realTiming_ln);
+						}
+					}
+				}
+				if (gp->bmsobj_note[i].count > 0 && cfg->play.m_addlong == 100) {
+					gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count - 1].realTiming_ln = endtime;
+					gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count - 1].bmsTiming_ln = RealTimeToBMSTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count - 1].realTiming_ln);
+					gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count - 1].renderTiming_ln = RealTimeToRenderTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count - 1].realTiming_ln);
+				}
+				gp->bpmt_start = 0;
+			}
+		}
+		endtime += 2000.0;
+	}
+
+	if (cfg->play.m_addmine > 0) {
+		for (int i = 0; i < 20; i++) {
+			if (i != 0 && i != 10) {
+				int s = gp->bmsobj_note[i].count;
+				for (int j = 0; j < gp->bmsobj_note[i].count - 1; j++) {
+					if (GetRand(100) < cfg->play.m_addmine) {
+						if (gp->bmsobj_note[i].count == gp->bmsobj_note[i].size) {
+							ExpandNoteBuffer(&gp->bmsobj_note[i], 1000);
+						}
+
+						if (gp->bmsobj_note[i].notes[j + 1].realTiming_ln > gp->bmsobj_note[i].notes[j + 1].realTiming) {
+							if (200.0 < gp->bmsobj_note[i].notes[j + 1].realTiming - gp->bmsobj_note[i].notes[j].realTiming_ln) {
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming = (gp->bmsobj_note[i].notes[j + 1].realTiming + gp->bmsobj_note[i].notes[j].realTiming_ln) * 0.5;
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].bmsTiming = RealTimeToBMSTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming);
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].renderTiming = RealTimeToRenderTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming);
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].val = 0.0;
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].mine = 4;
+								gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].op = gp->bmsobj_note[i].notes[j + 1].op;
+								gp->bmsobj_note[i].count++;
+							}
+						}
+						else if (200.0 < gp->bmsobj_note[i].notes[j + 1].realTiming - gp->bmsobj_note[i].notes[j].realTiming) {
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming = (gp->bmsobj_note[i].notes[j + 1].realTiming + gp->bmsobj_note[i].notes[j].realTiming) * 0.5;
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].bmsTiming = RealTimeToBMSTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming);
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].renderTiming = RealTimeToRenderTime(gp, gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].realTiming);
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].val = 0.0;
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].mine = 4;
+							gp->bmsobj_note[i].notes[gp->bmsobj_note[i].count].op = gp->bmsobj_note[i].notes[j + 1].op;
+							gp->bmsobj_note[i].count++;
+						}
+					}
+				}
+				gp->bpmt_start = 0;
+				if (s > 1) {
+					qsort(gp->bmsobj_note[i].notes, gp->bmsobj_note[i].count, sizeof(NoteStruct), CMP_NotesByRealTiming);
+				}
+			}
+		}
+	}
+
+	gp->p1Score.InitJudgeQueue();
+	gp->p1Score.ResetJudgeQueue(gp->player[PLAYER_1].totalnotes * 2);
+	gp->BPM = gp->BPM_fix;
+	gp->player[PLAYER_1].total_note += gp->player[PLAYER_1].totalnotes;
+	gp->song_runtime = endtime;
+	gp->player[PLAYER_2].total_note += gp->player[PLAYER_2].totalnotes;
+
+	if (gp->soundonly == 1 && bgaFlag && (cfg->play.bga == 3 || cfg->play.bga == 1 || (cfg->play.bga == 2 && gp->isAutoplay)) && cfg->play.autojudge != 2) {
+		DeleteGraph(gp->bgaHandle[1295]);
+		gp->bgaHandle[1295] = -1;
+		CSTR defaultMovieFile = GetRandomFile(fs::make_preferred("LR2files/Movie/*.mpg").data(), 0);
+		if (defaultMovieFile.isDiff("ERROR")) gp->bgaHandle[1295] = LoadGraph(defaultMovieFile);
+		if (gp->bgaHandle[1295] == -1) {
+			defaultMovieFile = GetRandomFile(fs::make_preferred("LR2files/Movie/*.avi").data(), 0);
+			if (defaultMovieFile.isDiff("ERROR")) gp->bgaHandle[1295] = LoadGraph(defaultMovieFile);
+			if (gp->bgaHandle[1295] == -1) {
+				defaultMovieFile = GetRandomFile(fs::make_preferred("LR2files/Movie/*.wmv").data(), 0);
+				if (defaultMovieFile.isDiff("ERROR")) gp->bgaHandle[1295] = LoadGraph(defaultMovieFile);
+				if (gp->bgaHandle[1295] == -1) {
+					defaultMovieFile = GetRandomFile(fs::make_preferred("LR2files/Movie/*.mp4").data(), 0);
+					if (defaultMovieFile.isDiff("ERROR")) gp->bgaHandle[1295] = LoadGraph(defaultMovieFile);
+					if (gp->bgaHandle[1295] == -1) {
+						defaultMovieFile = GetRandomFile(fs::make_preferred("LR2files/Movie/*.ogv").data(), 0);
+						if (defaultMovieFile.isDiff("ERROR")) gp->bgaHandle[1295] = LoadGraph(defaultMovieFile);
+					}
+				}
+			}
+		}
+	}
+	if (cfg->system.isablebmsthread == 1 && gp->isPreviewLoad == 0) {
+		LoadBmsResource(gp, filename, aud, cfg, meta, bgaFlag, scratchSide, 0, true);
+	}
+	for (int i = 0; i < 5; i++) {
+		if (gp->fadeinSOUNDstart[i] <= 0 || gp->fadeinSOUNDend[i] <= 0) {
+			aud->param.stageBgmVolume[i] = 1.0;
+			aud->param.stageKeyVolume[i] = 1.0;
+		}
+	}
+	ApplySoundFX(aud, 1, cfg->sound.disableDSP);
+	ErrorLogAdd("BMSを読み込みました。\n");
+	return 1;
+}

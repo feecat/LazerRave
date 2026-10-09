@@ -1,0 +1,172 @@
+1 TargetName
+2 MyName
+
+10 THISSONG_TITLE
+11 THISSONG_SUBTITLE
+12 THISSONG_FULLTITLE
+13 THISSONG_GENRE
+14 THISSONG_ARTIST
+15 THISSONG_SUBARTIST
+16 THISSONG_SEARCHTAG
+17 THISSONG_PLAYLEVEL
+18 THISSONG_DIFFICULTYCOUNT
+
+
+20 TAGEDIT_TITLE
+21 TAGEDIT_SUBTITLE
+22 TAGEDIT_FULLTITLE
+23 TAGEDIT_GENRE
+24 TAGEDIT_ARTIST
+25 TAGEDIT_SUBARTIST
+26 TAGEDIT_SEARCHTAG
+27 TAGEDIT_PLAYLEVEL
+28 TAGEDIT_DIFFICULTYCOUNT
+29 TAGEDIT_EXLEVEL
+30 SEARCH_COMMAND_JUKEBOXNAME
+
+
+40 Slot0
+41 Slot1
+42 Slot2
+43 Slot3
+44 Slot4
+45 Slot5
+46 Slot6
+47 Slot7
+
+
+50 SKIN_NAME
+51 SKIN_ARTIST
+
+
+60 PLAYMODE_KEY
+61 PLAYMODE_SORT
+62 PLAYMODE_DIFFICULTY
+
+
+63 RANDOM1P
+64 RANDOM2P
+65 GAUGE1P
+66 GAUGEP
+67 ASSIST1P
+68 ASSIST2P
+69 BATTLE
+70 FLIP
+71 SCOREGRAPH
+72 GHOST
+73 SHUTTER
+74 SCROLLTYPE
+
+75 BGA_SIZE
+76 BGA_DRAW
+
+77 ScreenColors
+78 vsync
+79 ScreenMode
+
+80 AUTOJUDGE
+81 REPLAYOPTION
+
+82 TRIAL1
+83 TRIAL2
+
+84 EFFECT1P
+85 EFFECT2P
+
+
+
+100 SkinCustomize_Category1
+101 SkinCustomize_Category2
+102 SkinCustomize_Category3
+103 SkinCustomize_Category4
+104 SkinCustomize_Category5
+105 SkinCustomize_Category6
+106 SkinCustomize_Category7
+107 SkinCustomize_Category8
+108 SkinCustomize_Category9
+109 SkinCustomize_Category10
+
+110 SkinCustomize_Item1
+111 SkinCustomize_Item2
+112 SkinCustomize_Item3
+113 SkinCustomize_Item4
+114 SkinCustomize_Item5
+115 SkinCustomize_Item6
+116 SkinCustomize_Item7
+117 SkinCustomize_Item8
+118 SkinCustomize_Item9
+119 SkinCustomize_Item10
+
+120 Ranking_PlayerName1
+121 Ranking_PlayerName2
+122 Ranking_PlayerName3
+123 Ranking_PlayerName4
+124 Ranking_PlayerName5
+125 Ranking_PlayerName6
+126 Ranking_PlayerName7
+127 Ranking_PlayerName8
+128 Ranking_PlayerName9
+129 Ranking_PlayerName10
+
+130 ClearText_Temp1
+131 ClearText_Temp2
+
+
+150 CourseTitle_1stage
+151 CourseTitle_2stage
+152 CourseTitle_3stage
+153 CourseTitle_4stage
+154 CourseTitle_5stage
+155 CourseTitle_6stage
+156 CourseTitle_7stage
+157 CourseTitle_8stage
+158 CourseTitle_9stage
+159 CourseTitle_10stage
+
+160 CourseSubTitle_1stage
+161 CourseSubTitle_2stage
+162 CourseSubTitle_3stage
+163 CourseSubTitle_4stage
+164 CourseSubTitle_5stage
+165 CourseSubTitle_6stage
+166 CourseSubTitle_7stage
+167 CourseSubTitle_8stage
+168 CourseSubTitle_9stage
+169 CourseSubTitle_10stage
+
+170 CourseEditAndName
+
+171 CourseConnectionstage1-2
+172 CourseConnectionstage2-3
+173 CourseConnectionstage3-4
+174 CourseConnectionstage4-5
+175 CourseConnectionstage5-6
+176 CourseConnectionstage6-7
+177 CourseConnectionstage7-8
+178 CourseConnectionstage8-9
+179 CourseConnectionstage9-10
+
+
+180 CourseOption_SOFLAN
+181 CourseOption_GAUGETYPE
+182 CourseOption_OPTIONBAN
+183 CourseOption_IR
+
+
+190 RandomCourseOptionLevelForMe
+191 RandomCourseOptionLevelMax
+192 RandomCourseOptionLevelMin
+193 RandomCourseOptionBPMrange
+194 RandomCourseOptionBPMmax
+195 RandomCourseOptionBPMmin
+196 RandomCourseOptionStages
+
+
+198 AllCourseOptionDefaultConnection
+199 AllCourseOptionDefaultGauge
+
+
+300 scalingFilter
+301 stretch
+302 LIFT_ONOFF
+

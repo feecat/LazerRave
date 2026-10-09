@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../../../out/build/tools/resource-pack/bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../../out/build/tools/resource-pack/obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

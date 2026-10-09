@@ -1,0 +1,4 @@
+[*]
+# TODO: use the same as in OpenLR2
+indent_style = space
+indent_size = 4

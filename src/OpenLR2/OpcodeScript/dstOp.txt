@@ -1,0 +1,520 @@
+0 AlwaysTrue
+1 ThisBarFolder
+2 ThisBarSong
+3 ThisBarCourse
+4 ThisBarCreateCourse
+5 ThisBarPlayable
+
+
+10 DOUBLEorDOUBLEBATTLE
+11 BATTLE
+12 BATTLEorDOUBLEBATTLEorBATTLE
+13 GBATTLEorBaTTLE
+
+
+20 NOPANEL
+21 PANEL1
+22 PANEL2
+23 PANEL3
+24 PANEL4
+25 PANEL5
+26 PANEL6
+27 PANEL7
+28 PANEL8
+29 PANEL9
+30 BGANOEXTEND
+31 BGAEXTEND
+32 AUTO_OFF
+33 AUTO_ON
+34 GHOST_OFF
+35 GHOST_A
+36 GHOST_B
+37 GHOST_C
+
+38 SCOREGRAPH_OFF
+39 SCOREGRAPH_ON
+40 BGA_OFF
+41 BGA_ON
+
+42 1PGROOVEGAUGE
+43 1PREDGAUGE
+44 2PGROOVEGAUGE
+45 2PREDGAUGE
+
+46 DIFFILCULTYFILTER_ON
+47 DIFFILCULTYFILTER_OFF
+
+
+50 OFFLINE
+51 ONLINE
+52 EXTRA_OFF
+53 EXTRA_ON
+
+54 1PAUTOSCRATCH_OFF
+55 1PAUTOSCRATCH_ON
+56 2PAUTOSCRATCH_OFF
+57 2PAUTOSCRATCH_ON
+
+
+60 NOSAVE
+61 SAVE
+62 NOCLEAR
+63 ASEASYCLEAR
+64 ASNORMALCLEAR
+65 ASHARDCLEARR
+66 ASFULLCOMBO
+
+
+70 BEGINNER
+71 NORMAL
+72 HYPER
+73 ANOTHER
+74 INSANE
+75 BEGINNER_OVERLEVEL
+76 NORMAL_OVERLEVEL
+77 HYPER_OVERLEVEL
+78 ANOTHER_OVERLEVEL
+79 INSANE_OVERLEVEL
+
+80 LOADING
+81 LOADED
+
+82 REPLAY_OFF
+83 REPLAY_RECORDING
+84 REPLAY_PLAYING
+
+
+90 RESULT_CLEAR
+91 RESULT_MISS
+
+
+100 CLEARED_NOPLAY
+101 CLEARED_FAILED
+102 CLEARED_EASY
+103 CLEARED_CLEAR
+104 CLEARED_HARD
+105 CLEARED_FULLCOMBO
+
+
+110 RANK_AAA
+111 RANK_AA
+112 RANK_A
+113 RANK_B
+114 RANK_C
+115 RANK_D
+116 RANK_E
+117 RANK_F
+
+118 CLEAROPTION_GROOVE
+119 CLEAROPTION_SURVIVAL
+120 CLEAROPTION_DEATH
+121 CLEAROPTION_EASY
+122 CLEAROPTION_PATTACK
+123 CLEAROPTION_GATTACK
+124 CLEAROPTION_NOTYET124
+125 CLEAROPTION_NOTYET125
+
+126 CLEAROPTION_NORANDOM
+127 CLEAROPTION_MIRROR
+128 CLEAROPTION_RANDOM
+129 CLEAROPTION_SRANDOM
+130 CLEAROPTION_SCATTER
+131 CLEAROPTION_CONVERGE
+132 CLEAROPTION_NOTYET132
+133 CLEAROPTION_NOTYET133
+
+134 CLEAROPTION_NOHIDSUD
+135 CLEAROPTION_HID
+136 CLEAROPTION_SUD
+137 CLEAROPTION_HIDSUD
+138 CLEAROPTION_NOTYET138
+139 CLEAROPTION_NOTYET139
+140 CLEAROPTION_NOTYET140
+141 CLEAROPTION_NOTYET141
+
+142 CLEAROPTION_AUTOSCRATCH
+143 CLEAROPTION_EXTRAMODE
+144 CLEAROPTION_DBATTLE
+145 CLEAROPTION_SPTODP
+
+
+150 DIFFICULTY_NO
+151 DIFFICULTY_EASY
+152 DIFFICULTY_NORMAL
+153 DIFFICULTY_HYPER
+154 DIFFICULTY_ANOTHER
+155 DIFFICULTY_INSANE
+
+
+160 BMS_7KEYS
+161 BMS_5KEYS
+162 BMS_14KEYS
+163 BMS_10KEYS
+164 BMS_9KEYS
+165 PLAY_7KEYS
+166 PLAY_5KEYS
+167 PLAY_14KEYS
+168 PLAY_10KEYS
+169 PLAY_9KEYS
+
+170 BGAEXIST_NO
+171 BGAEXIST_YES
+172 LNEXIST_NO
+173 LNEXIST_YES
+174 TEXTEXIST_NO
+175 TEXTEXIST_YES
+176 SOFLANEXIST_NO
+177 SOFLANEXIST_YES
+178 RANDOMEXIST_NO
+179 RANDOMEXIST_YES
+
+180 JUDGE_VHARD
+181 JUDGE_HARD
+182 JUDGE_NORMAL
+183 JUDGE_EASY
+
+
+185 OVERLEVEL_NO
+186 OVERLEVEL_YES
+
+
+190 STAGEFILEEXIST_NO
+191 STAGEFILEEXIST_YES
+192 BANNEREXIST_NO
+193 BANNEREXIST_YES
+194 BACKBMPEXIST_NO
+195 BACKBMPEXIST_YES
+196 REPLAYEXIST_NO
+197 REPLAYEXIST_YES
+
+
+200 1PRANK_AAA
+201 1PRANK_AA
+202 1PRANK_A
+203 1PRANK_B
+204 1PRANK_C
+205 1PRANK_D
+206 1PRANK_E
+207 1PRANK_F
+
+
+210 2PRANK_AAA
+211 2PRANK_AA
+212 2PRANK_A
+213 2PRANK_B
+214 2PRANK_C
+215 2PRANK_D
+216 2PRANK_E
+217 2PRANK_F
+
+
+220 AAAconfirm
+221 AAconfirm
+222 Aconfirm
+223 Bconfirm
+224 Cconfirm
+225 Dconfirm
+226 Econfirm
+227 Fconfirm
+
+
+230 1Pgauge_0-10
+231 1Pgauge10-19
+232 1Pgauge20-29
+233 1Pgauge30-39
+234 1Pgauge40-49
+235 1Pgauge50-59
+236 1Pgauge60-69
+237 1Pgauge70-79
+238 1Pgauge80-89
+239 1Pgauge90-99
+240 1Pgauge100
+
+241 1P_PERFECT
+242 1P_GREAT
+243 1P_GOOD
+244 1P_BAD
+245 1P_POOR
+246 1P_MPOOR
+
+247 1P_POORBGA_NOTTIME
+248 1P_POORBGA_TIME
+
+
+250 2Pgauge0-10
+251 2Pgauge10-19
+252 2Pgauge20-29
+253 2Pgauge30-39
+254 2Pgauge40-49
+255 2Pgauge50-59
+256 2Pgauge60-69
+257 2Pgauge70-79
+258 2Pgauge80-89
+259 2Pgauge90-99
+260 2Pgauge100
+
+261 2P_PERFECT
+262 2P_GREAT
+263 2P_GOOD
+264 2P_BAD
+265 2P_POOR
+266 2P_MPOOR
+
+267 2P_POORBGA_NOTTIME
+268 2P_POORBGA_TIME
+
+
+270 1P_SUD+Setting (also LIFT value: Start/Select held while lift on)
+271 2P_SUD+Setting
+
+274 1pLanecover
+275 2pLanecover
+
+
+280 CourseStage1
+281 CourseStage2
+282 CourseStage3
+283 CourseStage4
+289 CourseStageFINAL
+
+290 Course
+291 Nonstop
+292 Expert
+293 Dan
+
+
+300 1P_AAA
+301 1P_AA
+302 1P_A
+303 1P_B
+304 1P_C
+305 1P_D
+306 1P_E
+307 1P_F
+308 1P_0
+
+
+310 2P_AAA
+311 2P_AA
+312 2P_A
+313 2P_B
+314 2P_C
+315 2P_D
+316 2P_E
+317 2P_F
+318 2P_0
+
+
+320 old_AAA
+321 old_AA
+322 old_A
+323 old_B
+324 old_C
+325 old_D
+326 old_E
+327 old_F
+
+
+330 ScoreUpdate
+331 MAXCOMBOUpdate
+332 BPUpdate
+333 TrialUpdate
+334 IRrankUpdate
+335 ScoreRankUpdate
+
+
+340 new_AAA
+341 new_AA
+342 new_A
+343 new_B
+344 new_C
+345 new_D
+346 new_E
+347 new_F
+
+
+350 ResultFlip_OFF
+351 ResultFlip_ON
+
+352 1PWIN_2PLOSE
+353 1PLOSE_2PWIN
+354 DRAW
+
+
+400 7/14KEYS
+401 9KEYS
+402 5/10KEYS
+
+
+500 Beginner_Exist_NO
+501 normal_Exist_NO
+502 hyper_Exist_NO
+503 another_Exist_NO
+504 insane_Exist_NO
+
+505 beginner_Exist_YES
+506 normal_Exist_YES
+507 hyper_Exist_YES
+508 another_Exist_YES
+509 insane_Exist_YES
+
+510 beginner_Exist_ONLYONE
+511 normal_Exist_ONLYONE
+512 hyper_Exist_ONLYONE
+513 another_Exist_ONLYONE
+514 insane_Exist_ONLYONE
+
+515 beginner_Exist_SEVERAL
+516 normal_Exist_SEVERAL
+517 hyper_Exist_SEVERAL
+518 another_Exist_SEVERAL
+519 nsan_Exist_SEVERAL
+
+520 levelbar_beginner_noplay
+521 levelbar_beginner_failed
+522 levelbar_beginner_easy
+523 levelbar_beginner_clear
+524 levelbar_beginner_hardclear
+525 levelbar_beginner_fullcombo
+
+
+530 levelbar_normal_noplay
+531 levelbar_normal_failed
+532 levelbar_normal_easy
+533 levelbar_normal_clear
+534 levelbar_normal_hardclear
+535 levelbar_normal_fullcombo
+
+
+540 levelbar_hyper_no_play
+541 levelbar_hyper_failed
+542 levelbar_hyper_easy
+543 levelbar_hyper_clear
+544 levelbar_hyper_hardclear
+545 levelbar_hyper_fullcombo
+
+
+550 levelbar_another_no_play
+551 levelbar_another_failed
+552 levelbar_another_easy
+553 levelbar_another_clear
+554 levelbar_another_hardclear
+555 levelbar_another_fullcombo
+
+
+560 levelbar_insane_no_play
+561 levelbar_insane_failed
+562 levelbar_insane_easy
+563 levelbar_insane_clear
+564 levelbar_insane_hardclear
+565 levelbar_insane_fullcombo
+
+
+571 isCourseSelect_YES
+572 isCourseSelect_NO
+
+
+580 stage_morethan_1
+581 stage_morethan_2
+582 stage_morethan_3
+583 stage_morethan_4
+584 stage_morethan_5
+585 stage_morethan_6
+586 stage_morethan_7
+587 stage_morethan_8
+588 stage_morethan_9
+589 stage_morethan_10
+
+590 CourseSelect_stage1
+591 CourseSelect_stage2
+592 CourseSelect_stage3
+593 CourseSelect_stage4
+594 CourseSelect_stage5
+595 CourseSelect_stage6
+596 CourseSelect_stage7
+597 CourseSelect_stage8
+598 CourseSelect_stage9
+599 CourseSelect_stage10
+
+
+626 ImporteedScoreDisplayed
+
+700 stage1_difficultyNone
+701 stage1_difficulty1
+702 stage1_difficulty2
+703 stage1_difficulty3
+704 stage1_difficulty4
+705 stage1_difficulty5
+
+
+710 stage2_difficultyNone
+711 stage2_difficulty1
+712 stage2_difficulty2
+713 stage2_difficulty3
+714 stage2_difficulty4
+715 stage2_difficulty5
+
+
+720 stage3_difficultyNone
+721 stage3_difficulty1
+722 stage3_difficulty2
+723 stage3_difficulty3
+724 stage3_difficulty4
+725 stage3_difficulty5
+
+
+730 stage4_difficultyNone
+731 stage4_difficulty1
+732 stage4_difficulty2
+733 stage4_difficulty3
+734 stage4_difficulty4
+735 stage4_difficulty5
+
+
+740 stage5_difficultyNone
+741 stage5_difficulty1
+742 stage5_difficulty2
+743 stage5_difficulty3
+744 stage5_difficulty4
+745 stage5_difficulty5
+
+
+600 IR_NOTTARGET
+601 IR_LOAD
+602 IR_COMPLETE
+603 IR_NOPLAYER
+604 IR_CONNECTIONFAIL
+605 BANNED_SONG
+606 IR_UPDATE_WAIT
+607 IR_ACCESSING
+608 IR_BUSY
+
+
+620 SHOW_RANK_NO
+621 SHOW_RANK_YES
+
+622 GBATTLE_NO
+623 GBATTLE_YES
+
+624 COMPARING_SCORE_NO
+625 COMPARING_SCORE_YES
+
+
+640 NOT_PLAYED
+641 FAILED
+642 EASY_CLEARED
+643 NORMAL_CLEARED
+644 HARD_CLEARED
+645 FULL_COMBO
+
+650 AAA_8/9
+651 AA_7/9
+652 A_6/9
+653 B_5/9
+654 C_4/9
+655 D_3/9
+656 E_2/9
+657 F_1/9
+
+
+999 Alwaysfalse

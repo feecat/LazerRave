@@ -1,0 +1,508 @@
+﻿#include "LR2_gameloop.h"
+#include "Engine.h"
+#include "LR2_replay.h"
+#include "LR2_audio.h"
+#include "LR2_skinobject.h"
+
+#include "Scenes.h"
+
+void ReactInput(game *g) {
+
+	GetTimeWrap();
+	if (g->txtStruct.readme.show > 0 && g->is_starter == 0) {
+
+		g->txtStruct.readme.h += g->KeyInput.mousewheel * g->skstruct.src_README[0].op1;
+
+		if ( (g->KeyInput.mouse_buttonR == 3
+			|| (g->KeyInput.inputID[KEY_INPUT_F2] == 1 || g->KeyInput.p1_buttonInput[1] == 1 || g->KeyInput.p1_buttonInput[2] == 1)
+			|| (g->KeyInput.p1_buttonInput[3] == 1 || g->KeyInput.p1_buttonInput[4] == 1 || g->KeyInput.p1_buttonInput[5] == 1)
+			|| (g->KeyInput.p1_buttonInput[6] == 1 || g->KeyInput.p1_buttonInput[7] == 1))
+			|| (g->KeyInput.p2_buttonInput[1] == 1 || g->KeyInput.p2_buttonInput[2] == 1 || g->KeyInput.p2_buttonInput[3] == 1 || g->KeyInput.p2_buttonInput[4] == 1 || g->KeyInput.p2_buttonInput[5] == 1 || g->KeyInput.p2_buttonInput[6] == 1 || g->KeyInput.p2_buttonInput[7] == 1)
+			|| g->KeyInput.inputID[KEY_INPUT_RETURN] == 1) {
+			
+			ResetTimeLapse(15, &g->timer1);
+			SetTimeLapse(16, &g->timer1);
+			g->txtStruct.readme.show = 0;
+		}
+		else if (g->KeyInput.mouse_buttonL == 2) {
+			if (g->KeyInput.mouse_oldX < 200) {
+				g->txtStruct.readme.w += g->timer1.tickTime * 600.0 / 1000.0;
+			}
+			else if (g->KeyInput.mouse_oldX > skinSizeX - 200) {
+				g->txtStruct.readme.w -= g->timer1.tickTime * 1200.0 / 1000.0;
+			}
+			
+			if (g->KeyInput.mouse_oldY < 150) {
+				g->txtStruct.readme.h += g->timer1.tickTime * 600.0 / 1000.0;
+			}
+			else if (g->KeyInput.mouse_oldY > skinSizeY - 150) {
+				g->txtStruct.readme.h -= g->timer1.tickTime * 1200.0 / 1000.0;
+			}
+		}
+
+		if (g->KeyInput.inputID[KEY_INPUT_UP] == 2) {
+			g->txtStruct.readme.h += g->timer1.tickTime * 600.0 / 1000.0;
+		}
+		if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 2) {
+			g->txtStruct.readme.h -= g->timer1.tickTime * 1200.0/ 1000.0;
+		}
+		//TODO_RESOULUTION
+		if (g->txtStruct.readme.h < skinSizeY - g->txtStruct.readme.y) g->txtStruct.readme.h = skinSizeY - g->txtStruct.readme.y;
+		if (g->txtStruct.readme.w < skinSizeX - g->txtStruct.readme.x) g->txtStruct.readme.w = skinSizeX - g->txtStruct.readme.x;
+		if (g->txtStruct.readme.w > 0) g->txtStruct.readme.w = 0;
+		if (g->txtStruct.readme.h > 0) g->txtStruct.readme.h = 0;
+	}
+	GetTimeWrap();
+
+	GetTimeWrap();
+	if (!g->audio.disableFmod) FMOD_System_Update(g->audio.fmodSys);
+	SetVolumeByFade(&g->audio);
+	GetTimeWrap();
+
+	GetTimeWrap();
+	if (g->sSelect.metaSelected.keymode >= 10) {
+		if (g->procSelecter == 4 && g->config.play.battle == OPTION_BATTLE_SP2DP) {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 1, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 1, 0);
+		}
+		else {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 0, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 0, 0);
+		}
+	}
+	else {
+		if (g->procSelecter == 4 && g->config.play.battle == OPTION_BATTLE_OFF) {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 1, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 1, 0);
+		}
+		else if (g->sSelect.metaSelected.keymode <= 8) {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 0, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 0, 0);
+		}
+		else if (g->procSelecter == 4 && g->config.play.battle == OPTION_BATTLE_SP2DP) {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 1, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 1, 0);
+		}
+		else {
+			if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0)
+				InputToButton(&g->KeyInput, &g->config.input, 0, 1);
+			else
+				InputToButton(&g->KeyInput, &g->config.input, 0, 0);
+		}
+	}
+	GetTimeWrap();
+
+	GetTimeWrap();
+
+	if (g->gameplay.replay.status == 1 && GetTimeLapse(41, &g->timer1) != -1.0 && g->procSelecter == 4) {
+		InputToReplay(&g->gameplay.replay, &g->KeyInput, GetTimeLapse(41, &g->timer1), g->gameplay.scratchSide);
+	}
+	else if (g->gameplay.replay.status == 2 && GetTimeLapse(41, &g->timer1) != -1.0 && g->procSelecter == 4) {
+		ReplayToInput(&g->gameplay.replay, g, &g->audio, &g->gameplay, &g->KeyInput, &g->timer1);
+	}
+	GetTimeWrap();
+
+	GetTimeWrap();
+	if (g->txtStruct.st_text_num != -1) {
+		std::ranges::fill(g->KeyInput.p1_buttonInput, 0);
+		std::ranges::fill(g->KeyInput.p2_buttonInput, 0);
+	}
+	if (GetTimeLapse(1, &g->timer1) >= 0.0) {
+		for (int i = 0; i < 10; i++) {
+			if (g->KeyInput.p1_buttonInput[i] == 1) {
+				SetTimeLapse(100 + i, &g->timer1);
+				ResetTimeLapse(120 + i, &g->timer1);
+			}
+			if (g->KeyInput.p1_buttonInput[i] == 3) {
+				ResetTimeLapse(100 + i, &g->timer1);
+				SetTimeLapse(120 + i, &g->timer1);
+			}
+		}
+		
+		for (int i = 0; i < 10; i++) {
+			if (g->KeyInput.p2_buttonInput[i] == 1) {
+				SetTimeLapse(110 + i, &g->timer1);
+				ResetTimeLapse(130 + i, &g->timer1);
+			}
+			if (g->KeyInput.p2_buttonInput[i] == 3) {
+				ResetTimeLapse(110 + i, &g->timer1);
+				SetTimeLapse(130 + i, &g->timer1);
+			}
+		}
+	}
+	GetTimeWrap();
+
+	GetTimeWrap();
+	FxByMIDI(g);
+	GetTimeWrap();
+
+	GetTimeWrap();
+	SetObjectValue_Slider(g, &g->skstruct, &g->timer1, 0);
+	GetTimeWrap();
+
+	GetTimeWrap();
+	SetObjectValue_Button(g, &g->skstruct, &g->timer1, 0);
+	GetTimeWrap();
+
+	GetTimeWrap();
+	if (g->procSelecter == 7) {
+		SetObjectValue_Slider(g, &g->skstruct2, &g->timer2, 1);
+		SetObjectValue_Button(g, &g->skstruct2, &g->timer2, 1);
+	}
+
+	if (g->procSelecter == 4) {
+		enum {
+			BUTTON_SCRATCH_DOWN = 10,
+			BUTTON_SCRATCH_UP = 11,
+			BUTTON_START = 12,
+			BUTTON_SELECT = 13,
+		};
+		enum {
+			INPUT_PRESS = 1,
+			INPUT_HOLD = 2,
+		};
+
+		auto& p1 = g->KeyInput.p1_buttonInput;
+		auto& p2 = g->KeyInput.p2_buttonInput;
+		const bool coverActiveP1 = (g->config.play.lanecover[PLAYER_1] && g->gameplay.lanecoverDisplayP1 == 1);
+
+		// Wheel: lift when cover inactive; otherwise cover ±1
+		if (g->is_starter == 0 && g->config.play.lift[PLAYER_1] && !coverActiveP1 && g->KeyInput.mousewheel != 0) {
+			g->config.play.liftv[PLAYER_1] -= g->KeyInput.mousewheel;
+		}
+		else if (g->config.play.lanecover[PLAYER_1] == 1) {
+			g->config.play.lanecoverv[PLAYER_1] -= g->KeyInput.mousewheel;
+		}
+
+		if (g->is_starter == 0) {
+			const bool coverActiveP2 = (g->config.play.lanecover[PLAYER_2] && g->gameplay.lanecoverDisplayP2 == 1);
+			const bool startOrSelectP1 = (p1[BUTTON_START] == INPUT_HOLD || p1[BUTTON_SELECT] == INPUT_HOLD);
+			const bool startOrSelectP2 = (p2[BUTTON_START] == INPUT_HOLD || p2[BUTTON_SELECT] == INPUT_HOLD);
+
+			// Start/Select + scratch: lift ±1 (edge, then every 100ms)
+			static double liftScratchTickP1 = 0.0;
+			static double liftScratchTickP2 = 0.0;
+			const double now = GetTimeWrap();
+			auto stepLiftFromScratch = [&](const unsigned char *btn, int &liftv, double &tick) {
+				const bool down = (btn[BUTTON_SCRATCH_DOWN] == INPUT_PRESS || btn[BUTTON_SCRATCH_DOWN] == INPUT_HOLD);
+				const bool up = (btn[BUTTON_SCRATCH_UP] == INPUT_PRESS || btn[BUTTON_SCRATCH_UP] == INPUT_HOLD);
+				if (!down && !up) {
+					tick = 0.0;
+					return;
+				}
+				const bool edge = (btn[BUTTON_SCRATCH_DOWN] == INPUT_PRESS || btn[BUTTON_SCRATCH_UP] == INPUT_PRESS);
+				if (edge || tick == 0.0 || now - tick >= 100.0) {
+					if (down)
+						liftv -= 1;
+					else
+						liftv += 1;
+					tick = now;
+				}
+			};
+
+			const bool liftScratchP1 =
+				g->config.play.lift[PLAYER_1] && !coverActiveP1 && startOrSelectP1;
+			const bool liftScratchP2Battle =
+				g->config.play.battle == OPTION_BATTLE_BATTLE
+				&& g->config.play.lift[PLAYER_2] && !coverActiveP2 && startOrSelectP2;
+			const bool liftScratchP1FromP2 =
+				g->config.play.battle != OPTION_BATTLE_BATTLE
+				&& g->config.play.lift[PLAYER_1] && !coverActiveP1 && !coverActiveP2 && startOrSelectP2;
+
+			if (liftScratchP1)
+				stepLiftFromScratch(p1, g->config.play.liftv[PLAYER_1], liftScratchTickP1);
+			else if (liftScratchP1FromP2)
+				stepLiftFromScratch(p2, g->config.play.liftv[PLAYER_1], liftScratchTickP1);
+			else
+				liftScratchTickP1 = 0.0;
+
+			if (liftScratchP2Battle)
+				stepLiftFromScratch(p2, g->config.play.liftv[PLAYER_2], liftScratchTickP2);
+			else
+				liftScratchTickP2 = 0.0;
+
+			if (startOrSelectP1
+				&& (p1[1] == INPUT_PRESS || p1[3] == INPUT_PRESS || p1[5] == INPUT_PRESS)) {
+
+				g->config.play.hiSpeed[PLAYER_1] -= g->config.play.hsmargin;
+				g->gameplay.isSpeedChanged = true;
+			}
+
+			if (startOrSelectP1
+				&& (p1[2] == INPUT_PRESS || p1[4] == INPUT_PRESS)) {
+
+				g->config.play.hiSpeed[PLAYER_1] += g->config.play.hsmargin;
+				g->gameplay.isSpeedChanged = true;
+			}
+
+			if (startOrSelectP2
+				&& (p2[1] == INPUT_PRESS || p2[3] == INPUT_PRESS || p2[5] == INPUT_PRESS)) {
+
+				if (g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_2] -= g->config.play.hsmargin;
+					g->gameplay.isSpeedChanged = true;
+				}
+				else {
+					g->config.play.hiSpeed[PLAYER_1] -= g->config.play.hsmargin;
+					g->gameplay.isSpeedChanged = true;
+				}
+			}
+
+			if (startOrSelectP2
+				&& (p2[2] == INPUT_PRESS || p2[4] == INPUT_PRESS)) {
+
+				if (g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_2] += g->config.play.hsmargin;
+					g->gameplay.isSpeedChanged = true;
+				}
+				else {
+					g->config.play.hiSpeed[PLAYER_1] += g->config.play.hsmargin;
+					g->gameplay.isSpeedChanged = true;
+				}
+			}
+
+			if (g->config.play.lanecover[PLAYER_1] && g->gameplay.lanecoverDisplayP1 == 1) {
+				if (startOrSelectP1 && p1[6] == INPUT_PRESS) {
+					g->config.play.lanecoverv[PLAYER_1] -= g->config.play.shuttermargin;
+				}
+
+				if (startOrSelectP1 && p1[7] == INPUT_PRESS) {
+					g->config.play.lanecoverv[PLAYER_1] += g->config.play.shuttermargin;
+				}
+
+				if (startOrSelectP2 && p2[6] == INPUT_PRESS && g->config.play.battle != OPTION_BATTLE_BATTLE) {
+					g->config.play.lanecoverv[PLAYER_1] -= g->config.play.shuttermargin;
+				}
+
+				if (startOrSelectP2 && p2[7] == INPUT_PRESS && g->config.play.battle != OPTION_BATTLE_BATTLE) {
+					g->config.play.lanecoverv[PLAYER_1] += g->config.play.shuttermargin;
+				}
+			}
+			else {
+				if (startOrSelectP1 && p1[6] == INPUT_PRESS) {
+					g->config.play.hiSpeed[PLAYER_1] += g->config.play.hsmargin;
+				}
+
+				if (startOrSelectP1 && p1[7] == INPUT_PRESS) {
+					g->config.play.hiSpeed[PLAYER_1] -= g->config.play.hsmargin;
+				}
+
+				if (startOrSelectP2 && p2[6] == INPUT_PRESS && g->config.play.battle != OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_1] += g->config.play.hsmargin;
+				}
+
+				if (startOrSelectP2 && p2[7] == INPUT_PRESS && g->config.play.battle != OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_1] -= g->config.play.hsmargin;
+				}
+			}
+
+			if (g->config.play.lanecover[PLAYER_2] && g->gameplay.lanecoverDisplayP2 == 1) {
+				if (startOrSelectP2 && p2[6] == INPUT_PRESS && g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.lanecoverv[PLAYER_2] -= g->config.play.shuttermargin;
+				}
+
+				if (startOrSelectP2 && p2[7] == INPUT_PRESS && g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.lanecoverv[PLAYER_2] += g->config.play.shuttermargin;
+				}
+			}
+			else {
+				if (startOrSelectP2 && p2[6] == INPUT_PRESS && g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_2] += g->config.play.hsmargin;
+				}
+
+				if (startOrSelectP2 && p2[7] == INPUT_PRESS && g->config.play.battle == OPTION_BATTLE_BATTLE) {
+					g->config.play.hiSpeed[PLAYER_2] -= g->config.play.hsmargin;
+				}
+			}
+		}
+	}
+
+	if (g->config.play.lanecoverv[PLAYER_1] < 0) g->config.play.lanecoverv[PLAYER_1] = 0;
+	if (g->config.play.lanecoverv[PLAYER_1] > 100) g->config.play.lanecoverv[PLAYER_1] = 100;
+
+	if (g->config.play.liftv[PLAYER_1] < 0) g->config.play.liftv[PLAYER_1] = 0;
+	if (g->config.play.liftv[PLAYER_1] > 100) g->config.play.liftv[PLAYER_1] = 100;
+
+	if (g->config.play.hiSpeed[PLAYER_1] < g->config.play.hsmin) g->config.play.hiSpeed[PLAYER_1] = g->config.play.hsmin;
+	if (g->config.play.hiSpeed[PLAYER_1] > g->config.play.hsmax) g->config.play.hiSpeed[PLAYER_1] = g->config.play.hsmax;
+
+	if (g->config.play.lanecoverv[PLAYER_2] < 0) g->config.play.lanecoverv[PLAYER_2] = 0;
+	if (g->config.play.lanecoverv[PLAYER_2] > 100) g->config.play.lanecoverv[PLAYER_2] = 100;
+
+	if (g->config.play.liftv[PLAYER_2] < 0) g->config.play.liftv[PLAYER_2] = 0;
+	if (g->config.play.liftv[PLAYER_2] > 100) g->config.play.liftv[PLAYER_2] = 100;
+
+	if (g->config.play.hiSpeed[PLAYER_2] < g->config.play.hsmin) g->config.play.hiSpeed[PLAYER_2] = g->config.play.hsmin;
+	if (g->config.play.hiSpeed[PLAYER_2] > g->config.play.hsmax) g->config.play.hiSpeed[PLAYER_2] = g->config.play.hsmax;
+
+	if (g->KeyInput.p1_buttonInput[10] == 2) {
+		g->skstruct.scratchAngle_1 -= (GetTimeWrap() - g->timer1.scratch) * 2 * 360.0 / 1000.0;
+	}
+	else if (g->KeyInput.p1_buttonInput[11] == 2) {
+		g->skstruct.scratchAngle_1 += (GetTimeWrap() - g->timer1.scratch) * 2 * 360.0 / 1000.0;
+	}
+	else if (GetTimeLapse(41, &g->timer1) >= 0.0) {
+		g->skstruct.scratchAngle_1 += (GetTimeWrap() - g->timer1.scratch) * 360.0 / 1000.0;
+	}
+
+	if (g->KeyInput.p2_buttonInput[10] == 2) {
+		g->skstruct.scratchAngle_2 -= (GetTimeWrap() - g->timer1.scratch) * 2 * 360.0 / 1000.0;
+	}
+	else if (g->KeyInput.p2_buttonInput[11] == 2) {
+		g->skstruct.scratchAngle_2 += (GetTimeWrap() - g->timer1.scratch) * 2 * 360.0 / 1000.0;
+	}
+	else if (GetTimeLapse(41, &g->timer1) >= 0.0) {
+		g->skstruct.scratchAngle_2 += (GetTimeWrap() - g->timer1.scratch) * 360.0 / 1000.0;
+	}
+
+	if (GetTimeLapse(41, &g->timer1) >= 0) {
+		g->timer1.Rhythm = ( (GetTimeWrap() - g->timer1.rhythmTick) * g->gameplay.BPM) / 60.0 + g->timer1.Rhythm;
+	}
+
+	if(g->procSelecter==4){
+		enum {
+			BUTTON_START = 12,
+			BUTTON_SELECT = 13,
+		};
+		enum {
+			INPUT_PRESS = 1,
+			INPUT_HOLD = 2,
+		};
+
+		auto& p1 = g->KeyInput.p1_buttonInput;
+		auto& p2 = g->KeyInput.p2_buttonInput;
+
+		// Cover display: Start or Select edge only (not both)
+		const bool p1SingleEdge =
+			(p1[BUTTON_START] == INPUT_PRESS && p1[BUTTON_SELECT] != INPUT_PRESS && p1[BUTTON_SELECT] != INPUT_HOLD) ||
+			(p1[BUTTON_SELECT] == INPUT_PRESS && p1[BUTTON_START] != INPUT_PRESS && p1[BUTTON_START] != INPUT_HOLD);
+		const bool p2SingleEdge =
+			(p2[BUTTON_START] == INPUT_PRESS && p2[BUTTON_SELECT] != INPUT_PRESS && p2[BUTTON_SELECT] != INPUT_HOLD) ||
+			(p2[BUTTON_SELECT] == INPUT_PRESS && p2[BUTTON_START] != INPUT_PRESS && p2[BUTTON_START] != INPUT_HOLD);
+
+		if (p1SingleEdge || (p2SingleEdge && g->config.play.battle != OPTION_BATTLE_BATTLE)) {
+			if (g->gameplay.lanecoverDoubleclickTimeP1 == 0 || GetTimeWrap() - g->gameplay.lanecoverDoubleclickTimeP1 > 250.0) {
+				g->gameplay.lanecoverDoubleclickTimeP1 = GetTimeWrap();
+			}
+			else {
+				g->gameplay.lanecoverDoubleclickTimeP1 = 0;
+				g->gameplay.lanecoverDisplayP1 = (g->gameplay.lanecoverDisplayP1 == 0); //means, toggle
+			}
+		}
+
+		if (p2SingleEdge && g->config.play.battle == OPTION_BATTLE_BATTLE) {
+			if (g->gameplay.lanecoverDoubleclickTimeP2 == 0 || GetTimeWrap() - g->gameplay.lanecoverDoubleclickTimeP2 > 250.0) {
+				g->gameplay.lanecoverDoubleclickTimeP2 = GetTimeWrap();
+			}
+			else {
+				g->gameplay.lanecoverDoubleclickTimeP2 = 0;
+				g->gameplay.lanecoverDisplayP2 = (g->gameplay.lanecoverDisplayP2 == 0); //means, toggle
+			}
+		}
+
+		if (g->KeyInput.mouse_buttonL == INPUT_PRESS) {
+			if (g->gameplay.lanecoverDoubleclickTimeP1 == 0 || GetTimeWrap() - g->gameplay.lanecoverDoubleclickTimeP1 > 250.0) {
+				g->gameplay.lanecoverDoubleclickTimeP1 = GetTimeWrap();
+			}
+			else {
+				g->gameplay.lanecoverDoubleclickTimeP1 = 0;
+				g->gameplay.lanecoverDisplayP1 = (g->gameplay.lanecoverDisplayP1 == 0); //means, toggle
+			}
+		}
+	}
+
+	if(g->config.play.m_isLunaris && GetTimeLapse(41,&g->timer1) > 0.0 && g->procPhase == 1){
+		ProcI_Lunaris(g);
+	}
+	if (g->procSelecter == 4 && !g->config.play.m_isLunaris) {
+		
+		if (g->KeyInput.inputID[KEY_INPUT_1] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.shift_y -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.shift_y += 10;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.shift_x -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.shift_x += 10;
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_2] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.rate_y -= 5;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.rate_y += 5;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.rate_x -= 5;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.rate_x += 5;
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_3] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.judge_y -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.judge_y += 10;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.judge_x -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.judge_x += 10;
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_4] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.size_y += 1;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.size_y -= 1;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.size_x -= 1;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.size_x += 1;
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_5] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) {
+				LoopInRange(0, 2, 1, &g->skstruct.adjust.dark_type); //original code doesn't call function, but it's same...
+				/*g->skstruct.adjust.dark_type++;
+				if (g->skstruct.adjust.dark_type > 2) g->skstruct.adjust.dark_type = 0;
+				else if (g->skstruct.adjust.dark_type < 0) g->skstruct.adjust.dark_type = 2;*/
+			}
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) LoopInRange(0, 2, -1, &g->skstruct.adjust.dark_type);
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) LoopInRange(0, 2, 1, &g->skstruct.adjust.dark_type);
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) LoopInRange(0, 2, -1, &g->skstruct.adjust.dark_type);
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_6] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.note_y[PLAYER_1] -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.note_y[PLAYER_1] += 10;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.note_x[PLAYER_1] -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.note_x[PLAYER_1] += 10;
+		}
+		else if (g->KeyInput.inputID[KEY_INPUT_7] == 2) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) g->skstruct.adjust.note_y[PLAYER_2] -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) g->skstruct.adjust.note_y[PLAYER_2] += 10;
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) g->skstruct.adjust.note_x[PLAYER_2] -= 10;
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1) g->skstruct.adjust.note_x[PLAYER_2] += 10;
+		}
+		else if (!g->config.play.disableCurSpeedChange) {
+			if (g->KeyInput.inputID[KEY_INPUT_UP] == 1) {
+				LoopInRange(g->config.play.hsmin, g->config.play.hsmax, g->config.play.hsmargin, &g->config.play.hiSpeed[PLAYER_1]); //original code doesn't call function, but it's same...
+			}
+			if (g->KeyInput.inputID[KEY_INPUT_DOWN] == 1) LoopInRange(g->config.play.hsmin, g->config.play.hsmax, -g->config.play.hsmargin, &g->config.play.hiSpeed[PLAYER_1]);
+			if (g->KeyInput.inputID[KEY_INPUT_RIGHT] == 1){
+				LoopInRange(-1000, 1000, g->config.play.shuttermargin, &g->config.play.lanecoverv[PLAYER_1]); //original code doesn't call function, but it's same...
+			}
+			if (g->KeyInput.inputID[KEY_INPUT_LEFT] == 1) LoopInRange(-1000, 1000, -g->config.play.shuttermargin, &g->config.play.lanecoverv[PLAYER_1]);
+
+			if (g->config.play.lanecoverv[PLAYER_1] > 100) g->config.play.lanecoverv[PLAYER_1] = 100;
+			if (g->config.play.lanecoverv[PLAYER_1] < 0) g->config.play.lanecoverv[PLAYER_1] = 0;
+		}
+	}
+	g->timer1.scratch = GetTimeWrap();
+	g->timer1.rhythmTick = GetTimeWrap();
+	if (g->procSelecter == 7) {
+		g->timer2.scratch = g->timer1.scratch;
+		g->timer2.rhythmTick = g->timer1.rhythmTick;
+	}
+	if (g->KeyInput.inputID[KEY_INPUT_F6] == 1) {
+		g->flag_Screenshot = true;
+	}
+	if (g->KeyInput.inputID[KEY_INPUT_F7] == 1) {
+		g->flag_showFPS = !g->flag_showFPS;
+	}
+}
+
+
+
+
+
+

@@ -1,0 +1,3157 @@
+﻿#include "LR2_songmanage.h"
+#include "LR2_customir.h"
+#include "LR2_statlong.h"
+#include "filesystem.h"
+#include "filesystem.h"
+#include <algorithm>
+#include <cassert>
+#include <cstring>
+#include <filesystem>
+#include <iterator>
+#include <ranges>
+#include <string>
+#include <string_view>
+#include <charconv>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <stdexcept>
+#include <memory>
+
+#ifdef _WIN32
+#include <shellapi.h>
+#endif // _WIN32
+
+int EnabledInsane;
+
+namespace {
+
+// --- Reload scan cache (single init per full autoreload) -------------------
+// Built once before a full reload; lets the folder/song passes skip charts
+// already present in song.db. The skip is hash-verified, so an in-place edit
+// (same path, changed content) still falls through to a full reparse.
+bool g_fullSongPass = false;
+bool g_reloadHeadless = false;
+std::unordered_map<std::string, std::string> g_songHashes;
+std::unordered_set<std::string> g_processedSongPaths;
+std::string g_songPassDisplayedFolder;
+
+std::string MakePathKey(CSTR path) {
+	return path.body ? std::string(path.body) : std::string();
+}
+
+void BuildSongReloadSnapshot(sqlite3* sql) {
+	g_fullSongPass = true;
+	g_songHashes.clear();
+	g_processedSongPaths.clear();
+	g_songPassDisplayedFolder.clear();
+
+	sqlite3_stmt* pStmt = nullptr;
+	if (sqlite3_prepare(sql, "SELECT path,hash FROM song", -1, &pStmt, nullptr) != 0) return;
+	while (sqlite3_step(pStmt) == 100) {
+		const std::string pathKey = MakePathKey(SQL_GetColumn(0, pStmt));
+		g_songHashes.emplace(pathKey, MakePathKey(SQL_GetColumn(1, pStmt)));
+	}
+	sqlite3_finalize(pStmt);
+}
+
+void EndSongReloadSnapshot() {
+	g_fullSongPass = false;
+	g_songHashes.clear();
+	g_processedSongPaths.clear();
+}
+
+// --- Scan progress display (loading screen feedback during autoreload) ------
+
+void ShowReloadFolderPassProgress(const size_t processed, const size_t total, CSTR path) {
+	if (g_reloadHeadless) return;
+	if (!g_fullSongPass || total == 0) return;
+	if (processed != total && processed % 64 != 0) { 
+		ProcessMessage(); 
+		return; 
+	}
+
+	const int percent = static_cast<int>(100 * processed / total);
+	if (hBackImage > 0) DrawGraph(0, 0, hBackImage, 0); 
+	
+	printfDx("Now Loading...\n%d / %d (%d%%)\n%s\n", static_cast<int>(processed), static_cast<int>(total), percent, path.body);
+	ScreenFlip(); 
+	ClsDrawScreen(); 
+	clsDx(); 
+	ProcessMessage();
+}
+
+// Song-pass feedback. Called with an empty path from the row loop (shows the
+// overall progress bar, only until the first file gets hash-checked) and with a
+// concrete path from RefreshSongDateIfHashMatches (shows the folder being
+// hashed, once per folder).
+void ShowReloadSongPassProgress(const size_t processed, const size_t total, CSTR path) {
+	if (g_reloadHeadless) return;
+	if (!g_fullSongPass || total == 0) return;
+
+	if (path.body && path.body[0]) {
+		const CSTR folder(path.getDirectory());
+		const std::string folderKey = MakePathKey(folder);
+		if (folderKey == g_songPassDisplayedFolder) {
+			ProcessMessage();
+			return;
+		}
+		g_songPassDisplayedFolder = folderKey;
+		if (hBackImage > 0) DrawGraph(0, 0, hBackImage, 0);
+
+		printfDx("Checking song folder...\n%s\n", folder.body);
+		ScreenFlip();
+		ClsDrawScreen();
+		clsDx();
+		ProcessMessage();
+		return;
+	}
+
+	if (!g_songPassDisplayedFolder.empty()) {
+		ProcessMessage();
+		return;
+	}
+
+	if (processed != total && processed % 512 != 0) {
+		ProcessMessage();
+		return;
+	}
+
+	const int width = 300, height = 14, x = 0, y = 32;
+	const int filled = static_cast<int>(width * processed / total);
+	const int percent = static_cast<int>(100 * processed / total);
+
+	if (hBackImage > 0) DrawGraph(0, 0, hBackImage, 0);
+
+	printfDx("Checking song files...\n%d / %d (%d%%)\n", static_cast<int>(processed), static_cast<int>(total), percent);
+	DrawBox(x, y, x + width, y + height, GetColor(64, 64, 64), true);
+	DrawBox(x, y, x + filled, y + height, GetColor(255, 255, 255), true);
+
+	ScreenFlip();
+	ClsDrawScreen();
+	clsDx();
+	ProcessMessage();
+}
+
+// ---------------------------------------------------------------------------
+
+bool RefreshSongDateIfHashMatches(sqlite3* sql, CSTR path, const int newTime, char* queryBuffer, const size_t queryBufferSize) {
+	if (!g_fullSongPass) return false;
+
+	const auto it = g_songHashes.find(MakePathKey(path));
+	if (it == g_songHashes.end() || it->second.empty()) return false;
+
+	ShowReloadSongPassProgress(0, 1, path);
+	CSTR currentHash;
+	if (makeFileHash(path.body, currentHash.body) != 1) return false;
+	if (strcmp(currentHash.body, it->second.c_str()) != 0) return false;
+
+	SQL_Run(sqlite3_snprintf(static_cast<int>(queryBufferSize), queryBuffer, "UPDATE song SET date = %d WHERE path = \'%q\'", newTime, path.body), sql);
+	g_processedSongPaths.insert(MakePathKey(path));
+	return true;
+}
+
+char ToUpperAscii(char ch) {
+	if ('a' <= ch && ch <= 'z') return ch - ('a' - 'A');
+	return ch;
+}
+
+bool StartsWithICaseAscii(std::string_view str, std::string_view head) {
+	if (str.size() < head.size()) return false;
+	for (size_t i = 0; i < head.size(); ++i) {
+		if (ToUpperAscii(str[i]) != ToUpperAscii(head[i])) return false;
+	}
+	return true;
+}
+
+bool IsDigitAscii(char ch) {
+	return '0' <= ch && ch <= '9';
+}
+
+bool GetRawBodyInt(std::string_view line, std::string_view head, int& out) {
+	if (!StartsWithICaseAscii(line, head)) return false;
+	if (line.size() <= head.size() + 1) return false;
+
+	int value = 0;
+	const auto result = std::from_chars(line.data() + head.size() + 1, line.data() + line.size(), value);
+	if (result.ec != std::errc()) return false;
+
+	out = value;
+	return true;
+}
+
+void UpdateBpmRange(BMSMETA& meta, const int bpm) {
+	if (bpm <= 0) return;
+	if (meta.maxbpm == 0) {
+		meta.maxbpm = bpm;
+		meta.minbpm = bpm;
+	}
+	else if (bpm > meta.maxbpm) {
+		meta.maxbpm = bpm;
+	}
+	else if (bpm < meta.minbpm) {
+		meta.minbpm = bpm;
+	}
+}
+
+bool IsTextCommand(std::string_view line) {
+	return StartsWithICaseAscii(line, "#TITLE") ||
+		StartsWithICaseAscii(line, "#GENRE") ||
+		StartsWithICaseAscii(line, "#CATEGORY") ||
+		StartsWithICaseAscii(line, "#SUBTITLE") ||
+		StartsWithICaseAscii(line, "#ARTIST") ||
+		StartsWithICaseAscii(line, "#SUBARTIST") ||
+		StartsWithICaseAscii(line, "#INFORMATION_A") ||
+		StartsWithICaseAscii(line, "#INFORMATION_B") ||
+		StartsWithICaseAscii(line, "#TAG") ||
+		StartsWithICaseAscii(line, "#COMMAND") ||
+		StartsWithICaseAscii(line, "#STAGEFILE") ||
+		StartsWithICaseAscii(line, "#BANNER") ||
+		StartsWithICaseAscii(line, "#BACKBMP");
+}
+
+bool ParseTextCommand(BMSMETA& meta, CSTR& line) {
+	if (GetDifficulty(&line, "#TITLE", &meta.title, &meta.subtitle, &meta.difficulty)) return true;
+	if (GetStringBodyStr(&line, "#GENRE", &meta.genre)) {
+		CSTR none;
+		GetDifficulty(&line, "#GENRE", &none, &none, &meta.difficulty);
+		return true;
+	}
+	if (GetStringBodyStr(&line, "#CATEGORY", &meta.genre)) return true;
+	if (GetStringBodyStr(&line, "#SUBTITLE", &meta.subtitle)) return true;
+	if (GetStringBodyStr(&line, "#ARTIST", &meta.artist)) return true;
+	if (GetStringBodyStr(&line, "#SUBARTIST", &meta.subartist)) return true;
+	if (GetStringBodyStr(&line, "#INFORMATION_A", &meta.artist)) return true;
+	if (GetStringBodyStr(&line, "#INFORMATION_B", &meta.subartist)) return true;
+	if (GetStringBodyStr(&line, "#TAG", &meta.tag)) return true;
+	if (GetStringBodyStr(&line, "#COMMAND", &meta.tag)) return true;
+	if (GetStringBodyStr(&line, "#STAGEFILE", &meta.stagefilepath)) return true;
+	if (GetStringBodyStr(&line, "#BANNER", &meta.bannerpath)) return true;
+	if (GetStringBodyStr(&line, "#BACKBMP", &meta.backBMPpath)) return true;
+	return false;
+}
+
+// IR Records are locally compared and updated to the original record in lr2.
+void LoadIRDerivedRecord(sqlite3* sql, SONGDATA& sd) {
+	const char* sqlQuery = "SELECT clear, perfect, great, good, bad, poor, totalnotes, maxcombo, minbp, "
+		"rank, rate, clear_db, clear_sd, clear_ex, op_best, rseed, complete "
+		"FROM imported_score WHERE hash = ?";
+	sqlite3_stmt* stmt;
+	if (sqlite3_prepare_v2(sql, sqlQuery, -1, &stmt, nullptr) == SQLITE_OK) {
+		sqlite3_bind_text(stmt, 1, sd.hash.body, -1, SQLITE_STATIC);
+		int stepResult = sqlite3_step(stmt);
+
+		if (stepResult == SQLITE_ROW) {
+
+			STATUS myIRbest;
+			const STATUS& mybest = sd.mybest;
+
+			int clear = sqlite3_column_int(stmt, 0);
+			int perfect = sqlite3_column_int(stmt, 1);
+			int great = sqlite3_column_int(stmt, 2);
+			int good = sqlite3_column_int(stmt, 3);
+			int bad = sqlite3_column_int(stmt, 4);
+			int poor = sqlite3_column_int(stmt, 5);
+			int totalnotes = sqlite3_column_int(stmt, 6);
+			int maxcombo = sqlite3_column_int(stmt, 7);
+			int minbp = sqlite3_column_int(stmt, 8);
+			int rank = sqlite3_column_int(stmt, 9);
+			int rate = sqlite3_column_int(stmt, 10);
+			int clear_db = sqlite3_column_int(stmt, 11);
+			int clear_sd = sqlite3_column_int(stmt, 12);
+			int clear_ex = sqlite3_column_int(stmt, 13);
+			int op_best = sqlite3_column_int(stmt, 14);
+			int rseed = sqlite3_column_int(stmt, 15);
+			int complete = sqlite3_column_int(stmt, 16);
+
+			int stat_score = (good + great * 2 + perfect * 4) * 50000ULL / totalnotes;
+			int stat_exscore = perfect * 2 + great;
+			if (!minbp) {
+				minbp = bad + poor;
+			}
+
+			if (stat_exscore > mybest.stat_exscore)
+			{
+				myIRbest.stat_pgreat = perfect;
+				myIRbest.stat_great = great;
+				myIRbest.stat_good = good;
+				myIRbest.stat_bad = bad;
+				myIRbest.stat_poor = poor;
+
+				myIRbest.rank = rank;
+				myIRbest.rate = rate;
+				myIRbest.rseed = rseed;
+				myIRbest.op_best = op_best;
+				myIRbest.stat_exscore = stat_exscore;
+				myIRbest.stat_score = stat_score;
+			}
+			else
+			{
+				myIRbest.stat_pgreat = mybest.stat_pgreat;
+				myIRbest.stat_great = mybest.stat_great;
+				myIRbest.stat_good = mybest.stat_good;
+				myIRbest.stat_bad = mybest.stat_bad;
+				myIRbest.stat_poor = mybest.stat_poor;
+
+				myIRbest.rank = mybest.rank;
+				myIRbest.rate = mybest.rate;
+				myIRbest.rseed = mybest.rseed;
+				myIRbest.op_best = mybest.op_best;
+				myIRbest.stat_exscore = mybest.stat_exscore;
+				myIRbest.stat_score = mybest.stat_score;
+			}
+			
+			myIRbest.clear = std::max(mybest.clear, clear);
+			myIRbest.clear_db = std::max(mybest.clear_db, clear_db);
+			myIRbest.clear_sd = std::max(mybest.clear_sd, clear_sd);
+			myIRbest.clear_ex = std::max(mybest.clear_ex, clear_ex);
+			myIRbest.complete = std::max(mybest.complete, complete);
+
+			// total_notes can be zero
+			myIRbest.total_notes = std::max(mybest.total_notes, totalnotes);
+
+			// STATUS.clear == 5 means full combo
+			myIRbest.minbp = myIRbest.clear == 5 ? std::min(mybest.minbp, minbp) : minbp;
+			myIRbest.stat_maxcombo = myIRbest.clear == 5 ? totalnotes : std::max(mybest.stat_maxcombo, maxcombo);
+
+			// ignore playcounts
+			myIRbest.playcount = mybest.playcount;
+			myIRbest.clearcount = mybest.clearcount;
+			myIRbest.failcount = mybest.failcount;
+
+			myIRbest.op_history = mybest.op_history;
+			sd.myIRbest = myIRbest;
+		}
+
+		sqlite3_finalize(stmt);
+	}
+}
+
+} // namespace
+
+void COPY_SONGDATA(SONGDATA *self, SONGDATA *other){
+	self->title = other->title;
+	self->subtitle = other->subtitle;
+	self->genre = other->genre;
+	self->artist = other->artist;
+	self->subartist = other->subartist;
+	self->filepath = other->filepath;
+	self->fulltitle = other->fulltitle;
+	self->tag = other->tag;
+	self->hash = other->hash;
+	self->folder = other->folder;
+	self->stagefile = other->stagefile;
+	self->banner = other->banner;
+	self->backBMP = other->backBMP;
+	self->isStagefile = other->isStagefile;
+	self->isBanner = other->isBanner;
+	self->isBackBMP = other->isBackBMP;
+	self->difficulty = other->difficulty;
+	self->level = other->level;
+	self->exlevel = other->exlevel;
+	self->keymode = other->keymode;
+	self->folderType = other->folderType;
+	self->maxBPM = other->maxBPM;
+	self->minBPM = other->minBPM;
+	self->bga = other->bga;
+	self->txt = other->txt;
+	self->longnote = other->longnote;
+	self->random = other->random;
+	self->judge = other->judge;
+	self->replayExist = other->replayExist;
+	self->favorite = other->favorite;
+	self->adddate = other->adddate;
+	std::ranges::copy(other->difficultyLevel, self->difficultyLevel);
+	std::ranges::copy(other->difficultyExist, self->difficultyExist);
+	std::ranges::copy(other->difficultyLevelBarLamp, self->difficultyLevelBarLamp);
+	self->difficultyCount = other->difficultyCount;
+
+	std::ranges::copy(other->courseTitle, self->courseTitle);
+	std::ranges::copy(other->courseSubtitle, self->courseSubtitle);
+	std::ranges::copy(other->courseHash, self->courseHash);
+	std::ranges::copy(other->courseLevel, self->courseLevel);
+	std::ranges::copy(other->courseStageDifficulty, self->courseStageDifficulty);
+	std::ranges::copy(other->courseTotalnote, self->courseTotalnote);
+	self->courseID = other->courseID;
+	self->courseStageCount = other->courseStageCount;
+	self->coursePlayable = other->coursePlayable;
+	self->courseReadOnly = other->courseReadOnly;
+	std::ranges::copy(other->courseKeys, self->courseKeys);
+	self->courseType = other->courseType;
+	self->courseIR = other->courseIR;
+	self->grHandle = other->grHandle;
+	
+	self->myIRbest = other->myIRbest;
+	memcpy(&self->mybest, &other->mybest, sizeof(STATUS));
+	memcpy(&self->rivalRecord, &other->rivalRecord, sizeof(STATUS));
+}
+
+int InitSongData(SONGDATA *song){
+	song->artist.fillzero();
+	song->genre.fillzero();
+	song->level = 0;
+	song->filepath.fillzero();
+	song->subartist.fillzero();
+	song->subtitle.fillzero();
+	song->title.fillzero();
+	song->fulltitle.fillzero();
+	song->tag.fillzero();
+	song->hash.fillzero();
+	song->stagefile.fillzero();
+	song->banner.fillzero();
+	song->backBMP.fillzero();
+	song->folder.fillzero();
+	song->difficulty = 0;
+	song->folderType = 0;
+	song->keymode = 0;
+	song->maxBPM = 0;
+	song->minBPM = 0;
+	song->bga = 0;
+	song->txt = 0;
+	song->longnote = 0;
+	song->random = 0;
+	song->judge = 0;
+	song->isStagefile = false;
+	song->isBanner = false;
+	song->isBackBMP = false;
+	song->replayExist = 0;
+	song->favorite = 0;
+	song->adddate = 0;
+	song->difficultyCount = 0;
+	song->exlevel = 0;
+	std::ranges::fill(song->difficultyLevel, -1);
+	std::ranges::fill(song->difficultyExist, 0);
+	std::ranges::fill(song->difficultyLevelBarLamp, -1);
+	for (int i = 0; i < 10; i++) {
+		song->courseTitle[i].fillzero();
+		song->courseSubtitle[i].fillzero();
+		song->courseHash[i].fillzero();
+		song->courseLevel[i] = -1;
+		song->courseTotalnote[i] = 0;
+		song->courseStageDifficulty[i] = 0;
+		song->courseKeys[i] = 0;
+	}
+	song->courseID = -1;
+	song->courseStageCount = 0;
+	song->coursePlayable = 0;
+	song->mybest = {};
+	song->myIRbest.reset();
+	song->rivalRecord = {};
+	(song->mybest).minbp = -1;
+	song->courseType = -1;
+	song->courseIR = 0;
+	song->courseReadOnly = 0;
+	if (song->grHandle != -1) {
+		DeleteGraph(song->grHandle);
+	}
+	song->grHandle = -1;
+	return 1;
+}
+
+int LoadBMSMETAFromDB(BMSMETA *meta, sqlite3 *sql) {
+	char str[1024];
+	sqlite3_stmt *pStmt;
+	sqlite3_snprintf(1024, str, "SELECT * FROM tag WHERE hash = \'%q\'", meta->hash.body);
+	SQL_prepare(str, sql, &pStmt);
+	if(sqlite3_step(pStmt) == 100){
+		meta->title = SQL_GetColumn(1, pStmt);
+		meta->subtitle = SQL_GetColumn(2, pStmt);
+		meta->genre = SQL_GetColumn(3, pStmt);
+		meta->artist = SQL_GetColumn(4, pStmt);
+		meta->subartist = SQL_GetColumn(5, pStmt);
+		meta->tag = SQL_GetColumn(6, pStmt);
+		meta->selLevel = sqlite3_column_int(pStmt, 7);
+		meta->difficulty = sqlite3_column_int(pStmt, 8);
+		meta->keymode = sqlite3_column_int(pStmt, 9);
+		meta->exlevel = sqlite3_column_int(pStmt, 10);
+		sqlite3_finalize(pStmt);
+		return 1;
+	}
+	sqlite3_finalize(pStmt);
+	return 0;
+}
+
+int SetUndefinedDifficulty(sqlite3 *sql) {
+	char str[1024];
+	sqlite3_stmt *pStmt;
+	CSTR folder;
+	int mode{}, difficulty{};
+
+	sqlite3_prepare(sql, "SELECT difficulty,folder,mode,path FROM song ORDER BY folder,mode,karinotes", -1, &pStmt, NULL);
+	while (sqlite3_step(pStmt) == 100) {
+		if (0 <= sqlite3_column_int(pStmt, 0) && sqlite3_column_int(pStmt, 0) <= 5) {
+			cstrSprintf(&folder, "%s", sqlite3_column_text(pStmt, 1));
+			mode = sqlite3_column_int(pStmt, 2);
+			difficulty = sqlite3_column_int(pStmt, 0);
+		}
+		else {
+			CSTR newfolder;
+			cstrSprintf(&newfolder, "%s", sqlite3_column_text(pStmt, 1));
+			if (folder.isSame(newfolder) && (mode == sqlite3_column_int(pStmt, 2))) {
+				difficulty++;
+				if (difficulty == 5) difficulty = 4;
+				else if (difficulty < 0) difficulty = 2;
+				else if (difficulty > 5) difficulty = 5;
+			}
+			else {
+				difficulty = 2;
+			}
+			SQL_Run(sqlite3_snprintf(1024, str, "UPDATE song SET difficulty = %d WHERE path = \'%q\'", difficulty, SQL_GetColumn(3, pStmt).body), sql);
+			folder = SQL_GetColumn(1, pStmt);
+			mode = sqlite3_column_int(pStmt, 2);
+		}
+	}
+	sqlite3_finalize(pStmt);
+	return 1;
+}
+
+int CMP_SongDataByExLevel(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	if (s1->keymode != s2->keymode) {
+		return s1->keymode - s2->keymode;
+	}
+
+	if(s1->exlevel > 0 && s2->exlevel > 0) return s1->exlevel - s2->exlevel;
+	if(s1->exlevel > 0 && s2->exlevel <= 0) return 1;
+	if(s1->exlevel <= 0 && s2->exlevel > 0) return -1;
+	if(s1->exlevel <= 0 && s2->exlevel <= 0) return s1->level - s2->level;
+
+	return 1;//not neccessary
+}
+
+int CMP_SongDataByTitle(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	CSTR c1(s1->title);
+	c1.upper();
+	CSTR c2(s2->title);
+	c2.upper();
+
+	if (c1.isDiffHigh(&c2)) return 1;
+	if (c1.isSame(&c2)) {
+		if (s1->difficulty == 5 && s2->difficulty != 5) return 1;
+		if (s1->difficulty != 5 && s2->difficulty != 5) return s1->level - s2->level;
+		if (s1->difficulty == 5 && s2->difficulty == 5) return s1->level - s2->level;
+		if (s1->difficulty != 5 && s2->difficulty == 5) return -1;
+	}
+	if (c1.isDiffLow(&c2)) return -1;
+
+	return 0;
+}
+
+int CMP_SongDataByScore(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	return ((s1->mybest.total_notes) ? s1->mybest.stat_exscore * 10000 / s1->mybest.total_notes * 2 : 0)
+		 - ((s2->mybest.total_notes) ? s2->mybest.stat_exscore * 10000 / s2->mybest.total_notes * 2 : 0);
+}
+
+int CMP_SongDataByRivalScore(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	return (s2->rivalRecord.stat_exscore - s2->mybest.stat_exscore) - (s1->rivalRecord.stat_exscore - s1->mybest.stat_exscore);
+}
+
+int CMP_SongDataByDirectory(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	CSTR c1(s1->folder);
+	c1.upper();
+	CSTR c2(s2->folder);
+	c2.upper();
+
+	if (c1.isDiffHigh(&c2)) return 1;
+	if (c1.isSame(&c2)) {
+		if (s1->keymode == s2->keymode)
+			return (s1->level - s2->level) + (s1->difficulty == 5) * 100 - (s2->difficulty == 5) * 100;
+		else
+			return s1->keymode - s2->keymode;
+	}
+	if (c1.isDiffLow(&c2)) return -1;
+
+	return 0;
+}
+
+int CMP_SongDataByPath(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	CSTR c1(s1->filepath);
+	c1.upper();
+	CSTR c2(s2->filepath);
+	c2.upper();
+
+	if (c1.isDiffHigh(&c2)) return 1;
+	if (c1.isDiffLow(&c2)) return -1;
+
+	return 0;
+}
+
+int UpdateSongDataTag(SONGDATA *song, sqlite3 *sql){
+	char query[1024];
+
+	SQL_Run("BEGIN", sql);
+	if (song->keymode >= 5) {
+		sqlite3_snprintf(0x400, query, "UPDATE song SET title=\'%q\',subtitle=\'%q\',genre=\'%q\',artist=\'%q\',subartist=\'%q\',tag=\'%q\',level=%d,difficulty=%d,mode=%d,favorite=%d,exlevel=%d WHERE hash = \'%q\'",
+			song->title.body, song->subtitle.body, song->genre.body, song->artist.body, song->subartist.body, song->tag.body, song->level, song->difficulty, song->keymode, song->favorite, song->exlevel, song->hash.body);
+		SQL_Run(query, sql);
+
+		sqlite3_snprintf(0x400, query, "INSERT INTO tag (hash,title,subtitle,genre,artist,subartist,tag,level,difficulty,mode,exlevel) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,%d,%d)",
+			song->hash.body, song->title.body, song->subtitle.body, song->genre.body, song->artist.body, song->subartist.body, song->tag.body, song->level, song->difficulty, song->keymode, song->exlevel);
+		if (SQL_Run(query, sql) != 0) {
+			sqlite3_snprintf(0x400, query, "UPDATE tag SET title=\'%q\',subtitle=\'%q\',genre=\'%q\',artist=\'%q\',subartist=\'%q\',tag=\'%q\',level=%d,difficulty=%d,mode=%d WHERE hash = \'%q\'",
+				song->title.body, song->subtitle.body, song->genre.body, song->artist.body, song->subartist.body, song->tag.body, song->level, song->difficulty, song->keymode, song->hash.body);
+			SQL_Run(query, sql);
+		}
+	}
+	else {
+		sqlite3_snprintf(0x400, query, "UPDATE folder SET title=\'%q\',subtitle=\'%q\',category=\'%q\',info_a=\'%q\',info_b=\'%q\',command=\'%q\',max=%d WHERE path = \'%q\'",
+			song->title.body, song->subtitle.body, song->genre.body, song->artist.body, song->subartist.body, song->tag.body, song->level, song->filepath.body);
+		SQL_Run(query, sql);
+	}
+	SQL_Run("COMMIT", sql);
+	return 1;
+}
+
+int EditTag(SONGDATA *song, sqlite3 *sql) {
+	sqlite3_stmt *stmt;
+	char query[1024];
+
+	int wtime = GetFileUnixtime(song->filepath);
+	int ntime = GetNowUnixtime();
+	int temp;
+	if (song->folderType == 0 || song->folderType == 5) {
+
+		sqlite3_snprintf(1024, query, "SELECT adddate FROM song WHERE path = \'%q\'", song->filepath.body);
+		SQL_prepare(query, sql, &stmt);
+		temp = 0;
+		if (sqlite3_step(stmt) == 100) {
+			temp = sqlite3_column_int(stmt, 0);
+		}
+		sqlite3_finalize(stmt);
+		BMSMETA meta;
+		ParseBMSMETA(&meta, song->filepath, 0);
+
+		sqlite3_snprintf(1024, query, "DELETE FROM song WHERE path=\'%q\'", song->filepath.body);
+		SQL_Run(query, sql);
+		sqlite3_snprintf(1024, query, "DELETE FROM tag WHERE hash=\'%q\'", song->hash.body);
+		SQL_Run(query, sql);
+
+		sqlite3_snprintf(1024, query, "INSERT INTO song (hash,title,subtitle,genre,artist,subartist,level,date,path,folder,stagefile,banner,backbmp,parent,maxbpm,minbpm,random,longnote,judge,mode,bga,difficulty,favorite,type,txt,karinotes,adddate,exlevel) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,%d,%d,%d,%d,%d,%d,0,0,%d,%d,%d,%d)",
+			meta.hash.body, meta.title.body, meta.subtitle.body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.selLevel, wtime, song->filepath.body, AssignCRC32(meta.folderpath).body, meta.stagefilepath.body,meta.bannerpath.body,meta.backBMPpath.body, AssignCRC32(meta.parentfolderpath).body, meta.maxbpm,meta.minbpm, meta.random,meta.longnote,meta.judge,meta.keymode,meta.bga,meta.difficulty,(int)meta.hasTxt,meta.notecount,temp,meta.exlevel);
+		SQL_Run(query, sql);
+
+		if (meta.difficulty <= 0 || meta.difficulty > 5) {
+			SetUndefinedDifficulty(sql);
+		}
+
+		sqlite3_snprintf(1024, query, "SELECT difficulty FROM song WHERE path = \'%q\'", song->filepath.body);
+		SQL_prepare(query, sql, &stmt);
+		temp = 0;
+		if (sqlite3_step(stmt) == 100) {
+			temp = sqlite3_column_int(stmt, 0);
+		}
+		sqlite3_finalize(stmt);
+
+		song->title = meta.title;
+		song->artist = meta.artist;
+		song->genre = meta.genre;
+		song->subtitle = meta.subtitle;
+		song->subartist = meta.subartist;
+		song->keymode = meta.keymode;
+		song->tag = meta.tag;
+		song->level = meta.selLevel;
+		song->favorite = 0;
+		song->difficulty = temp;
+	}
+	else if (IsLR2Folder(song->filepath)) {
+		sqlite3_snprintf(1024, query, "DELETE FROM folder WHERE path=\'%q\'", song->filepath.body);
+		SQL_Run(query, sql);
+		BMSMETA meta;
+		ParseBMSMETA(&meta, song->filepath, 0);
+		sqlite3_snprintf(1024, query, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , adddate ) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , %d , %d) ",
+			song->filepath.body, meta.title.body, song->folder.body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, wtime, song->folderType, ntime);
+		SQL_Run(query, sql);
+
+		song->title = meta.title;
+		song->artist = meta.artist;
+		song->genre = meta.genre;
+		song->subtitle = meta.subtitle;
+		song->subartist = meta.subartist;
+		song->keymode = meta.keymode;
+		song->tag = meta.tag;
+		song->level = meta.selLevel;
+	}
+	else if (song->folderType == 1 || song->folderType == 2) {
+		sqlite3_snprintf(1024, query, "UPDATE folder SET title=\'%q\',subtitle=\'\',category=\'\',info_a=\'\',info_b=\'\',command=\'\',max=0 WHERE path = \'%q\'", song->filepath.getFilename().body, song->filepath.body);
+		SQL_Run(query, sql);
+
+		song->title = song->filepath.getFilename();
+		song->artist.fillzero();
+		song->genre.fillzero();
+		song->subtitle.fillzero();
+		song->subartist.fillzero();
+		song->tag.fillzero();
+		song->level = 0;
+	}
+	return 1;
+}
+
+// TODO : I need to understand this and rename variables
+int LoadFolderDataFromDB(CSTR query, SONGDATA *song, sqlite3 *sql, int difficulty, int key, int /*sort*/, int maxCount, CONFIG_SELECT *cfg_select, char flag) {
+	sqlite3_stmt *stmt;
+	SONGDATA* slist;
+	SONGDATA sd;
+	int keys = 0;
+	size_t nowsize, maxsize;
+	int slistCount;
+	CSTR nowFolder, newFolder, workingFolder;
+	int nowMode{}, nowDifficulty{};
+
+	key = openlr2::adjustFilterKey(*cfg_select, key);
+	if ((cfg_select->ignoreDifficultyAll) && (difficulty == 0)) difficulty = 1;
+
+	if (query.findStrPos("__NEWSONG__") > -1) {
+		cstrSprintf(&query,
+				"SELECT * FROM song LEFT JOIN score ON song.hash = score.hash WHERE adddate > %lld",
+				static_cast<long long>(GetNowUnixtime() - cfg_select->titleflash * 3600));
+	}
+
+	if (query.left(6).isDiff("SELECT")) return -1;
+
+	if (maxCount == 1 && query.findStrPos("random()") == -1) return 0;
+
+	if (query.findStrPos("ORDER BY") != -1) {
+		difficulty = 0;
+		key = 0;
+	}
+	if (flag) {
+		difficulty = 0;
+	}
+
+	if (query.findStrPos("ORDER BY") == -1) {
+		switch (key) {
+			case 2:
+				keys = 7;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC");
+				break;
+			case 3:
+				keys = 5;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC");
+				break;
+			case 5:
+				keys = 14;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC");
+				break;
+			case 6:
+				keys = 10;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC");
+				break;
+			case 7:
+				keys = 9;
+				query.add(" ORDER BY folder ASC,difficulty ASC");
+				break;
+		}
+	}
+
+	int keymode_A = 0;
+	slist = (SONGDATA*)malloc(sizeof(SONGDATA) * 1000);
+	memset(slist, 0, sizeof(SONGDATA) * 1000); // FIXME: bad memset
+	slistCount = 0;
+	SQL_prepare(query, sql, &stmt);
+
+	int difficultyCount = 0;
+	int folderSongCount = 0;
+	int keymode_B = 0;
+
+	nowsize = sizeof(SONGDATA) * 1000;
+	maxsize = 2000;
+
+	while (sqlite3_step(stmt) == 100) {
+		if (maxCount != 0 && slistCount == maxCount) break;
+
+		int mode = sqlite3_column_int(stmt, 18);
+		if (cfg_select->ignoreDP && mode >= 10) continue;
+		if (cfg_select->ignorePMS && mode == 9) continue;
+
+		sd.keymode = mode;
+
+		if( (maxsize - 1001) == slistCount){
+			int newsize = nowsize + sizeof(SONGDATA) * 1000;
+			slist = (SONGDATA*)realloc(slist, newsize);
+			assert(slist != nullptr);
+			if (maxsize - 1000 < maxsize) {
+				memset((void*)((uintptr_t)slist + nowsize), 0, sizeof(SONGDATA) * 1000);
+			}
+			maxsize += 1000;
+			keymode_A = keymode_B;
+			nowsize = newsize;
+		}
+
+		sd.difficulty = sqlite3_column_int(stmt, 15);
+		sd.favorite = sqlite3_column_int(stmt, 24);
+		if (cfg_select->ignore5key) {
+			cstrSprintf(&sd.folder, "%s", sqlite3_column_text(stmt, 9));
+			if (nowFolder.isDiff(&sd.folder)) {
+				folderSongCount = 0;
+			}
+			else {
+				if ((keymode_A != 5 || sd.keymode != 7) && (keymode_A != 10 || sd.keymode != 14)) {
+					if (keymode_A != sd.keymode) {
+						folderSongCount = 0;
+					}
+				}
+				else {
+					slistCount -= folderSongCount;
+					folderSongCount = 0;
+				}
+			}
+		}
+
+		if (slistCount < 0)	slistCount = 0;
+
+		if (sd.favorite == 2) continue;
+
+		auto keymode_allowed_for_playstyle = [](int keymode, int playstyle, int playstyle_keys) {
+			if (playstyle == 0 /*all*/) {
+				return true;
+			}
+			switch(keymode) {
+			case 5: return keymode == playstyle_keys || playstyle == 1 /*single*/;
+			case 7: return keymode == playstyle_keys || playstyle == 1 /*single*/;
+			case 9: return keymode == playstyle_keys;
+			case 10: return keymode == playstyle_keys || playstyle == 4 /*double*/;
+			case 14: return keymode == playstyle_keys || playstyle == 4 /*double*/;
+			default: return false; // unreachable?
+			}
+		};
+		if (!keymode_allowed_for_playstyle(sd.keymode, key, keys)) continue;
+
+		sd.difficulty = sqlite3_column_int(stmt, 15);
+		cstrSprintf(&newFolder, "%s", sqlite3_column_text(stmt, 9));
+		if (sd.keymode > 0) {
+			sd.mybest.clear = sqlite3_column_int(stmt, 30);
+			sd.mybest.stat_pgreat = sqlite3_column_int(stmt, 31);
+			sd.mybest.stat_great = sqlite3_column_int(stmt, 32);
+			sd.mybest.stat_good = sqlite3_column_int(stmt, 33);
+			sd.mybest.stat_bad = sqlite3_column_int(stmt, 34);
+			sd.mybest.stat_poor = sqlite3_column_int(stmt, 35);
+			sd.mybest.total_notes = sqlite3_column_int(stmt, 36);
+			sd.mybest.stat_maxcombo = sqlite3_column_int(stmt, 37);
+			sd.mybest.minbp = sqlite3_column_int(stmt, 38);
+			sd.mybest.playcount = sqlite3_column_int(stmt, 39);
+			sd.mybest.clearcount = sqlite3_column_int(stmt, 40);
+			sd.mybest.failcount = sqlite3_column_int(stmt, 41);
+			sd.mybest.rank = sqlite3_column_int(stmt, 42);
+			sd.mybest.rate = sqlite3_column_int(stmt, 43);
+			sd.mybest.clear_db = sqlite3_column_int(stmt, 44);
+			sd.mybest.op_history = sqlite3_column_int(stmt, 45);
+			sd.mybest.clear_sd = sqlite3_column_int(stmt, 48);
+			sd.mybest.clear_ex = sqlite3_column_int(stmt, 49);
+			sd.mybest.op_best = sqlite3_column_int(stmt, 50);
+			sd.mybest.rseed = sqlite3_column_int(stmt, 51);
+			sd.mybest.complete = sqlite3_column_int(stmt, 52);
+
+			// SONGDATA's hash was not assigned. (Tracking folder stats now)
+			sd.hash = SQL_GetColumn(0, stmt);
+			LoadIRDerivedRecord(sql, sd);
+		}
+		if (mode == 0) {
+			workingFolder = newFolder;
+			COPY_SONGDATA(&slist[slistCount], &sd);
+			nowMode = mode;
+			difficultyCount = 1;
+
+			slistCount++;
+			folderSongCount++;
+			nowFolder = sd.folder;
+			keymode_B = sd.keymode;
+			keymode_A = sd.keymode;
+		}
+		else if (newFolder.isDiff(workingFolder)) {
+			workingFolder = newFolder;
+			nowMode = mode;
+			nowDifficulty = sd.difficulty;
+			difficultyCount = 1;
+			COPY_SONGDATA(&slist[slistCount], &sd);
+
+			slistCount++;
+			folderSongCount++;
+			nowFolder = sd.folder;
+			keymode_B = sd.keymode;
+			keymode_A = sd.keymode;
+		}
+		else if (mode != nowMode) {
+			nowMode = mode;
+			nowDifficulty = sd.difficulty;
+			difficultyCount = 1;
+			COPY_SONGDATA(&slist[slistCount], &sd);
+
+			slistCount++;
+			folderSongCount++;
+			nowFolder = sd.folder;
+			keymode_B = sd.keymode;
+			keymode_A = sd.keymode;
+		}
+		else if (nowDifficulty < sd.difficulty && sd.difficulty <= difficulty && difficulty != 0) {
+			folderSongCount -= difficultyCount;
+			slistCount -= difficultyCount;
+			if (folderSongCount < 1) folderSongCount = 0;
+			nowDifficulty = sd.difficulty;
+			difficultyCount = 1;
+			COPY_SONGDATA(&slist[slistCount], &sd);
+
+			slistCount++;
+			folderSongCount++;
+			nowFolder = sd.folder;
+			keymode_B = sd.keymode;
+			keymode_A = sd.keymode;
+		}
+		else if (nowDifficulty == sd.difficulty || difficulty == 0) {
+			difficultyCount++;
+			COPY_SONGDATA(&slist[slistCount], &sd);
+
+			slistCount++;
+			folderSongCount++;
+			nowFolder = sd.folder;
+			keymode_B = sd.keymode;
+			keymode_A = sd.keymode;
+		}
+		InitSongData(&sd);
+	}
+	sqlite3_finalize(stmt);
+	if (slistCount) {
+		song->mybest.clear = 5;
+		song->mybest.clear_db = 5;
+		for (int i = 0; i < slistCount; i++) {
+			song->mybest.playcount += slist[i].mybest.playcount;
+			song->mybest.clearcount += slist[i].mybest.clearcount;
+			song->mybest.failcount += slist[i].mybest.failcount;
+			if (slist[i].myIRbest.has_value())
+			{
+				const STATUS& myIRbest = *(slist[i].myIRbest);
+				song->mybest.clear = std::min(song->mybest.clear, myIRbest.clear);
+				song->mybest.clear_db = std::min(song->mybest.clear_db, myIRbest.clear_db);
+			}
+			else
+			{
+				song->mybest.clear = std::min(slist[i].mybest.clear, song->mybest.clear);
+				song->mybest.clear_db = std::min(slist[i].mybest.clear_db, song->mybest.clear_db);
+			}
+		}
+	}
+	free(slist);
+	return 1;
+}
+
+int UninstallSong(CSTR path, sqlite3 *sql) {
+	char query[2048];
+
+	CSTR dir(path.getDirectory());
+	CSTR crc(AssignCRC32(dir));
+
+	sqlite3_snprintf(2048, query, "DELETE FROM song WHERE folder=\'%q\'", crc.body);
+	SQL_Run(query, sql);
+
+	sqlite3_snprintf(2048, query, "DELETE FROM folder WHERE path=\'%q\'", dir.body);
+	SQL_Run(query, sql);
+
+	dir.nullAtPos(dir.length()-1);
+
+#ifdef _WIN32
+	SHFILEOPSTRUCTA sh{};
+	sh.wFunc = FO_DELETE; //3
+	sh.pFrom = dir;
+	sh.pTo = NULL;
+	sh.fFlags = FOF_NOERRORUI | FOF_NOCONFIRMATION | FOF_SILENT; //0x414
+
+	return (SHFileOperationA(&sh) == 0);
+#else // TODO: check if error handling matches and then consolidate the two.
+	// std::error_code ec; // not tested. dear game, pls never delete my stuff
+	// std::filesystem::remove_all(dir.body, ec);
+	return {};
+#endif // _WIN32
+}
+
+int Rename(CSTR path, sqlite3 *sql) {
+	char query[2048];
+
+	CSTR newpath(path);
+	newpath.add("_");
+
+	sqlite3_snprintf(2048, query, "DELETE FROM song WHERE path=\'%q\'", path.body);
+	SQL_Run(query, sql);
+
+#ifdef _WIN32
+	SHFILEOPSTRUCTA sh{};
+	sh.wFunc = FO_RENAME; //4
+	sh.pFrom = path;
+	sh.pTo = newpath;
+	sh.fFlags = FOF_NOERRORUI | FOF_NOCONFIRMATION | FOF_SILENT; //0x414
+
+	return (SHFileOperationA(&sh) == 0);
+#else // TODO: check if error handling matches and then consolidate the two.
+	std::error_code ec;
+	std::filesystem::rename(path.body, newpath.body, ec);
+	return {};
+#endif // _WIN32
+}
+
+int GetSongData(CSTR songMD5, SONGDATA *song, sqlite3 *sql, SONGSELECT *ss, const char* preferredPath) {
+	CSTR query;
+	CSTR replayPath;
+	CSTR besthash;
+	sqlite3_stmt *stmt;
+	int ret = 0;
+
+	InitSongData(song);
+	char* queryText = sqlite3_mprintf("SELECT * FROM song LEFT JOIN score ON song.hash = score.hash WHERE song.hash = \'%q\' ORDER BY song.path = \'%q\' DESC, song.path", songMD5.body, preferredPath ? preferredPath : "");
+	if (!queryText) return 0;
+	query = queryText;
+	sqlite3_free(queryText);
+	SQL_prepare(query, sql, &stmt);
+	if (sqlite3_step(stmt) == 100) {
+		song->maxBPM = sqlite3_column_int(stmt, 16);
+		song->minBPM = sqlite3_column_int(stmt, 17);
+		song->hash = SQL_GetColumn(0, stmt);
+		if (song->hash.isSame("9cbea4427d7e8caff0d28f9d7600cdec"))
+			song->title = AutomationFactory();
+		else
+			song->title = SQL_GetColumn(1, stmt);
+		song->subtitle = SQL_GetColumn(2, stmt);
+		song->genre = SQL_GetColumn(3, stmt);
+		song->filepath = SQL_GetColumn(7, stmt);
+		song->folderType = sqlite3_column_int(stmt, 8);
+		song->level = sqlite3_column_int(stmt, 14);
+		song->artist = SQL_GetColumn(4, stmt);
+		song->subartist = SQL_GetColumn(5, stmt);
+		song->keymode = sqlite3_column_int(stmt, 18);
+		song->judge = sqlite3_column_int(stmt, 19);
+		song->longnote = sqlite3_column_int(stmt, 20);
+		song->bga = sqlite3_column_int(stmt, 21);
+		song->random = sqlite3_column_int(stmt, 22);
+		song->folder = SQL_GetColumn(9, stmt);
+		song->txt = sqlite3_column_int(stmt, 25);
+		song->favorite = sqlite3_column_int(stmt, 24);
+		song->adddate = sqlite3_column_int(stmt, 27);
+		
+		song->stagefile = SQL_GetColumn(10, stmt);
+		if (song->stagefile.isDiff("(null)") && song->stagefile.length() > 4)
+			song->isStagefile = true;
+		song->banner = SQL_GetColumn(11, stmt);
+		if (song->banner.isDiff("(null)") && song->banner.length() > 4)
+			song->isBanner = true;
+		song->backBMP = SQL_GetColumn(12, stmt);
+		if (song->backBMP.isDiff("(null)") && song->backBMP.length() > 4)
+			song->isBackBMP = true;
+
+		if(song->subtitle.isDiff("(null)"))
+			cstrSprintf(&song->fulltitle,"%s %s", song->title.body, song->subtitle.body);
+		else
+			song->fulltitle = song->title;
+
+		song->tag = SQL_GetColumn(6, stmt);
+		song->difficulty = sqlite3_column_int(stmt, 15);
+		cstrSprintf(&replayPath, fs::make_preferred("LR2files/Replay/%s/%s.lr2rep").data(), ss->playerID.body, song->hash.body);
+		song->replayExist = IsFileExist(replayPath);
+		if (song->keymode > 0) {
+			song->mybest.clear = sqlite3_column_int(stmt, 30);
+			song->mybest.stat_pgreat = sqlite3_column_int(stmt, 31);
+			song->mybest.stat_great = sqlite3_column_int(stmt, 32);
+			song->mybest.stat_good = sqlite3_column_int(stmt, 33);
+			song->mybest.stat_bad = sqlite3_column_int(stmt, 34);
+			song->mybest.stat_poor = sqlite3_column_int(stmt, 35);
+			song->mybest.total_notes = sqlite3_column_int(stmt, 36);
+			song->mybest.stat_maxcombo = sqlite3_column_int(stmt, 37);
+			song->mybest.minbp = sqlite3_column_int(stmt, 38);
+			song->mybest.playcount = sqlite3_column_int(stmt, 39);
+			song->mybest.clearcount = sqlite3_column_int(stmt, 40);
+			song->mybest.failcount = sqlite3_column_int(stmt, 41);
+			song->mybest.rank = sqlite3_column_int(stmt, 42);
+			song->mybest.rate = sqlite3_column_int(stmt, 43);
+			if (song->mybest.rank > 8) song->mybest.rank = 8;
+			if (song->mybest.rank == 0 && (song->mybest.stat_pgreat + song->mybest.stat_great > 0)) song->mybest.rank = 1;
+			song->mybest.clear_db = sqlite3_column_int(stmt, 44);
+			song->mybest.op_history = sqlite3_column_int(stmt, 45);
+			song->mybest.clear_sd = sqlite3_column_int(stmt, 48);
+			song->mybest.clear_ex = sqlite3_column_int(stmt, 49);
+			song->mybest.op_best = sqlite3_column_int(stmt, 50);
+			song->mybest.rseed = sqlite3_column_int(stmt, 51);
+			song->mybest.complete = sqlite3_column_int(stmt, 52);
+			LoadIRDerivedRecord(sql, *song);
+
+			besthash = SQL_GetColumn(46, stmt);
+			if (isSameScoreHash(&song->mybest, &ss->playerPassMD5, &song->hash, &besthash)) {
+				song->mybest.stat_exscore = song->mybest.stat_great + song->mybest.stat_pgreat * 2;
+				if (song->mybest.total_notes < 1) 
+					song->mybest.total_notes = sqlite3_column_int(stmt, 26);
+
+				if (song->mybest.total_notes > 0)
+					song->mybest.stat_score = (song->mybest.stat_good + song->mybest.stat_great * 2 + song->mybest.stat_pgreat * 4) * 50000ULL / song->mybest.total_notes;
+
+				if (song->mybest.minbp == 0 && song->mybest.clear != 5)
+					song->mybest.minbp = -1;
+			}
+			else {
+				song->mybest = {};
+				song->mybest.minbp = -1;
+				song->mybest.total_notes = sqlite3_column_int(stmt, 26);
+			}
+		}
+		ret = 1;
+	}
+	else {
+		ErrorLogFmtAdd("曲データの取得に失敗 %s\n", songMD5.body);
+	}
+	sqlite3_finalize(stmt);
+	return ret;
+}
+
+int WriteCourse(sqlite3 *sql, COURSESELECT course, SONGDATA *song, CSTR passmd5, int connection, int /*gauge*/) {
+
+	char t[1024];
+
+	if (song->courseReadOnly) return 1;
+
+	CSTR hash;
+	CSTR query;
+
+	if (course.id < 0) {
+		if (course.type == 1) 
+			cstrSprintf(&hash, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d00000000000000%s", connection, connection, connection, connection, connection, 0, 0, 0, 0, 0, 1, 0, 0, 0, passmd5.left(4).body);
+		else 
+			cstrSprintf(&hash, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d00000000000000%s", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, course.type, 0, 0, 0, passmd5.left(4).body);
+
+		for (int i = 0; i < course.count; i++) hash.add(course.data[i].hash);
+
+		if (course.type == 0) 
+			query = sqlite3_snprintf(1024, t, "INSERT INTO expert (title,hash,line,ir) VALUES (\'%q\' , \'%q\', %d,0)", course.name.body, hash.body, course.data[0].keymode);
+		else if (course.type == 1) 
+			query = sqlite3_snprintf(1024, t, "INSERT INTO nonstop (title,hash,line,ir) VALUES (\'%q\' , \'%q\', %d,0)", course.name.body, hash.body, course.data[0].keymode);
+		else if (course.type == 2) 
+			query = sqlite3_snprintf(1024, t, "INSERT INTO grade (title,hash,line,ir) VALUES (\'%q\' , \'%q\', %d,0)", course.name.body, hash.body, course.data[0].keymode);
+	}
+	else {
+		cstrSprintf(&hash, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d00000000000000%s", song->courseKeys[0], song->courseKeys[1], song->courseKeys[2], song->courseKeys[3], song->courseKeys[4], song->courseKeys[5],
+			song->courseKeys[6], song->courseKeys[7], song->courseKeys[8], song->courseKeys[9], song->courseType, 0, 0, 0, passmd5.left(4).body);
+
+		for (int i = 0; i < song->courseStageCount; i++) hash.add(song->courseHash[i]);
+
+		if (course.type == 0) 
+			query = sqlite3_snprintf(1024, t, "UPDATE expert SET title=\'%q\',hash=\'%q\',ir=%d WHERE id = %d", song->title.body, hash.body, song->courseIR, course.id);
+		else if (course.type == 1) 
+			query = sqlite3_snprintf(1024, t, "UPDATE nonstop SET title=\'%q\',hash=\'%q\',ir=%d WHERE id = %d", song->title.body, hash.body, song->courseIR, course.id);
+		else if (course.type == 2) 
+			query = sqlite3_snprintf(1024, t, "UPDATE grade SET title=\'%q\',hash=\'%q\',ir=%d WHERE id = %d", song->title.body, hash.body, song->courseIR, course.id);
+	}
+
+	SQL_Run(query, sql);
+	for (int i = 0; i < 10; i++) InitSongData(&course.data[i]);
+
+	return 1;
+}
+
+int ChangeCourseTitle(sqlite3* sql, CSTR title, int id, int coursetype) {
+
+	char str[1024];
+	CSTR query;
+
+	if (coursetype == 0) {
+		sqlite3_snprintf(0x400, str, "UPDATE expert SET title=\'%q\' WHERE id = %d",title.body, id);
+	}
+	else if (coursetype == 1) {
+		sqlite3_snprintf(0x400, str, "UPDATE nonstop SET title=\'%q\' WHERE id = %d", title.body, id);
+	}
+	else if (coursetype == 2) {
+		sqlite3_snprintf(0x400, str, "UPDATE grade SET title=\'%q\' WHERE id = %d", title.body, id);
+	}
+
+	query = str;
+	SQL_Run(query, sql);
+	return 1;
+}
+
+int DeleteCourse(sqlite3* sql, int id, int courseType) {
+
+	char str[1024];
+	CSTR query;
+
+	if (courseType == 0) {
+		sqlite3_snprintf(0x400, str,"DELETE FROM expert WHERE id = %d" , id);
+	}
+	else if (courseType == 1) {
+		sqlite3_snprintf(0x400, str, "DELETE FROM nonstop WHERE id = %d", id);
+	}
+	else if (courseType == 2){
+		sqlite3_snprintf(0x400, str, "DELETE FROM grade WHERE id = %d", id);
+	}
+
+	query = str;
+	SQL_Run(query, sql);
+	return 1;
+}
+
+CSTR GetRandomSongHash(CSTR ioDefault, CSTR folder, int levelStd, int mode, sqlite3 *sql, int levelMax, int levelMin) {
+
+	sqlite3_stmt *pStmt;
+
+	if (levelStd < 1) return ioDefault;
+
+	CSTR query;
+
+	cstrSprintf(&query, "SELECT hash FROM song WHERE folder=\'%s\' AND mode=%d AND level<=%d AND level>=%d ORDER BY abs(level - %d)", folder.body, mode, levelMax, levelMin, levelStd);
+	SQL_prepare(query, sql, &pStmt);
+	if (sqlite3_step(pStmt) == 100) {
+		ioDefault = SQL_GetColumn(0, pStmt);
+	}
+	sqlite3_finalize(pStmt);
+	return ioDefault;
+}
+
+int GetSongDataFromPath(CSTR filepath, SONGDATA *song, sqlite3 *sql, SONGSELECT *ss) {
+	BMSMETA meta;
+	CSTR hash;
+
+	InitSongData(song);
+	if (!filepath.canOpenFile()) {
+		ErrorLogFmtAdd("GetSongDataFromPath() bmsファイルが見つかりません\n");
+		return -1;
+	}
+
+	makeFileHash(filepath, hash);
+	const bool registered = GetSongData(hash,song,sql,ss,filepath.body) == 1;
+	// Scores belong to the hash; metadata and assets belong to the selected file.
+	if (!ParseBMSMETA(&meta, filepath, 0)) return -1;
+	LoadBMSMETAFromDB(&meta, sql);
+	song->artist = meta.artist;
+	song->backBMP = meta.backBMPpath;
+	song->stagefile = meta.stagefilepath;
+	song->banner = meta.bannerpath;
+	song->isStagefile = meta.stagefilepath.length() > 0;
+	song->isBanner = meta.bannerpath.length() > 0;
+	song->isBackBMP = meta.backBMPpath.length() > 0;
+	song->bga = meta.bga;
+	if (!registered || meta.difficulty >= 0) song->difficulty = meta.difficulty;
+	song->exlevel = meta.exlevel;
+	cstrSprintf(&song->fulltitle, "%s %s", meta.title.body, meta.subtitle.body);
+	song->folder = registered ? AssignCRC32(meta.folderpath) : meta.folderpath;
+	song->genre = meta.genre;
+	song->hash = meta.hash;
+	song->longnote = meta.longnote;
+	song->level = meta.selLevel;
+	song->keymode = meta.keymode;
+	song->maxBPM = meta.maxbpm;
+	song->minBPM = meta.minbpm;
+	song->filepath.assign(&filepath);
+	song->random = meta.random;
+	song->judge = meta.judge;
+	song->subartist = meta.subartist;
+	song->subtitle = meta.subtitle;
+	song->tag = meta.tag;
+	song->txt = meta.hasTxt;
+	song->title = meta.title;
+	song->folderType = 0;
+	ErrorLogFmtAdd("GetSongDataFromPath() 曲をロードしました\n");
+	return registered ? 1 : 2;
+}
+
+int ChangeCourseID(sqlite3 *sql, int newID, int oldID, int type) {
+
+	char str[1024];
+
+	if (newID <= 0 || oldID <= 0) return 0;
+
+	if (type == 0) {
+		sqlite3_snprintf(0x400, str, "UPDATE expert SET id = -1 WHERE id = %d", newID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE expert SET id = %d WHERE id = %d", newID, oldID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE expert SET id = %d WHERE id = -1", oldID);
+		SQL_Run(str, sql);
+	}
+	else if (type == 1) {
+		sqlite3_snprintf(0x400, str, "UPDATE nonstop SET id = -1 WHERE id = %d", newID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE nonstop SET id = %d WHERE id = %d", newID, oldID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE nonstop SET id = %d WHERE id = -1", oldID);
+		SQL_Run(str, sql);
+	}
+	else if (type == 2) {
+		sqlite3_snprintf(0x400, str, "UPDATE grade SET id = -1 WHERE id = %d", newID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE grade SET id = %d WHERE id = %d", newID, oldID);
+		SQL_Run(str, sql);
+		sqlite3_snprintf(0x400, str, "UPDATE grade SET id = %d WHERE id = -1", oldID);
+		SQL_Run(str, sql);
+	}
+	return 1;
+}
+
+
+// Repair songs left by the previous OpenLR2 bug where 'parent' became the same as 'folder'.
+// Costs nothing on a healthy DB. https://github.com/GOMazk/OpenLR2/pull/111
+static void RepairSongHierarchy(sqlite3 *sql) {
+	std::vector<CSTR> pathList;
+	sqlite3_stmt *pStmt;
+	sqlite3_prepare(sql, "SELECT path FROM song WHERE parent = folder", -1, &pStmt, nullptr);
+	while (sqlite3_step(pStmt) == 100) {
+		pathList.push_back(SQL_GetColumn(0, pStmt));
+	}
+	sqlite3_finalize(pStmt);
+	char query[1024];
+	for (auto& path : pathList) {
+		sqlite3_exec(sql, sqlite3_snprintf(sizeof(query), query, "UPDATE song SET parent=\'%q\' WHERE path=\'%q\'",
+			AssignCRC32(path.getParentDirectory()).body, path.body), nullptr, nullptr, nullptr);
+	}
+	if (pathList.size() > 0) {
+		ErrorLogFmtAdd("Repaired hierarchy info: %d\n", static_cast<int>(pathList.size()));
+	}
+}
+
+int SearchSongsFromPath(CSTR root, sqlite3 *sql, CSTR path) {
+#ifdef _WIN32
+	HANDLE hFindFile;
+	_WIN32_FIND_DATAA findFileData;
+	int now,filetime;
+	char str[2048];
+	int count = 0;
+	
+
+	ErrorLogFmtAdd("曲の検索を行います。パス%s\n", root.body);
+	ErrorLogTabAdd();
+	if (root.right(1).isDiff("\\")) root.add("\\");
+
+	CSTR searchPath;
+	BMSMETA meta; 
+	searchPath = root;
+	searchPath.add("*.*");
+	hFindFile = FindFirstFileA(searchPath, &findFileData);
+	if (hFindFile == INVALID_HANDLE_VALUE) {
+		ErrorLogTabSub();
+		return count;
+	}
+	now = GetNowUnixtime();
+	while (1) {
+		if ( ((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) || !(strcmp("..", findFileData.cFileName) && strcmp(".", findFileData.cFileName)) || (g_reloadHeadless && (findFileData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) ) { // not directory
+			if (((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) && IsBmsFile(findFileData.cFileName)) {
+				searchPath = root;
+				searchPath.add(findFileData.cFileName);
+				filetime = GetUnixtimeFromFiletime(findFileData.ftLastWriteTime);
+				if (!g_fullSongPass || !g_songHashes.contains(MakePathKey(searchPath))) {
+					ErrorLogFmtAdd("曲を発見しました。　パス:%s\n", searchPath.body);
+					ParseBMSMETA(&meta, searchPath, 1);
+					LoadBMSMETAFromDB(&meta, sql);
+					sqlite3_snprintf(2048, str, "INSERT INTO song (hash,title,subtitle,genre,artist,subartist,level,date,path,folder,stagefile,banner,backbmp,parent,maxbpm,minbpm,random,longnote,judge,mode,bga,difficulty,favorite,type,txt,karinotes,adddate,exlevel) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,%d,%d,%d,%d,%d,%d,0,0,%d,%d,%d,%d)",
+						meta.hash.body, meta.title.body, meta.subtitle.body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.selLevel, filetime, searchPath.body, AssignCRC32(meta.folderpath).body, meta.stagefilepath.body, meta.bannerpath.body, meta.backBMPpath.body, AssignCRC32(meta.parentfolderpath).body, meta.maxbpm, meta.minbpm, meta.random, meta.longnote, meta.judge, meta.keymode, meta.bga, meta.difficulty, (int)meta.hasTxt, meta.notecount, now, meta.exlevel);
+					SQL_Run(str, sql);
+					if (g_fullSongPass) g_processedSongPaths.insert(MakePathKey(searchPath));
+				}
+				count++;
+			}
+			else if (((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) && IsLR2Folder(findFileData.cFileName)){
+				searchPath = root;
+				searchPath.add(findFileData.cFileName);
+				ErrorLogFmtAdd("カスタムフォルダを発見しました。　パス:%s\n", searchPath.body);
+				filetime = GetUnixtimeFromFiletime(findFileData.ftLastWriteTime);
+				ParseBMSMETA(&meta, searchPath, 1);
+				sqlite3_snprintf(2048, str, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , 2 , \'%q\' , %d) ",
+					searchPath.body, meta.title.body, AssignCRC32(path).body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, filetime, meta.bannerpath.body, now);
+				if (SQL_Run(str, sql) == 0) {
+					ErrorLogFmtAdd("追加失敗 エラー内容 %s\n", sqlite3_errmsg(sql));
+				}
+				count++;
+			}
+
+		}
+		else {
+			searchPath = root;
+			searchPath.add(findFileData.cFileName).add("\\");
+			ErrorLogFmtAdd("フォルダを発見しました。　パス:%s\n", searchPath.body);
+			
+			CSTR folderinfo(searchPath);
+			folderinfo.add("folderinfo.txt");
+			filetime = GetUnixtimeFromFiletime(findFileData.ftLastWriteTime);
+			if (IsFileExist(folderinfo)) {
+				ErrorLogAdd("ついでにフォルダインフォを発見しました\n");
+				ParseBMSMETA(&meta, folderinfo, 0);
+				if (meta.judge != 2) meta.judge = 1;
+
+				sqlite3_snprintf(2048, str, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , %d , \'%q\' , %d) ",
+					searchPath.body, meta.title.body, AssignCRC32(path).body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, filetime, meta.judge, meta.bannerpath.body, now);
+				if (SQL_Run(str, sql) == 0 || g_reloadHeadless) {
+					ErrorLogAdd("再帰検索を行います。\n");
+					CSTR subPath(root);
+					subPath.add(findFileData.cFileName).add("\\");
+					count += SearchSongsFromPath(searchPath, sql, subPath);
+				}
+			}
+			else {
+				sqlite3_snprintf(2048, str, "INSERT INTO folder (path , title , parent , date , type  , adddate) VALUES(\'%q\',\'%q\',\'%q\',%d , 1 , %d )", searchPath.body, findFileData.cFileName, AssignCRC32(path).body, filetime, now);
+				if (SQL_Run(str, sql) == 0 || g_reloadHeadless) {
+					ErrorLogAdd("再帰検索を行います。\n");
+					CSTR subPath(root);
+					subPath.add(findFileData.cFileName).add("\\");
+					count += SearchSongsFromPath(searchPath, sql, subPath);
+				}
+			}
+		}
+
+		if (FindNextFileA(hFindFile, &findFileData) == 0) {
+			FindClose(hFindFile);
+			ErrorLogTabSub();
+			return count;
+		}
+	}
+#else
+	// FIXME(linux): stub
+	return {};
+#endif // _WIN32
+}
+
+// TODO:arrange duplicated code
+int ReloadSongsByQuery(CSTR query, sqlite3 *sql, CONFIG_JUKEBOX *jb, ReloadProgress progress) {
+
+	sqlite3_stmt *pStmt;
+	char sBuf[1024];
+	int cAlready = 0, cNot = 0, cChange = 0;
+
+	GetTimeWrap();
+	SQL_prepare(query, sql, &pStmt);
+	const int now = GetNowUnixtime();
+
+	std::vector<CSTR> pathList;
+	std::vector<int> timeList;
+	while (sqlite3_step(pStmt) == 100) {
+		pathList.push_back(SQL_GetColumn(0, pStmt));
+		timeList.push_back(sqlite3_column_int(pStmt, 1));
+	}
+	sqlite3_finalize(pStmt);
+
+	const bool showFolderPassProgress = (progress == ReloadProgress::FolderPass);
+	const bool showSongPassProgress = (progress == ReloadProgress::SongPass);
+	if (showFolderPassProgress) ShowReloadFolderPassProgress(0, pathList.size(), CSTR(""));
+
+	size_t rowIndex = 0;
+	for (const auto& [str, time] : std::views::zip(pathList, timeList)) {
+		rowIndex++;
+		if (showFolderPassProgress) ShowReloadFolderPassProgress(rowIndex, pathList.size(), str);
+		else if (showSongPassProgress) ShowReloadSongPassProgress(rowIndex, pathList.size(), CSTR(""));
+		if (!str.left(8).isSame("LR2files")) {
+			const bool is_bms_file = IsBmsFile(str);
+			const bool is_lr2folder = IsLR2Folder(str);
+
+			if (is_bms_file && g_fullSongPass && g_processedSongPaths.contains(MakePathKey(str))) {
+				cAlready++;
+				continue;
+			}
+
+			int is_path_in_jukebox = 0;
+			for (int i = 0; i < jb->numOfPath; i++) {
+				if (str.left(jb->path[i].length()).isSame(&jb->path[i])) {
+					is_path_in_jukebox = 1;
+				}
+			}
+
+			if (jb->numOfPath == 0 || is_path_in_jukebox){
+				int newTime;
+				int chg = IsFileChanged(time, str, &newTime);
+				// Files can change within one timestamp tick or retain an older timestamp.
+				if (g_reloadHeadless && is_bms_file && chg == 0) chg = 2;
+				if (chg == 0) {
+					cAlready++;
+				}
+				else if (chg == 1) {
+					cNot++;
+					if (is_bms_file) {
+						SQL_Run(sqlite3_snprintf(512, sBuf, "DELETE FROM song WHERE path=\'%q\'", str.body), sql); 
+					}
+					else {
+						SQL_Run(sqlite3_snprintf(512, sBuf, "DELETE FROM folder WHERE path=\'%q\'", str.body), sql);
+					}
+				}
+				else if (chg == 2) {
+					cChange++;
+					if (is_bms_file) {
+						if (RefreshSongDateIfHashMatches(sql, str, newTime, sBuf, sizeof(sBuf))) {
+							continue;
+						}
+						SQL_Run(sqlite3_snprintf(1024, sBuf, "DELETE FROM song WHERE path=\'%q\'", str.body), sql);
+						BMSMETA meta;
+						ParseBMSMETA(&meta, str, 1);
+						LoadBMSMETAFromDB(&meta, sql);
+						SQL_Run(sqlite3_snprintf(1024, sBuf, "INSERT INTO song (hash,title,subtitle,genre,artist,subartist,level,date,path,folder,stagefile,banner,backbmp,parent,maxbpm,minbpm,random,longnote,judge,mode,bga,difficulty,favorite,type,txt,karinotes,adddate,exlevel) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d,%d,%d,%d,%d,%d,%d,%d,0,0,%d,%d,%d,%d)",
+							meta.hash.body, meta.title.body, meta.subtitle.body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.selLevel, newTime, str.body, AssignCRC32(meta.folderpath).body, meta.stagefilepath.body, meta.bannerpath.body, meta.backBMPpath.body,AssignCRC32(meta.parentfolderpath).body,meta.maxbpm,meta.minbpm,meta.random,meta.longnote,meta.judge,meta.keymode,meta.bga,meta.difficulty,(int)meta.hasTxt,meta.notecount,now,meta.exlevel), sql);
+						if (g_fullSongPass) g_processedSongPaths.insert(MakePathKey(str));
+					}
+					else if (is_lr2folder) {
+						SQL_Run(sqlite3_snprintf(1024, sBuf, "DELETE FROM folder WHERE path=\'%q\'", str.body), sql);
+						BMSMETA meta;
+						ParseBMSMETA(&meta, str, 1);
+						SQL_Run(sqlite3_snprintf(1024, sBuf, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , 2 , \'%q\' , %d) ",
+							str.body, meta.title.body, AssignCRC32(meta.folderpath).body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, newTime, meta.bannerpath.body, now), sql);
+					}
+					else {
+						CSTR folderinfo(str);
+						folderinfo.add("folderinfo.txt");
+						if (IsFileExist(folderinfo)) {
+							BMSMETA meta;
+							ParseBMSMETA(&meta, folderinfo, 0);
+							if (meta.judge != 2) meta.judge = 1;
+							if (SQL_Run(sqlite3_snprintf(512, sBuf, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type  , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , %d , \'%q\' , %d) ",
+								str.body, meta.title.body, AssignCRC32(meta.folderpath).body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, newTime, meta.judge, meta.bannerpath.body, now), sql) == 0) {
+								SearchSongsFromPath(str, sql, str);
+							}
+						}
+						else {
+							if (SQL_Run(sqlite3_snprintf(512, sBuf, "UPDATE folder SET date = %d , adddate = %d WHERE path = \'%q\'", newTime, now, str.body), sql) == 0) {
+								SearchSongsFromPath(str, sql, str);
+							}
+						}
+					}
+				}
+				
+			}
+			else {
+				if (is_bms_file) {
+					SQL_Run(sqlite3_snprintf(512, sBuf, "DELETE FROM song WHERE path=\'%q\'", str.body), sql);
+				}
+				else {
+					SQL_Run(sqlite3_snprintf(512, sBuf, "DELETE FROM folder WHERE path=\'%q\'", str.body), sql);
+				}
+			}
+		}
+	}
+
+	GetTimeWrap();
+
+	if (cAlready == 0 && cNot == 0) {
+		if(cChange == 0){
+			ErrorLogFmtAdd("曲が見つかりません / No matching songs found: %s\n", query.body);
+			return 0;
+		}
+	}
+	else if (cChange == 0) {
+		ErrorLogFmtAdd("更新はありません / No updates\n");
+		return 1;
+	}
+	ErrorLogFmtAdd("更新しました / Updated. missing %d changed %d\n", cNot, cChange);
+	return 2;
+}
+
+int CMP_SongDataByDifficulty(const void *p1, const void *p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	if (s1->keymode != s2->keymode) {
+		return s1->keymode - s2->keymode;
+	}
+
+	if ((s1->difficulty == 5) == (s2->difficulty == 5)) {
+		if (s1->level != s2->level) return s1->level - s2->level;
+		return CMP_SongDataByTitle(p1, p2);
+	}
+	if (s1->difficulty == 5 && s2->difficulty != 5) return 1;
+	if (s1->difficulty != 5 && s2->difficulty == 5) return -1;
+
+	return 0;
+}
+
+int CMP_SongDataByClear(const void* p1, const void* p2) {
+	SONGDATA* s1 = (SONGDATA*)p1;
+	SONGDATA* s2 = (SONGDATA*)p2;
+
+	if (s1->folderType != s2->folderType) {
+		return s1->folderType - s2->folderType;
+	}
+
+	STATUS s1best = s1->myIRbest.has_value() ? *(s1->myIRbest) : s1->mybest;
+	STATUS s2best = s2->myIRbest.has_value() ? *(s2->myIRbest) : s2->mybest;
+	if (s1best.clear != s2best.clear) return s1best.clear - s2best.clear;
+
+	return CMP_SongDataByDifficulty(p1, p2);
+}
+
+int SearchCourseFromDB(sqlite3 *sql, SONGSELECT *ss, int keys, int multistagemode) {
+
+	sqlite3_stmt *pStmt;
+	CSTR str;
+
+	keys = openlr2::adjustFilterKey(ss->filter, keys);
+
+	GetNowUnixtime();
+	ss->rivalID = 0;
+
+	CSTR query;
+	if (multistagemode == 0) {
+		query = "SELECT * FROM expert LEFT JOIN score ON expert.hash = score.hash";
+		ss->course.type = 0;
+	}
+	else if (multistagemode == 1) {
+		query = "SELECT * FROM nonstop LEFT JOIN score ON nonstop.hash = score.hash";
+		ss->course.type = 1;
+	}
+	else if (multistagemode == 2) {
+		query = "SELECT * FROM grade LEFT JOIN score ON grade.hash = score.hash";
+		ss->course.type = 2;
+	}
+
+	switch (keys) {
+		case 0:
+			query.add(" ");
+			break;
+		case 1:
+			query.add(" WHERE line=7 OR line=5");
+			break;
+		case 2:
+			query.add(" WHERE line=7");
+			break;
+		case 3:
+			query.add(" WHERE line=5");
+			break;
+		case 4:
+			query.add(" WHERE line=14 OR line=10");
+			break;
+		case 5:
+			query.add(" WHERE line=14");
+			break;
+		case 6:
+			query.add(" WHERE line=10");
+			break;
+		case 7:
+			query.add(" WHERE line=9");
+			break;
+	}
+	query.add(" ORDER BY id DESC");
+
+	SQL_prepare(query, sql, &pStmt);
+	ss->prevListCount = 0;
+	SONGDATA song;
+	while (sqlite3_step(pStmt) == 100) {
+
+		if (ss->prevListSize - 1 == ss->prevListCount) {
+			ss->prevList = (SONGDATA*)realloc(ss->prevList, (ss->prevListSize + 1000) * sizeof(SONGDATA));
+			assert(ss->prevList != nullptr);
+			for (int i = ss->prevListSize; i < ss->prevListSize + 1000; i++) {
+				memset(&ss->prevList[i], 0, sizeof(SONGDATA));
+			}
+			ss->prevListSize += 1000;
+		}
+		InitSongData(&song);
+		song.folderType = 8;
+		cstrSprintf(&song.filepath, "%d", ss->prevListCount);
+		song.courseID = sqlite3_column_int(pStmt, 0);
+		song.title = SQL_GetColumn(1, pStmt);
+		song.fulltitle = song.title;
+		song.keymode = sqlite3_column_int(pStmt, 2);
+		song.hash = SQL_GetColumn(3, pStmt);
+		song.courseStageCount = song.hash.length()/32 - 1;
+		song.courseIR = sqlite3_column_int(pStmt, 4);
+		if (song.courseIR == 1) song.courseReadOnly = 1;
+		if (song.courseStageCount > 9) song.courseStageCount = 10;
+		if (song.hash.length() > 63) {
+			for (int i = 0; i < 10; i++) {
+				song.courseKeys[i] = *song.hash.atPos(i) - 0x30;
+			}
+			song.courseType = *song.hash.atPos(10) - 0x30;
+			song.coursePlayable = 1;
+		}
+
+		for (int i = 1; i <= song.courseStageCount; i++) {
+			SONGDATA newsong;
+			if (GetSongData(song.hash.getSliced(i * 32, 32),&newsong, sql, ss) == 1) {
+				song.courseHash[i - 1] = newsong.hash;
+				song.courseTitle[i - 1] = newsong.title;
+				song.courseSubtitle[i - 1] = newsong.subtitle;
+				song.courseLevel[i - 1] = newsong.level;
+				song.courseTotalnote[i - 1] = newsong.mybest.total_notes;
+				song.courseStageDifficulty[i - 1] = newsong.difficulty;
+			}
+			else {
+				song.courseHash[i - 1].fillzero();
+				song.courseTitle[i - 1] = "この曲を所持していません";
+				song.courseLevel[i - 1] = -1;
+				song.coursePlayable = 0;
+			}
+
+		}
+		if (song.courseStageCount == 0) {
+			song.artist = "曲が設定されていないのでプレイできません";
+			song.coursePlayable = 0;
+		}
+		else if (song.coursePlayable == 0) {
+			song.artist = "曲が設定されていないのでプレイできません";
+		}
+
+		if (multistagemode == 1) { //nonstop
+			cstrSprintf(&str, fs::make_preferred("LR2files/Replay/%s/%s.lr2rep").data(), ss->playerID.body, MD5str(song.hash));
+		}
+		else {
+			cstrSprintf(&str, fs::make_preferred("LR2files/Replay/%s/c/%s").data(), ss->playerID.body, MD5str(song.hash));
+		}
+		song.replayExist = IsFileExist(str);
+		song.mybest.clear = sqlite3_column_int(pStmt, 6);
+		song.mybest.stat_pgreat = sqlite3_column_int(pStmt, 7);
+		song.mybest.stat_great = sqlite3_column_int(pStmt, 8);
+		song.mybest.stat_good = sqlite3_column_int(pStmt, 9);
+		song.mybest.stat_bad = sqlite3_column_int(pStmt, 10);
+		song.mybest.stat_poor = sqlite3_column_int(pStmt, 11);
+		song.mybest.total_notes = sqlite3_column_int(pStmt, 12);
+		song.mybest.stat_maxcombo = sqlite3_column_int(pStmt, 13);;
+		song.mybest.minbp = sqlite3_column_int(pStmt, 14);
+		song.mybest.playcount = sqlite3_column_int(pStmt, 15);
+		song.mybest.clearcount = sqlite3_column_int(pStmt, 16);
+		song.mybest.failcount = sqlite3_column_int(pStmt, 17);
+		song.mybest.rank = sqlite3_column_int(pStmt, 18);
+		song.mybest.rate = sqlite3_column_int(pStmt, 19);
+		if (song.mybest.rank < 9) {
+			if (song.mybest.rank == 0 && song.mybest.stat_pgreat + song.mybest.stat_great > 0)
+				song.mybest.rank = 1;
+		}
+		else {
+			song.mybest.rank = 8;
+		}
+		song.mybest.clear_db = sqlite3_column_int(pStmt, 20);
+		song.mybest.op_history = sqlite3_column_int(pStmt, 21);
+		song.mybest.clear_sd = sqlite3_column_int(pStmt, 24);
+		song.mybest.clear_ex = sqlite3_column_int(pStmt, 25);
+		song.mybest.op_best = sqlite3_column_int(pStmt, 26);
+		song.mybest.rseed = sqlite3_column_int(pStmt, 27);
+		song.mybest.complete = sqlite3_column_int(pStmt, 28);
+		LoadIRDerivedRecord(sql, song);
+
+		str = SQL_GetColumn(22, pStmt);
+		if (isSameScoreHash(&song.mybest, &ss->playerPassMD5, &song.hash, &str)) {
+			song.mybest.stat_exscore = song.mybest.stat_great + song.mybest.stat_pgreat * 2;
+			if (song.mybest.total_notes > 0) {
+				song.mybest.stat_score = (song.mybest.stat_good + song.mybest.stat_exscore) * 2 * 50000ULL / song.mybest.total_notes;
+			}
+			if (song.mybest.minbp == 0 && song.mybest.clear != 5) song.mybest.minbp = -1;
+		}
+		else {
+			song.mybest = {};
+			song.mybest.minbp = -1;
+			song.mybest.total_notes = 0;
+		}
+
+		COPY_SONGDATA(&ss->prevList[ss->prevListCount], &song);
+		ss->prevListCount++;
+	}
+	InitSongData(&song);
+	song.title = "NEW COURSE";
+	song.fulltitle = "NEW COURSE";
+	song.artist = "新規コースを作成します";
+	song.hash = "newcourse";
+	song.filepath = "newcourse";
+	song.folderType = 7;
+	song.level = 0;
+	COPY_SONGDATA(&ss->prevList[ss->prevListCount], &song);
+	ss->prevListCount++;
+	if (ss->course.type != 2) {
+		song.title = "RANDOM MIX";
+		song.fulltitle = "RANDOM MIX";
+		song.artist = "ランダムでコースを作成します";
+		song.hash = "randomcourse";
+		song.filepath = "randomcourse";
+		song.folderType = 9;
+		song.level = 0;
+		COPY_SONGDATA(&ss->prevList[ss->prevListCount], &song);
+		ss->prevListCount++;
+	}
+	return ss->prevListCount;
+}
+
+int LoadBmsListFromDB(CSTR query, sqlite3 *sql, SONGSELECT *ss, int *difficulty, int *key, int sort, int count) {
+	
+	sqlite3_stmt *stmt;
+	SONGDATA song;
+	char buf[1024];
+
+
+	if (query.left(6).isDiff("SELECT")) return -1;
+
+	*key = openlr2::adjustFilterKey(ss->filter, *key);
+	if (ss->filter.ignoreDifficultyAll && *difficulty == 0) *difficulty = 1;
+
+	SQL_prepare(query, sql, &stmt);
+	ErrorLogFmtAdd("結果…%s\n", sqlite3_errmsg(sql));
+	int i = 0;
+	while (sqlite3_step(stmt) == 100) {
+		if (count != 0 && i == count) break;
+		if (ss->prevListSize - 1 == i) {
+			ss->prevList = (SONGDATA*)realloc(ss->prevList, (ss->prevListSize + 1000) * sizeof(SONGDATA));
+			assert(ss->prevList != nullptr);
+			for (int j = ss->prevListSize; j < ss->prevListSize + 1000; j++) {
+				memset(&ss->prevList[j], 0, sizeof(SONGDATA)); // FIXME: bad memset
+			}
+			ss->prevListSize += 1000;
+		}
+		InitSongData(&song);
+		song.title = SQL_GetColumn(0, stmt);
+		song.subtitle = SQL_GetColumn(1, stmt);
+		song.genre = SQL_GetColumn(2, stmt);
+		song.artist = SQL_GetColumn(3, stmt);
+		song.subartist = SQL_GetColumn(4, stmt);
+		song.tag = SQL_GetColumn(5, stmt);
+		song.filepath = SQL_GetColumn(6, stmt);
+		song.folderType = sqlite3_column_int(stmt, 7);
+		song.folder = SQL_GetColumn(9, stmt);
+		song.level = sqlite3_column_int(stmt, 11);
+		song.adddate = sqlite3_column_int(stmt, 12);
+		song.keymode = 0;
+		song.fulltitle = song.title;
+		COPY_SONGDATA(&ss->prevList[i], &song);
+		i++;
+	}
+
+	if (i != 0) {
+		sqlite3_finalize(stmt);
+		ss->prevListCount = i;
+		ss->is_loading_bmslist = 1;
+		qsort(ss->prevList,ss->prevListCount,sizeof(SONGDATA),CMP_SongDataByPath);
+		if (ss->flag_folderlamp) {
+			for (int i = 0; i < ss->prevListCount; i++) {
+				CSTR query(1024);
+				if (ss->prevList[i].tag.isDiff("(null)") && ss->prevList[i].tag.length() >= 5) {
+					// Add IR scores in folder stats.
+					query = sqlite3_snprintf(1024, buf,
+						"SELECT * FROM song "
+						"LEFT JOIN score ON song.hash = score.hash "
+						"LEFT JOIN imported_score ON song.hash = imported_score.hash AND score.hash IS NULL "
+						"WHERE %s", ss->prevList[i].tag.body);
+					if (query.findStrPos("__NEWSONG__") > -1) {
+						query = sqlite3_snprintf(1024, buf, "SELECT * FROM song LEFT JOIN score ON song.hash = score.hash WHERE adddate > %d", GetNowUnixtime() - ss->titleflash * 3600);
+					}
+					LoadFolderDataFromDB(query, &ss->prevList[i], sql, *difficulty, *key, sort, ss->prevList[i].level, &ss->filter, 1);
+				}
+				else {
+					// Add IR scores in folder stats.
+					query = sqlite3_snprintf(1024, buf,
+						"SELECT * FROM song "
+						"LEFT JOIN score ON song.hash = score.hash "
+						"LEFT JOIN imported_score ON song.hash = imported_score.hash AND score.hash IS NULL "
+						"WHERE parent = \'%s\'", AssignCRC32(ss->prevList[i].filepath).body);
+					LoadFolderDataFromDB(query, &ss->prevList[i], sql, *difficulty, *key, sort, 0, &ss->filter, 0);
+				}
+			}
+		}
+		ErrorLogFmtAdd("成功　フォルダ数は%dです。\n", ss->prevListCount);
+		return ss->prevListCount;
+	}
+
+	ErrorLogFmtAdd("フォルダが見つかりません。%s...\n", query.body);
+	return -1;
+}
+
+int WriteRandomCourse(sqlite3 *sql, COURSESELECT *course, SONGSELECT *ss, CONFIG_COURSE cfg, int key) {
+	
+	sqlite3_stmt *pStmt;
+
+	ErrorLogAdd("ランダムコースを作成します\n");
+	CSTR query;
+
+	if (ss->course.type == 0) {
+		SQL_Run("DELETE FROM expert WHERE title = \'RANDOM MIX\'", sql);
+	}
+	else if (ss->course.type == 2) {
+		SQL_Run("DELETE FROM grade WHERE title = \'RANDOM MIX\'", sql);
+	}
+	else if (ss->course.type == 1) {
+		SQL_Run("DELETE FROM nonstop WHERE title = \'RANDOM MIX\'", sql);
+	}
+
+	course->name = "RANDOM MIX";
+	course->count = 0;
+	course->id = -1;
+
+	int stages = cfg.stage;
+	if (cfg.stage <= 0 || cfg.stage > 5) {
+		stages = GetRand(3)+2;
+	}
+
+	int maxlevel = 999999;
+	int minlevel = -999999;
+	if (cfg.maxlevel > 0) maxlevel = cfg.maxlevel;
+	if (cfg.minlevel > 0) minlevel = cfg.minlevel;
+
+	int maxbpm = 999999;
+	int minbpm = -999999;
+	if (cfg.maxbpm > 0) maxbpm = cfg.maxbpm;
+	if (cfg.minbpm > 0) minbpm = cfg.minbpm;
+
+	if (cfg.bpmrange <= 0) {
+		cstrSprintf(&query, "SELECT hash,folder FROM song WHERE mode=%d AND %d<=minbpm AND maxbpm<=%d AND %d<=level AND level<=%d ORDER BY random()", key, minbpm, maxbpm, minlevel, maxlevel);
+	}
+	else {
+		cstrSprintf(&query, "SELECT hash,folder FROM song WHERE mode=%d AND maxbpm=minbpm AND %d<=maxbpm AND maxbpm<=%d AND %d<=level AND level<=%d ORDER BY random()", key, minbpm, maxbpm, minlevel, maxlevel);
+	}
+
+	SQL_prepare(query, sql, &pStmt);
+	if (sqlite3_step(pStmt) == 100) {
+		CSTR songhash = GetRandomSongHash(SQL_GetColumn(0, pStmt), SQL_GetColumn(1, pStmt), cfg.optimumlevel_7, key, sql, maxlevel, minlevel);
+		if (GetSongData(songhash, &course->data[course->count], sql, ss) == 1) {
+			course->count++;
+			sqlite3_finalize(pStmt);
+
+			int rangeminbpm = minbpm;
+			int rangemaxbpm = maxbpm;
+			if (cfg.bpmrange > 0) {
+				if (minbpm < course->data[0].maxBPM - cfg.bpmrange)
+					rangeminbpm = course->data[0].maxBPM - cfg.bpmrange;
+				if (course->data[0].maxBPM + cfg.bpmrange < maxbpm)
+					rangemaxbpm = course->data[0].maxBPM + cfg.bpmrange;
+			}
+			cstrSprintf(&query, "SELECT hash,folder FROM song WHERE mode=%d AND %d<=minbpm AND maxbpm<=%d  AND %d<=level AND level<=%d ORDER BY random()", key, rangeminbpm, rangemaxbpm, minlevel, maxlevel);
+			SQL_prepare(query, sql, &pStmt);
+			while (sqlite3_step(pStmt) == 100) {
+
+				bool isSamesong = 0;
+				for (int i = 0; i < course->count; i++) {
+					if (SQL_GetColumn(1, pStmt).isSame(&course->data[i].folder))
+						isSamesong = true;
+				}
+
+				if (!isSamesong) {
+					CSTR songhash = GetRandomSongHash(SQL_GetColumn(0, pStmt), SQL_GetColumn(1, pStmt), cfg.optimumlevel_7, key, sql, maxlevel, minlevel);
+					if (GetSongData(songhash, &course->data[course->count], sql, ss) == 1) {
+						course->count++;
+					}
+				}
+
+				if (course->count == stages) break;
+			}
+			sqlite3_finalize(pStmt);
+			return 1;
+		}
+		sqlite3_finalize(pStmt);
+	}
+	else {
+		sqlite3_finalize(pStmt);
+	}
+	return 0;
+}
+
+
+// TOFIX: unneccessary codes
+int GetFolderDataFromPath(CSTR path, sqlite3 *sql) {
+#ifdef _WIN32
+	HANDLE hFindFile;
+	_WIN32_FIND_DATAA findFileData;
+	char str[1024];
+	int filetime, now;
+
+	ErrorLogFmtAdd("ルートの読み込みを行います。パス%s\n", path.body);
+	ErrorLogTabAdd();
+	BMSMETA meta;
+	CSTR searchPath(path);
+	if (searchPath.right(1).isSame("\\") || searchPath.right(1).isSame("/")) {
+		*searchPath.atPos(searchPath.length() - 1) = 0;
+	}
+
+	hFindFile = FindFirstFileA(searchPath, &findFileData);
+	if (hFindFile == (HANDLE)-1) {
+		FindClose((HANDLE)-1);
+		ErrorLogFmtAdd("フォルダもしくはファイルが見つかりません。\n");
+		ErrorLogTabSub();
+		return -1;
+	}
+	
+	filetime = GetUnixtimeFromFiletime(findFileData.ftLastWriteTime);
+	now = GetNowUnixtime();
+	CSTR folderinfo(path);
+	folderinfo.add("folderinfo.txt");
+	if ((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (strcmp("..", findFileData.cFileName) && strcmp(".", findFileData.cFileName)) && IsFileExist(folderinfo)) {
+		ErrorLogFmtAdd("フォルダインフォのある通常フォルダです。\n");
+		BMSMETA meta;
+		ParseBMSMETA(&meta, folderinfo, 0);
+		if (meta.judge != 2) meta.judge = 1;
+
+		sqlite3_snprintf(1024, str, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , %d , \'%q\' , %d) ",
+			path.body, meta.title.body, AssignCRC32("ROOT").body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, filetime, meta.judge, meta.bannerpath.body, now);
+		if (SQL_Run(str, sql) == 0) {
+			ErrorLogFmtAdd("新規登録なので検索を行います。\n");
+			SearchSongsFromPath(path, sql, path);
+		}
+	}
+	else { // folderinfo not exist
+		if (IsLR2Folder(path)) {
+			ErrorLogFmtAdd("カスタムフォルダです。\n");
+			filetime = GetUnixtimeFromFiletime(findFileData.ftLastWriteTime);
+			ParseBMSMETA(&meta, path, 0);
+
+			meta.judge = 2;
+			if (meta.tag.isSame("__NEWSONG__")) meta.judge = 3;
+			else if (meta.tag.isSame("__RIVAL__")) meta.judge = 4;
+			else if (meta.tag.isSame("__EXPERT__") || meta.tag.isSame("__NONSTOP__") || meta.tag.isSame("__GRADE__")) meta.judge = 6;
+
+			sqlite3_snprintf(1024, str, "INSERT INTO folder (path , title , parent , category , info_a , info_b , command , max , date , type , banner , adddate) VALUES(\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',\'%q\',%d , %d , %d , \'%q\' , %d) ",
+				path.body, meta.title.body, AssignCRC32("ROOT").body, meta.genre.body, meta.artist.body, meta.subartist.body, meta.tag.body, meta.selLevel, filetime, meta.judge, meta.bannerpath.body, now);
+			SQL_Run(str, sql);
+		}
+		else if (((findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) && (strcmp("..", findFileData.cFileName) && strcmp(".", findFileData.cFileName))) {
+			ErrorLogFmtAdd("通常フォルダです。\n");
+
+			sqlite3_snprintf(1024, str, "INSERT INTO folder (path , title , parent , date , type , adddate) VALUES(\'%q\',\'%q\',\'%q\',%d , 1 , %d )",
+				path.body, path.getFilename().body, AssignCRC32("ROOT").body, filetime, now);
+			if (SQL_Run(str, sql) == 0) {
+				ErrorLogFmtAdd("新規登録なので検索を行います。\n");
+				SearchSongsFromPath(path, sql, path);
+			}
+		}
+	}
+	FindClose(hFindFile);
+	ErrorLogFmtAdd("ルートの読み込みを終了しました。\n");
+	ErrorLogTabSub();
+	return 1;
+#else
+	// FIXME(linux): stub
+	return {};
+#endif // _WIN32
+}
+
+// TODO : rename variables
+int LoadFilteredBmsListFromDB(CSTR query, sqlite3 *sql, SONGSELECT *ss, int *diffFilter, int *mode, uint sort, int rivalID, char flag, CUSTOMIR_MANAGER& customIR) {
+
+	sqlite3_stmt *pStmt;
+	int lastreadDiff{};
+	int recentKeymode{};
+
+	ss->isExLevel = 0;
+	if (query.findStrPos("exlevel") >= 0) ss->isExLevel = 1;
+
+	*mode = openlr2::adjustFilterKey(ss->filter, *mode);
+	if (ss->filter.ignoreDifficultyAll && *diffFilter == 0 && flag == 0) *diffFilter = 1;
+	
+	bool isIgnore = 0, isRival = 0;
+	int now = GetNowUnixtime();
+
+	ss->rivalID = 0;
+	if (query.findStrPos("__EXPERT__") >= 0) {
+		ss->course.type = 0;
+		return SearchCourseFromDB(sql, ss, *mode, 0);
+	}
+	if (query.findStrPos("__NONSTOP__") >= 0) {
+		ss->course.type = 1;
+		return SearchCourseFromDB(sql, ss, *mode, 1);
+	}
+	if (query.findStrPos("__GRADE__") >= 0) {
+		ss->course.type = 2;
+		return SearchCourseFromDB(sql, ss, *mode, 2);
+	}
+	
+	if (query.findStrPos("__RIVAL__") >= 0) {
+		isRival = 1;
+		SQL_Run("DETACH rivaldb", sql);
+		CSTR str;
+		if (const auto rivalPath = customIR.RivalPath(rivalID)) {
+			cstrSprintf(&str, "ATTACH \'file:%s?mode=ro\' AS rivaldb", std::filesystem::path{*rivalPath}.concat(".db").generic_string().c_str());
+		} else {
+			cstrSprintf(&str, fs::make_preferred("ATTACH \'LR2files/Rival/%d.db\' AS rivaldb").data(), rivalID);
+		}
+		SQL_Run(str, sql);
+		ss->rivalID = rivalID;
+		rivalID = 0;
+		cstrSprintf(&query, "SELECT * FROM (song LEFT JOIN score ON song.hash = score.hash) INNER JOIN rival ON song.hash = rival.hash");
+	}
+	else if (query.findStrPos("INNER JOIN rival") >= 0) {
+		isRival = 1;
+	}
+	else if (query.findStrPos("__NEWSONG__") >= 0) {
+		cstrSprintf(&query, "SELECT * FROM song LEFT JOIN score ON song.hash = score.hash WHERE adddate > %d", now - ss->titleflash * 3600);
+	}
+
+	if (query.findStrPos("favorite = 2") >= 0) {
+		isIgnore = 1;
+	}
+
+	if (query.left(6).isDiff("SELECT")) return -1;
+
+	int isRandom = ss->isRandomFolder;
+	if (rivalID == 1 && query.findStrPos("random()") == -1) {
+		isRandom = 1;
+		*diffFilter = 0;
+		query.add(" ORDER BY random()");
+		*mode = 0;
+	}
+	if (query.findStrPos("ORDER BY") != -1) {
+		isRandom = 1;
+		*diffFilter = 0;
+	}
+	if (flag) *diffFilter = 0;
+	int keyFilter = 0;
+	int k5count = 0, k7count = 0, k10count = 0, k14count = 0, k9count = 0;
+	int diffcount[6] = { 0, };
+	CSTR queryCpy(query);
+	if (isRandom == 0) {
+		switch (*mode) {
+			case 1:
+				keyFilter = 1;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 2:
+				keyFilter = 7;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 3:
+				keyFilter = 5;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 4:
+				keyFilter = 2;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 5:
+				keyFilter = 14;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 6:
+				keyFilter = 10;
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+			case 7:
+				keyFilter = 9;
+				query.add(" ORDER BY folder ASC,difficulty ASC,level ASC");
+				break;
+			default:
+				query.add(" ORDER BY folder ASC,mode ASC,difficulty ASC,level ASC");
+				break;
+		}
+	}
+
+	GetTimeWrap();
+	SQL_prepare(query, sql, &pStmt);
+	int count = 0;
+	SONGDATA song;
+	CSTR lastreadFolder, thisFolder;
+	CSTR replayPath;
+	//
+	int countSameDiff = 0;
+	int lastKeymode = -1;
+	CSTR lastFolder;
+	int diffLevel[5] = { -1, };
+	int diffBarLamp[5] = { -1, };
+	int diffExist[5] = { -1, };
+	for (int i = 0; i < 5; i++) diffLevel[i] = -1;
+	for (int i = 0; i < 5; i++) diffBarLamp[i] = -1;
+	for (int i = 0; i < 5; i++) diffExist[i] = -1;
+	InitSongData(&song);
+	CSTR nowFolder;
+	int nowCount = 0;
+	int lastreadKeymode = 0;
+
+	while (sqlite3_step(pStmt) == 100 && (rivalID == 0 || count != rivalID)) {
+		int t = sqlite3_column_int(pStmt, 18);
+		if ((!ss->filter.ignoreDP || t < 10) && (ss->filter.ignorePMS != 1 || t != 9)) {
+
+			if (count == ss->prevListSize - 1) {
+				ss->prevList = (SONGDATA*)realloc(ss->prevList, (ss->prevListSize + 1000) * sizeof(SONGDATA));
+				assert(ss->prevList != nullptr);
+				for (int i = ss->prevListSize; i < ss->prevListSize + 1000; i++) {
+					memset(&ss->prevList[i], 0, sizeof(SONGDATA));
+				}
+				ss->prevListSize += 1000;
+			}
+			
+			song.keymode = t;
+			song.difficulty = sqlite3_column_int(pStmt, 15);
+			song.favorite = sqlite3_column_int(pStmt, 24);
+			if (ss->filter.ignore5key) {
+				
+				song.folder = SQL_GetColumn(9, pStmt);
+				if (nowFolder.isDiff(song.folder)) {
+					nowCount = 0;
+				}
+				else {
+					if (lastreadKeymode == 5 && song.keymode == 7) {
+						count -= nowCount;
+						nowCount = 0;
+					}
+					else if (lastreadKeymode == 10 && song.keymode == 14) {
+						count -= nowCount;
+						nowCount = 0;
+					}
+					else if (lastreadKeymode != song.keymode) {
+						nowCount = 0;
+					}
+				}
+			}
+			if (isIgnore == 0 && song.favorite != 2) {
+				if (song.keymode == 5) k5count++;
+				else if (song.keymode == 7) k7count++;
+				else if (song.keymode == 10) k10count++;
+				else if (song.keymode == 14) k14count++;
+				else if (song.keymode == 9) k9count++;
+			}
+			if (count < 0) count = 0;
+						
+			if ((song.favorite != 2 && ((song.keymode == 7 && keyFilter == 7) || (song.keymode <= 8 && *mode == 1 && keyFilter == 1) || (song.keymode == 14 && keyFilter >= 14) || (song.keymode >= 10 && *mode == 4 && keyFilter == 2) || ((song.keymode == 9 || song.keymode == 10 || song.keymode == 5) && song.keymode == keyFilter) || keyFilter == 0)) || song.keymode == 0 || isIgnore == 1) {
+				if (song.difficulty == 1) {
+					diffcount[1] ++;
+				}
+				else if (song.difficulty == 2) {
+					diffcount[2]++;
+				}
+				else if (song.difficulty == 3) {
+					diffcount[3]++;
+				}
+				else if (song.difficulty == 4) {
+					diffcount[4]++;
+				}
+				else if (song.difficulty == 5) {
+					diffcount[5]++;
+				}
+				else {
+					diffcount[0]++;
+				}
+				song.maxBPM = sqlite3_column_int(pStmt, 16);
+				song.minBPM = sqlite3_column_int(pStmt, 17);
+				song.hash = SQL_GetColumn(0, pStmt);
+			
+				//not same code with original. logic is same
+				bool unique = 1;
+				for (int i = 0; i < count; i++) {
+					if (song.hash.isSame(ss->prevList[i].hash)) {
+						unique = 0;
+						i = count;
+					}
+				}
+				if(unique) {
+					if (song.hash.isSame("9cbea4427d7e8caff0d28f9d7600cdec")) 
+						song.title = AutomationFactory();
+					else 
+						song.title = SQL_GetColumn(1, pStmt);
+					song.subtitle = SQL_GetColumn(2, pStmt);
+					song.genre = SQL_GetColumn(3, pStmt);
+					song.filepath = SQL_GetColumn(7, pStmt);
+					song.folderType = sqlite3_column_int(pStmt, 8);
+					song.level = sqlite3_column_int(pStmt, 14);
+					song.artist = SQL_GetColumn(4, pStmt);
+					song.subartist = SQL_GetColumn(5, pStmt);
+					song.keymode = sqlite3_column_int(pStmt, 18);
+					song.judge = sqlite3_column_int(pStmt, 19);
+					song.longnote = sqlite3_column_int(pStmt, 20);
+					song.bga = sqlite3_column_int(pStmt, 21);
+					song.random = sqlite3_column_int(pStmt, 22);
+					song.txt = sqlite3_column_int(pStmt, 25);
+					song.favorite = sqlite3_column_int(pStmt, 24);
+					song.adddate = sqlite3_column_int(pStmt, 27);
+					song.exlevel = sqlite3_column_int(pStmt, 28);
+					song.stagefile = SQL_GetColumn(10, pStmt);
+					if (song.stagefile.isDiff("(null)") && song.stagefile.length() > 4) song.isStagefile = true;
+					song.banner = SQL_GetColumn(11, pStmt);
+					if (song.banner.isDiff("(null)") && song.banner.length() > 4) song.isBanner = true;
+					song.backBMP = SQL_GetColumn(12, pStmt);
+					if (song.backBMP.isDiff("(null)") && song.backBMP.length() > 4) song.isBackBMP = true;
+
+					if (song.subtitle.isDiff("(null)"))
+						cstrSprintf(&song.fulltitle, "%s %s", song.title.body, song.subtitle.body);
+					else
+						song.fulltitle = song.title;
+
+					song.tag = SQL_GetColumn(6, pStmt);
+					song.difficulty = sqlite3_column_int(pStmt, 15);
+					cstrSprintf(&replayPath, fs::make_preferred("LR2files/Replay/%s/%s.lr2rep").data(), ss->playerID.body, song.hash.body);
+					song.replayExist = IsFileExist(replayPath);
+					thisFolder = SQL_GetColumn(9, pStmt);
+					song.folder = thisFolder;
+
+					if (song.keymode > 0) {
+						song.mybest.clear = sqlite3_column_int(pStmt, 30);
+						song.mybest.stat_pgreat = sqlite3_column_int(pStmt, 31);
+						song.mybest.stat_great = sqlite3_column_int(pStmt, 32);
+						song.mybest.stat_good = sqlite3_column_int(pStmt, 33);
+						song.mybest.stat_bad = sqlite3_column_int(pStmt, 34);
+						song.mybest.stat_poor = sqlite3_column_int(pStmt, 35);
+						song.mybest.total_notes = sqlite3_column_int(pStmt, 36);
+						song.mybest.stat_maxcombo = sqlite3_column_int(pStmt, 37);
+						song.mybest.minbp = sqlite3_column_int(pStmt, 38);
+						song.mybest.playcount = sqlite3_column_int(pStmt, 39);
+						song.mybest.clearcount = sqlite3_column_int(pStmt, 40);
+						song.mybest.failcount = sqlite3_column_int(pStmt, 41);
+						song.mybest.rank = sqlite3_column_int(pStmt, 42);
+						song.mybest.rate = sqlite3_column_int(pStmt, 43);
+						if (song.mybest.rank < 8) {
+							if (song.mybest.rank == 0 && (0 < song.mybest.stat_great + song.mybest.stat_pgreat)) {
+								song.mybest.rank = 1;
+							}
+						}
+						else {
+							song.mybest.rank = 8;
+						}
+						song.mybest.clear_db = sqlite3_column_int(pStmt, 44);
+						song.mybest.op_history = sqlite3_column_int(pStmt, 45);
+						song.mybest.clear_sd = sqlite3_column_int(pStmt, 48);
+						song.mybest.clear_ex = sqlite3_column_int(pStmt, 49);
+						song.mybest.op_best = sqlite3_column_int(pStmt, 50);
+						song.mybest.rseed = sqlite3_column_int(pStmt, 51);
+						song.mybest.complete = sqlite3_column_int(pStmt, 52);
+						LoadIRDerivedRecord(sql, song);
+
+						if (isRival) {
+							song.folderType = 5;
+							song.rivalRecord.clear = sqlite3_column_int(pStmt, 54);
+							song.rivalRecord.total_notes = sqlite3_column_int(pStmt, 55);
+							song.rivalRecord.stat_maxcombo = sqlite3_column_int(pStmt, 56);
+							song.rivalRecord.stat_pgreat = sqlite3_column_int(pStmt, 57);
+							song.rivalRecord.stat_great = sqlite3_column_int(pStmt, 58);
+							song.rivalRecord.stat_good = sqlite3_column_int(pStmt, 59);
+							song.rivalRecord.stat_bad = sqlite3_column_int(pStmt, 60);
+							song.rivalRecord.stat_poor = sqlite3_column_int(pStmt, 61);
+							song.rivalRecord.minbp = sqlite3_column_int(pStmt, 62);
+							song.rivalRecord.op_best = sqlite3_column_int(pStmt, 63);
+							song.rivalRecord.stat_exscore = song.rivalRecord.stat_great + song.rivalRecord.stat_pgreat * 2;
+							if (0 < song.rivalRecord.total_notes) {
+								song.rivalRecord.stat_score = ((song.rivalRecord.stat_good + song.rivalRecord.stat_exscore * 2) * 50000ULL) / song.rivalRecord.total_notes;
+								song.rivalRecord.rate = (song.rivalRecord.stat_exscore * 50) / song.rivalRecord.total_notes;
+								song.rivalRecord.rank = (song.rivalRecord.stat_exscore * 9) / (song.rivalRecord.total_notes * 2);
+								if (song.rivalRecord.rank < 9) {
+									if (song.rivalRecord.rank == 0 && (0 < song.rivalRecord.stat_great + song.rivalRecord.stat_pgreat)) {
+										song.rivalRecord.rank = 1;
+									}
+								}
+								else {
+									song.rivalRecord.rank = 8;
+								}
+							}
+						}
+						CSTR bestHash;
+						bestHash = SQL_GetColumn(46, pStmt);
+						if (isSameScoreHash(&song.mybest, &ss->playerPassMD5, &song.hash, &bestHash)) {
+							song.mybest.stat_exscore = song.mybest.stat_great + song.mybest.stat_pgreat * 2;
+							if (song.mybest.total_notes > 0) {
+								song.mybest.stat_score = ((song.mybest.stat_good + song.mybest.stat_exscore * 2) * 50000ULL) /	song.mybest.total_notes;
+							}
+							if ((song.mybest.minbp == 0) && (song.mybest.clear != 5)) {
+								song.mybest.minbp = -1;
+							}
+						}
+						else {
+							song.mybest = {};
+							song.mybest.minbp = -1;
+							song.mybest.total_notes = sqlite3_column_int(pStmt, 26);
+						}
+					}
+					if (lastFolder.isDiff(song.folder) || lastKeymode != song.keymode) {
+						for (int i = count - 1; i >= 0; i--) {
+							if (ss->prevList[i].folder.isDiff(lastFolder) || ss->prevList[i].keymode != lastKeymode)	break;
+
+							if (ss->prevList[i].difficulty == 1) {
+								ss->prevList[i].difficultyLevel[0] = ss->prevList[i].level;
+								ss->prevList[i].difficultyLevelBarLamp[0] = ss->prevList[i].mybest.clear;
+							}
+							else {
+								ss->prevList[i].difficultyLevel[0] = diffLevel[0];
+								ss->prevList[i].difficultyLevelBarLamp[0] = diffBarLamp[0];
+							}
+							ss->prevList[i].difficultyExist[0] = diffExist[0];
+
+							if (ss->prevList[i].difficulty == 2) {
+								ss->prevList[i].difficultyLevel[1] = ss->prevList[i].level;
+								ss->prevList[i].difficultyLevelBarLamp[1] = ss->prevList[i].mybest.clear;
+							}
+							else {
+								ss->prevList[i].difficultyLevel[1] = diffLevel[1];
+								ss->prevList[i].difficultyLevelBarLamp[1] = diffBarLamp[1];
+							}
+							ss->prevList[i].difficultyExist[1] = diffExist[1];
+
+							if (ss->prevList[i].difficulty == 3) {
+								ss->prevList[i].difficultyLevel[2] = ss->prevList[i].level;
+								ss->prevList[i].difficultyLevelBarLamp[2] = ss->prevList[i].mybest.clear;
+							}
+							else {
+								ss->prevList[i].difficultyLevel[2] = diffLevel[2];
+								ss->prevList[i].difficultyLevelBarLamp[2] = diffBarLamp[2];
+							}
+							ss->prevList[i].difficultyExist[2] = diffExist[2];
+
+							if (ss->prevList[i].difficulty == 4) {
+								ss->prevList[i].difficultyLevel[3] = ss->prevList[i].level;
+								ss->prevList[i].difficultyLevelBarLamp[3] = ss->prevList[i].mybest.clear;
+							}
+							else {
+								ss->prevList[i].difficultyLevel[3] = diffLevel[3];
+								ss->prevList[i].difficultyLevelBarLamp[3] = diffBarLamp[3];
+							}
+							ss->prevList[i].difficultyExist[3] = diffExist[3];
+
+							if (ss->prevList[i].difficulty == 5) {
+								ss->prevList[i].difficultyLevel[4] = ss->prevList[i].level;
+								ss->prevList[i].difficultyLevelBarLamp[4] = ss->prevList[i].mybest.clear;
+							}
+							else {
+								ss->prevList[i].difficultyLevel[4] = diffLevel[4];
+								ss->prevList[i].difficultyLevelBarLamp[4] = diffBarLamp[4];
+							}
+							ss->prevList[i].difficultyExist[4] = diffExist[4];
+						}
+						diffBarLamp[0] = -1;
+						diffBarLamp[1] = -1;
+						diffBarLamp[2] = -1;
+						diffBarLamp[3] = -1;
+						diffBarLamp[4] = -1;
+						diffExist[0] = 0;
+						diffExist[1] = 0;
+						diffExist[2] = 0;
+						diffExist[3] = 0;
+						diffExist[4] = 0;
+						diffLevel[0] = -1;
+						diffLevel[1] = -1;
+						diffLevel[2] = -1;
+						diffLevel[3] = -1;
+						diffLevel[4] = -1;
+					}
+					lastFolder = song.folder;
+					lastKeymode = song.keymode;
+					if (1 <= song.difficulty && song.difficulty < 6) {
+						if (diffLevel[song.difficulty - 1] == -1) {
+							diffLevel[song.difficulty - 1] = song.level;
+							diffBarLamp[song.difficulty - 1] = song.mybest.clear;
+						}
+						song.difficultyCount = diffExist[song.difficulty - 1];
+						diffExist[song.difficulty - 1] = song.difficultyCount + 1;
+					}
+					if (song.keymode == 0 || ss->isExLevel == 1) {
+						lastreadFolder = thisFolder;
+						COPY_SONGDATA(&ss->prevList[count], &song);
+						recentKeymode = song.keymode;
+						countSameDiff = 1;
+						nowCount++;
+						count++;
+						nowFolder = song.folder;
+						lastreadKeymode = song.keymode;
+					}
+					else if (thisFolder.isDiff(lastreadFolder)) {
+						lastreadFolder = thisFolder;
+						recentKeymode = song.keymode;
+						lastreadDiff = song.difficulty;
+						countSameDiff = 1;
+						COPY_SONGDATA(&ss->prevList[count], &song);
+						nowCount++;
+						count++;
+						nowFolder = song.folder;
+						lastreadKeymode = song.keymode;
+					}
+					else if (song.keymode != recentKeymode) {
+						recentKeymode = song.keymode;
+						lastreadDiff = song.difficulty;
+						countSameDiff = 1;
+						COPY_SONGDATA(&ss->prevList[count], &song);
+						nowCount++;
+						count++;
+						nowFolder = song.folder;
+						lastreadKeymode = song.keymode;
+					}
+					else if (lastreadDiff < song.difficulty && song.difficulty <= *diffFilter && *diffFilter) {
+						nowCount -= countSameDiff;
+						count -= countSameDiff;
+						if (nowCount < 1) nowCount = 0;
+						lastreadDiff = song.difficulty;
+						countSameDiff = 1;
+						COPY_SONGDATA(&ss->prevList[count], &song);
+						nowCount++;
+						count++;
+						nowFolder = song.folder;
+						lastreadKeymode = song.keymode;
+					}
+					else if (lastreadDiff == song.difficulty || *diffFilter == 0) {
+						countSameDiff++;
+						COPY_SONGDATA(&ss->prevList[count], &song);
+						nowCount++;
+						count++;
+						nowFolder = song.folder;
+						lastreadKeymode = song.keymode;
+					}
+				}
+				InitSongData(&song);
+			}
+		}
+	}
+
+	for (int i = count-1; i >= 0; i--) {
+
+		if (ss->prevList[i].folder.isDiff(lastFolder) || ss->prevList[i].keymode != lastKeymode)	break;
+
+		if (ss->prevList[i].difficulty == 1) {
+			ss->prevList[i].difficultyLevel[0] = ss->prevList[i].level;
+			ss->prevList[i].difficultyLevelBarLamp[0] = ss->prevList[i].mybest.clear;
+		}
+		else {
+			ss->prevList[i].difficultyLevel[0] = diffLevel[0];
+			ss->prevList[i].difficultyLevelBarLamp[0] = diffBarLamp[0];
+		}
+		ss->prevList[i].difficultyExist[0] = diffExist[0];
+
+		if (ss->prevList[i].difficulty == 2) {
+			ss->prevList[i].difficultyLevel[1] = ss->prevList[i].level;
+			ss->prevList[i].difficultyLevelBarLamp[1] = ss->prevList[i].mybest.clear;
+		}
+		else {
+			ss->prevList[i].difficultyLevel[1] = diffLevel[1];
+			ss->prevList[i].difficultyLevelBarLamp[1] = diffBarLamp[1];
+		}
+		ss->prevList[i].difficultyExist[1] = diffExist[1];
+
+		if (ss->prevList[i].difficulty == 3) {
+			ss->prevList[i].difficultyLevel[2] = ss->prevList[i].level;
+			ss->prevList[i].difficultyLevelBarLamp[2] = ss->prevList[i].mybest.clear;
+		}
+		else {
+			ss->prevList[i].difficultyLevel[2] = diffLevel[2];
+			ss->prevList[i].difficultyLevelBarLamp[2] = diffBarLamp[2];
+		}
+		ss->prevList[i].difficultyExist[2] = diffExist[2];
+
+		if (ss->prevList[i].difficulty == 4) {
+			ss->prevList[i].difficultyLevel[3] = ss->prevList[i].level;
+			ss->prevList[i].difficultyLevelBarLamp[3] = ss->prevList[i].mybest.clear;
+		}
+		else {
+			ss->prevList[i].difficultyLevel[3] = diffLevel[3];
+			ss->prevList[i].difficultyLevelBarLamp[3] = diffBarLamp[3];
+		}
+		ss->prevList[i].difficultyExist[3] = diffExist[3];
+
+		if (ss->prevList[i].difficulty == 5) {
+			ss->prevList[i].difficultyLevel[4] = ss->prevList[i].level;
+			ss->prevList[i].difficultyLevelBarLamp[4] = ss->prevList[i].mybest.clear;
+		}
+		else{
+			ss->prevList[i].difficultyLevel[4] = diffLevel[4];
+			ss->prevList[i].difficultyLevelBarLamp[4] = diffBarLamp[4];
+		}
+		ss->prevList[i].difficultyExist[4] = diffExist[4];
+	}
+	sqlite3_finalize(pStmt);
+	GetTimeWrap();
+
+	if (ss->unk5000 == 1 && count <= 0) {
+		ss->unk5000 = 0;
+		ErrorLogAdd("適正な曲が見つかりません。リトライも行いません。\n");
+		return 0;
+	}
+	else if (count > 0) {
+		if (!(ss->unk5000 || count <= 0 || *diffFilter <= 0 || diffcount[*diffFilter] || (k5count == 0 && k7count == 0 && k10count == 0 && k14count == 0 && k9count == 0))) {
+			int diffCycle = *diffFilter;
+			do {
+				if (*diffFilter == 0) break;
+				*diffFilter += 1;
+				if (*diffFilter >= 6) *diffFilter = 0;
+				if (ss->filter.ignoreDifficultyAll && *diffFilter == 0) *diffFilter = 1;
+			} while (diffcount[*diffFilter] == 0);
+
+			if (*diffFilter == diffCycle) {
+				ErrorLogAdd("適正な曲が見つかりません 5\n");
+				return -1;
+			}
+			ErrorLogFmtAdd("難度を変更します。　%d→%d\n", diffCycle, *diffFilter);
+			flag = 0;
+			return LoadFilteredBmsListFromDB(queryCpy, sql, ss, diffFilter, mode, sort, rivalID, flag, customIR);
+		}
+	}
+	else if (ss->unk5000 == 0) {
+		if (!k5count && !k7count && !k10count && !k14count && !k9count) {
+			ErrorLogAdd("適正な曲が見つかりません 0\n");
+			return -1;
+		}
+		else if (!k5count && !k7count && (k10count || k14count) && !k9count && ss->filter.ignoreDP && !ss->filter.ignorePMS) {
+			ErrorLogAdd("適正な曲が見つかりません 1\n");
+			return -1;
+		}
+		else if (!k5count && !k7count && !k10count && !k14count && k9count && !ss->filter.ignoreDP && ss->filter.ignorePMS) {
+			ErrorLogAdd("適正な曲が見つかりません 2\n");
+			return -1;
+		}
+		else if (!k5count && !k7count && (k10count || k14count || k9count) && ss->filter.ignoreDP && ss->filter.ignorePMS) {
+			ErrorLogAdd("適正な曲が見つかりません 3\n");
+			return -1;
+		}
+		else{
+			int modeCycle = *mode;
+			for (*mode = modeCycle + 1; *mode != modeCycle; *mode += 1) {
+				if (*mode == 8) *mode = 0;
+				*mode = openlr2::adjustFilterKey(ss->filter, *mode);
+
+				bool exit = 1;
+				switch (*mode) {
+				case 1:
+					if (k5count == 0) {
+						if (k7count == 0) exit = 0;
+						break;
+					}
+					break;
+				case 2:
+					if (k7count == 0) exit = 0;
+					break;
+				case 3:
+					if (k5count == 0) exit = 0;
+					break;
+				case 4:
+					if (k10count == 0) {
+						if (k14count == 0) exit = 0;
+						break;
+					}
+					break;
+				case 5:
+					if (k14count == 0) exit = 0;
+					break;
+				case 6:
+					if (k10count == 0) exit = 0;
+					break;
+				case 7:
+					if (k9count == 0) exit = 0;
+					break;
+				default:
+					break;
+				}
+				if (exit) break;
+			}
+			if (*mode == modeCycle) {
+				ErrorLogAdd("適正な曲が見つかりません 4\n");
+				return -1;
+			}
+			ErrorLogFmtAdd("鍵盤数を変更します %d→%d\n", modeCycle, *mode);
+			return LoadFilteredBmsListFromDB(queryCpy, sql, ss, diffFilter, mode, sort, rivalID, flag, customIR);
+		}
+		return -1;
+	}
+
+	ss->unk5000 = 0;
+	ss->prevListCount = count;
+	if(isRandom == 0) {
+		switch (sort) {
+			case 0:
+				for (int i = 0; i < ss->prevListCount; i++) {
+					ss->prevList[i].folder = ss->prevList[i].filepath.getDirectory();
+				}
+				qsort(ss->prevList, ss->prevListCount, sizeof(SONGDATA), CMP_SongDataByDirectory);
+				break;
+			case 1:
+				if ((EnabledInsane == 0 || !ss->filter.disableDifficultyFilter) && ss->isExLevel == 0) {
+					qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByDifficulty);
+				}
+				else {
+					qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByExLevel);
+				}
+				break;
+			case 2:
+				qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByTitle);
+				break;
+			case 3:
+				qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByClear);
+				break;
+			case 4:
+				if (isRival == 0) {
+					qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByScore);
+				}
+				else {
+					qsort(ss->prevList, count, sizeof(SONGDATA), CMP_SongDataByRivalScore);
+				}
+				break;
+			default:
+				break;
+		}
+	}
+
+	ss->is_loading_bmslist = 1;
+	ErrorLogFmtAdd("成功　曲数は%dです。\n",ss->prevListCount);
+	return ss->prevListCount;
+}
+
+// LoadLR2CustomFolder
+static void RefreshSongCatalogMetadata(sqlite3* sql) {
+	sqlite3_stmt* statement = nullptr;
+	if (sqlite3_prepare_v2(sql, "SELECT path,hash FROM song", -1, &statement, nullptr) != SQLITE_OK)
+		throw std::runtime_error(sqlite3_errmsg(sql));
+	std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> rows(statement, sqlite3_finalize);
+	std::vector<std::pair<CSTR, CSTR>> songs;
+	int result;
+	while ((result = sqlite3_step(statement)) == SQLITE_ROW)
+		songs.emplace_back(SQL_GetColumn(0, statement), SQL_GetColumn(1, statement));
+	if (result != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(sql));
+	rows.reset();
+	if (sqlite3_prepare_v2(sql, "UPDATE song SET title=?,subtitle=?,genre=?,artist=?,subartist=?,tag=?,stagefile=?,banner=?,backbmp=?,level=?,difficulty=?,maxbpm=?,minbpm=?,mode=?,judge=?,longnote=?,bga=?,random=?,txt=?,karinotes=?,exlevel=? WHERE path=? AND hash=?", -1, &statement, nullptr) != SQLITE_OK)
+		throw std::runtime_error(sqlite3_errmsg(sql));
+	rows.reset(statement);
+	for (auto& [path, hash] : songs) {
+		BMSMETA meta;
+		if (!ParseBMSMETA(&meta, path, 0) || !meta.hash.isSame(hash))
+			throw std::runtime_error("Chart changed during metadata refresh; retry the scan");
+		LoadBMSMETAFromDB(&meta, sql);
+		const char* texts[] = {meta.title.body, meta.subtitle.body, meta.genre.body, meta.artist.body,
+			meta.subartist.body, meta.tag.body, meta.stagefilepath.body, meta.bannerpath.body, meta.backBMPpath.body};
+		for (int i = 0; i < 9; ++i) sqlite3_bind_text(statement, i + 1, texts[i], -1, SQLITE_TRANSIENT);
+		const int numbers[] = {meta.selLevel, meta.difficulty, meta.maxbpm, meta.minbpm, meta.keymode,
+			meta.judge, meta.longnote, meta.bga, meta.random, static_cast<int>(meta.hasTxt), meta.notecount, meta.exlevel};
+		for (int i = 0; i < 12; ++i) sqlite3_bind_int(statement, i + 10, numbers[i]);
+		sqlite3_bind_text(statement, 22, path.body, -1, SQLITE_TRANSIENT);
+		sqlite3_bind_text(statement, 23, hash.body, -1, SQLITE_TRANSIENT);
+		if (sqlite3_step(statement) != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(sql));
+		sqlite3_reset(statement);
+	}
+}
+
+void SyncSongCatalog(sqlite3* sql, CONFIG_JUKEBOX* jb, bool refreshMetadata) {
+	auto execute = [sql](const char* text) {
+		if (sqlite3_exec(sql, text, nullptr, nullptr, nullptr) != SQLITE_OK)
+			throw std::runtime_error(sqlite3_errmsg(sql));
+	};
+	execute("CREATE TABLE IF NOT EXISTS folder(title TEXT,subtitle TEXT,category TEXT,info_a TEXT,info_b TEXT,command TEXT,path TEXT primary key,type INTEGER,banner TEXT,parent TEXT,date INTEGER,max INTEGER,adddate INTEGER)");
+	execute("CREATE TABLE IF NOT EXISTS song(hash TEXT,title TEXT,subtitle TEXT,genre TEXT,artist TEXT,subartist TEXT,tag TEXT,path TEXT primary key,type INTEGER,folder TEXT,stagefile TEXT,banner TEXT,backbmp TEXT,parent TEXT,level INTEGER,difficulty INTEGER,maxbpm INTEGER,minbpm INTEGER,mode INTEGER,judge INTEGER,longnote INTEGER,bga INTEGER,random INTEGER,date INTEGER,favorite INTEGER,txt INTEGER,karinotes INTEGER,adddate INTEGER,exlevel INTEGER)");
+	execute("CREATE INDEX IF NOT EXISTS hashidx ON song(hash)");
+	execute("CREATE INDEX IF NOT EXISTS parentidx ON song(parent)");
+	if (jb->numOfPath == 0) {
+		execute("DELETE FROM song");
+		execute("DELETE FROM folder WHERE path NOT LIKE 'LR2files%'");
+		return;
+	}
+	if (std::filesystem::exists("LR2files/Database/tag.db"))
+		execute("ATTACH 'LR2files/Database/tag.db' AS tagdb");
+	else {
+		execute("ATTACH ':memory:' AS tagdb");
+		execute("CREATE TABLE tagdb.tag(hash TEXT,title TEXT,subtitle TEXT,genre TEXT,artist TEXT,subartist TEXT,tag TEXT,level INTEGER,difficulty INTEGER,mode INTEGER,exlevel INTEGER)");
+	}
+	g_reloadHeadless = true;
+	try {
+		BuildSongReloadSnapshot(sql);
+		for (int i = 0; i < jb->numOfPath; ++i) GetFolderDataFromPath(jb->path[i], sql);
+		// Folder timestamps have one-second precision; enumerate even when unchanged.
+		for (int i = 0; i < jb->numOfPath; ++i)
+			if (!IsLR2Folder(jb->path[i])) SearchSongsFromPath(jb->path[i], sql, jb->path[i]);
+		ReloadSongsByQuery("SELECT path,date FROM folder", sql, jb);
+		ReloadSongsByQuery("SELECT path,date FROM song", sql, jb);
+		RepairSongHierarchy(sql);
+		if (refreshMetadata) RefreshSongCatalogMetadata(sql);
+		SetUndefinedDifficulty(sql);
+		EndSongReloadSnapshot();
+		g_reloadHeadless = false;
+	} catch (...) {
+		EndSongReloadSnapshot();
+		g_reloadHeadless = false;
+		throw;
+	}
+}
+
+int LoadLR2CustomFolder(sqlite3 *sql, CONFIG_JUKEBOX *jb, CSTR scoreDBpath, char flag_starter, char flag_direct, CUSTOMIR_MANAGER& customIR) {
+
+	sqlite3 *scoreDB, *tagDB;
+	char query[1024], query2[256];
+
+	int folderAddCount = 0;
+	EnabledInsane = 0;
+	if (flag_starter) {
+		SQL_Run("CREATE TABLE player(id TEXT primary key,hash TEXT,name TEXT,irid TEXT,irhash TEXT,playcount INTEGER,clear INTEGER,fail INTEGER,perfect INTEGER,great INTEGER,good INTEGER,bad INTEGER,poor INTEGER,playtime INTEGER,combo INTEGER,maxcombo INTEGER,grade_7 INTEGER,grade_5 INTEGER,grade_14 INTEGER,grade_10 INTEGER,grade_9 INTEGER,trial INTEGER,option INTEGER,systemversion INTEGER,gradeversion INTEGER, trialversion INTEGER,scorehash TEXT)", sql);
+		SQL_Run("CREATE TABLE folder(title TEXT ,subtitle TEXT ,category TEXT,info_a TEXT,info_b TEXT,command TEXT,path TEXT primary key,type INTEGER,banner TEXT,parent TEXT,date INTEGER,max INTEGER,adddate INTEGER)", sql);
+		SQL_Run("CREATE TABLE song(hash TEXT ,title TEXT ,subtitle TEXT ,genre TEXT,artist TEXT,subartist TEXT,tag TEXT ,path TEXT primary key ,type INTEGER,folder TEXT,stagefile TEXT,banner TEXT,backbmp TEXT,parent TEXT,level INTEGER,difficulty INTEGER,maxbpm INTEGER,minbpm INTEGER,mode INTEGER,judge INTEGER,longnote INTEGER,bga INTEGER,random INTEGER,date INTEGER,favorite INTEGER,txt INTEGER,karinotes INTEGER,adddate INTEGER)", sql);
+		SQL_Run("CREATE TABLE course(id INTEGER primary key,title TEXT,line INTEGER,hash TEXT)", sql);
+		SQL_Run("CREATE TABLE tag(hash TEXT primary key,title TEXT ,subtitle TEXT ,genre TEXT,artist TEXT,subartist TEXT,tag TEXT ,level INTEGER,difficulty INTEGER,mode INTEGER)", sql);
+		SQL_Run("CREATE TABLE score(hash TEXT primary key,clear INTEGER,perfect INTEGER,great INTEGER,good INTEGER,bad INTEGER,poor INTEGER,totalnotes INTEGER,maxcombo INTEGER,minbp INTEGER,playcount INTEGER,clearcount INTEGER,failcount INTEGER,rank INTEGER,rate INTEGER,clear_db INTEGER,op_history INTEGER,scorehash TEXT,ghost TEXT,clear_sd INTEGER,clear_ex INTEGER,op_best INTEGER, rseed INTEGER, complete INTEGER)", sql);
+	}
+	else {
+		if (flag_direct == 0) {
+			// FIXME: out of bounds write if jb->numOfPath == jb->path.size(). Make jb->path a vector.
+			//TODO : make define customfolderoption constant
+			if (jb->customfolder & 1) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/RANDOM/").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 2) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/favorite.lr2folder").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 4) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/TOP10.lr2folder").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 8) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/PLAYLEVEL/").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 0x10) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/CLEAR/").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 0x20) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/RANK/").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 0x40) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/ignore.lr2folder").data();
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			if (jb->customfolder & 0x80) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/INSANE01/").data();
+				jb->numOfPath++;
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/INSANE02/").data();
+				jb->numOfPath++;
+				folderAddCount+=2;
+				EnabledInsane = 1;
+			}
+			jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/course1.lr2folder").data();
+			jb->numOfPath++;
+			jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/course2.lr2folder").data();
+			jb->numOfPath++;
+			jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/course3.lr2folder").data();
+			jb->numOfPath++;
+			folderAddCount += 3;
+		}
+
+		sqlite3_open(scoreDBpath,&scoreDB);
+		sqlite3_open(fs::make_preferred("LR2files/Database/tag.db").data(), &tagDB);
+		SQL_Run("CREATE TABLE folder(title TEXT ,subtitle TEXT ,category TEXT,info_a TEXT,info_b TEXT,command TEXT,path TEXT primary key,type INTEGER,banner TEXT,parent TEXT,date INTEGER,max INTEGER,adddate INTEGER)", sql);
+		SQL_Run("CREATE TABLE song(hash TEXT ,title TEXT ,subtitle TEXT ,genre TEXT,artist TEXT,subartist TEXT,tag TEXT ,path TEXT primary key ,type INTEGER,folder TEXT,stagefile TEXT,banner TEXT,backbmp TEXT,parent TEXT,level INTEGER,difficulty INTEGER,maxbpm INTEGER,minbpm INTEGER,mode INTEGER,judge INTEGER,longnote INTEGER,bga INTEGER,random INTEGER,date INTEGER,favorite INTEGER,txt INTEGER,karinotes INTEGER,adddate INTEGER,exlevel INTEGER)", sql);
+		SQL_Run("CREATE INDEX hashidx ON song (hash)", sql);
+		SQL_Run("CREATE INDEX parentidx ON song (parent)", sql);
+		SQL_Run("DROP TABLE course", sql);
+		SQL_Run("CREATE TABLE nonstop(id INTEGER primary key,title TEXT,line INTEGER,hash TEXT,ir INTEGER)", sql);
+		SQL_Run("CREATE TABLE expert(id INTEGER primary key,title TEXT,line INTEGER,hash TEXT,ir INTEGER)", sql);
+		SQL_Run("CREATE TABLE grade(id INTEGER primary key,title TEXT,line INTEGER,hash TEXT,ir INTEGER)", sql);
+		SQL_Run("CREATE TABLE tag(hash TEXT primary key,title TEXT ,subtitle TEXT ,genre TEXT,artist TEXT,subartist TEXT,tag TEXT ,level INTEGER,difficulty INTEGER,mode INTEGER,exlevel INTEGER)", tagDB);
+		SQL_Run("CREATE TABLE score(hash TEXT primary key,clear INTEGER,perfect INTEGER,great INTEGER,good INTEGER,bad INTEGER,poor INTEGER,totalnotes INTEGER,maxcombo INTEGER,minbp INTEGER,playcount INTEGER,clearcount INTEGER,failcount INTEGER,rank INTEGER,rate INTEGER,clear_db INTEGER,op_history INTEGER,scorehash TEXT,ghost TEXT,clear_sd INTEGER,clear_ex INTEGER,op_best INTEGER, rseed INTEGER, complete INTEGER)", scoreDB);
+		SQL_Run("CREATE INDEX hashidx ON score (hash)", scoreDB);
+		sqlite3_close(scoreDB);
+		sqlite3_close(tagDB);
+
+		sqlite3_snprintf(256, query2, "ATTACH \'%q\' AS scoredb", scoreDBpath.body);
+		if (SQL_Run(query2, sql) != 0) {
+			ErrorLogAdd("スコアデータベースの接続に失敗しました。 / Failed to attach the score database.\n");
+			return -1;
+		}
+		if (SQL_Run(fs::make_preferred("ATTACH \'LR2files/Database/tag.db\' AS tagdb").data(), sql) != 0) {
+			ErrorLogAdd("タグとかデータベースの接続に失敗しました。 / Failed to attach the tag database.\n");
+			return -1;
+		}
+	}
+
+	if (flag_direct == 0) {
+		sqlite3_stmt *pStmt;
+
+		SQL_Run("BEGIN", sql);
+		ErrorLogAdd("エラーフォルダの検索を行います。 / Searching for orphaned folders.\n");
+
+		sqlite3_snprintf(1024, query, "SELECT * FROM folder WHERE parent = \'%s\'", AssignCRC32("ROOT").body);
+		SQL_prepare(query, sql, &pStmt);
+		while (sqlite3_step(pStmt) == 100) {
+			CSTR path;
+			path = SQL_GetColumn(6, pStmt);
+
+			bool is_path_not_in_jukebox = 1;
+
+			for (int i = 0; i < jb->numOfPath; i++) {
+				if (path.isSame(&jb->path[i]))
+					is_path_not_in_jukebox = 0;
+			}
+
+			if(is_path_not_in_jukebox) {
+				ErrorLogFmtAdd("エラーフォルダを削除します。 / Removing orphaned folder: %s\n", path.body);
+				sqlite3_snprintf(1024, query, "DELETE FROM folder WHERE path = \'%s\'", path.body);
+				SQL_Run(query, sql);
+			}
+			else {
+				ErrorLogFmtAdd("ジュークボックスに登録されています。 / Registered in jukebox: %s\n", path.body);
+			}
+		}
+		sqlite3_finalize(pStmt);
+
+		if (flag_starter) {
+			GetFolderDataFromPath(jb->path[0], sql);
+		}
+		else {
+			for (int i = 0; i < jb->numOfPath; i++) {
+				GetFolderDataFromPath(jb->path[i], sql);
+			}
+		}
+
+		if (jb->autoreload == 2 || flag_starter) {
+			BuildSongReloadSnapshot(sql);
+
+			ErrorLogAdd("フォルダ更新チェックを行います。 / Checking folder updates.\n");
+			ReloadSongsByQuery("SELECT path,date FROM folder", sql, jb, ReloadProgress::FolderPass);
+
+			ErrorLogAdd("ファイル更新チェックを行います。 / Checking file updates.\n");
+			ReloadSongsByQuery("SELECT path,date FROM song", sql, jb, ReloadProgress::SongPass);
+
+			EndSongReloadSnapshot();
+		}
+		else {
+			ErrorLogAdd("フォルダ更新チェック(ルートのみ)を行います。 / Checking folder updates (root only).\n");
+			sqlite3_snprintf(1024, query, "SELECT path,date FROM folder WHERE parent = \'%s\' OR date = 0", AssignCRC32("ROOT").body);
+			ReloadSongsByQuery(query, sql, jb);
+		}
+
+		RepairSongHierarchy(sql);
+
+		ErrorLogAdd("未定義#DIFFICULTYの自動設定を行います。 / Auto-assigning undefined #DIFFICULTY.\n");
+		SetUndefinedDifficulty(sql);
+		ErrorLogAdd("データベースチェックは終了しました。 / Database check finished.\n");
+
+		if (flag_starter == 0) {
+			SQL_Run(fs::make_preferred("DELETE FROM folder WHERE path LIKE \'LR2files/Rival/%\'").data(), sql);
+			SQL_Run(fs::make_preferred("DELETE FROM folder WHERE path LIKE \'LR2files/CustomIRRival/%\'").data(), sql);
+
+			if (customIR.IsDisplayRivalActive()) {
+				for (const auto& [rivalId, rivalStem] : customIR.RivalEntries()) {
+					if (rivalId < 1) continue;
+					std::filesystem::path folderPath = rivalStem;
+					folderPath += ".lr2folder";
+					cstrSprintf(&jb->path[jb->numOfPath], "%s", folderPath.string().c_str());
+					GetFolderDataFromPath(jb->path[jb->numOfPath], sql);
+					jb->numOfPath++;
+					folderAddCount++;
+				}
+			} else {
+				for (int i = 0; i < 20; i++) {
+					if (jb->rival[i] < 1) break;
+					cstrSprintf(&jb->path[jb->numOfPath], fs::make_preferred("LR2files/Rival/%d.lr2folder").data(), jb->rival[i]);
+					GetFolderDataFromPath(jb->path[jb->numOfPath], sql);
+					jb->numOfPath++;
+					folderAddCount++;
+				}
+			}
+
+			SQL_Run(fs::make_preferred("DELETE FROM folder WHERE path=\'LR2files/CustomFolder/newsong.lr2folder\'").data(), sql);
+			sqlite3_snprintf(1024, query, "SELECT * FROM song WHERE adddate > %d", GetNowUnixtime() - jb->titleflash * 3600);
+			sqlite3_stmt *pStmt;
+			SQL_prepare(query, sql, &pStmt);
+			if (sqlite3_step(pStmt) == 100) {
+				jb->path[jb->numOfPath] = fs::make_preferred("LR2files/CustomFolder/newsong.lr2folder").data();
+				GetFolderDataFromPath(jb->path[jb->numOfPath], sql);
+				jb->numOfPath++;
+				folderAddCount++;
+			}
+			sqlite3_finalize(pStmt);
+		}
+		sqlite3_exec(sql, "COMMIT", 0, 0, 0);
+		jb->numOfPath -= folderAddCount;
+		for (int i = jb->numOfPath; i < std::size(jb->path); i++) {
+			jb->path[i].fillzero();
+		}
+	}
+	return 1;
+}
+
+int InitBMSMETA(BMSMETA *meta_) {
+	auto& meta = *meta_;
+	meta.hash.fillzero();
+	meta.title.fillzero();
+	meta.subtitle.fillzero();
+	meta.artist.fillzero();
+	meta.subartist.fillzero();
+	meta.genre.fillzero();
+	meta.filepath.fillzero();
+	meta.filename.fillzero();
+	meta.stagefilepath.fillzero();
+	meta.bannerpath.fillzero();
+	meta.backBMPpath.fillzero();
+	meta.parentfolderpath.fillzero();
+	meta.folderpath.fillzero();
+	meta.tag.fillzero();
+	meta.notecount = 0;
+	meta.maxbpm = 0;
+	meta.minbpm = 0;
+	meta.keymode = 5;
+	meta.longnote = 0;
+	meta.selLevel = 0;
+	meta.exlevel = 0;
+	meta.judge = 2;
+	meta.difficulty = -1;
+	meta.random = 0;
+	meta.bga = 0;
+	meta.hasTxt = false;
+	return 1;
+}
+
+int ParseBMSMETA(BMSMETA *meta, CSTR filepath, char flag) {
+	FILE *pFile;
+	float notes;
+	int lnobj = -12345;
+	bool flagIf;
+
+	if (flag && !g_reloadHeadless) {
+		printfDx("Now Loading...\n%s\n",filepath.body);
+		if (hBackImage > 0) {
+			DrawGraph(0, 0, hBackImage, 0);
+		}
+		ScreenFlip();
+		ClsDrawScreen();
+		clsDx();
+		ProcessMessage();
+	}
+
+	InitBMSMETA(meta);
+	notes = 0.0;
+	flagIf = 0;
+	pFile = fopen(filepath.body, "r");
+	if (pFile == NULL) return 0;
+	const auto textCodepage = DetectTextCodepage(pFile, BmsTextCodepage());
+
+	CSTR dir(filepath.getDirectory()); // check this works as intended
+
+	if (filepath.right(4).isSame(".pms")) meta->keymode = 9;
+
+	CSTR buffer(102401);
+	while (char* pBuffer = fgets(buffer.outstr(), 102400, pFile)) {
+		const char* line = pBuffer;
+		const auto lineLen = static_cast<int>(strlen(line));
+		const std::string_view lineView{line, static_cast<size_t>(lineLen)};
+
+		if (lineView.starts_with("#IF") && !lineView.starts_with("#IF 1")) {
+			flagIf = 1;
+		}
+		else if (lineView.starts_with("#ENDIF")) {
+			flagIf = 0;
+		}
+		else if (line[0] != '#' || flagIf) {
+		}
+		else {
+			if (IsTextCommand(lineView)) {
+				CSTR utfLine(DecodeTextLine(line, textCodepage).c_str());
+				utfLine.trimWhiteSpace();
+				DealWhiteSpace(&utfLine);
+				ParseTextCommand(*meta, utfLine);
+			}
+			else if (GetRawBodyInt(lineView, "#PLAYLEVEL", meta->selLevel)) {}
+			else if (GetRawBodyInt(lineView, "#EXLEVEL", meta->exlevel)) {}
+			else if (GetRawBodyInt(lineView, "#MAXTRACKS", meta->selLevel)) {}
+			else if (GetRawBodyInt(lineView, "#DIFFICULTY", meta->difficulty)) {}
+			else if (lineView.starts_with("#CUSTOMFOLDER")) {
+				meta->judge = 2;
+			}
+			else if (lineView.starts_with("#FP/DSC")) {
+				meta->keymode = 9;
+			}
+			else if (GetRawBodyInt(lineView, "#RANK", meta->judge)) {}
+			else if (lineView.starts_with("#LNOBJ")) {
+				meta->longnote = 1;
+				const char ch1 = lineLen > 7 ? line[7] : '\0';
+				const char ch2 = lineLen > 8 ? line[8] : '\0';
+				lnobj = Base36ToInt(ch1, ch2);
+			}
+			else if (lineView.starts_with("#BMP")) {
+				meta->bga = 1;
+			}
+			else if (lineView.starts_with("#RAND")) {
+				meta->random = 1;
+			}
+			else if (lineView.starts_with("#BPM")) {
+				UpdateBpmRange(*meta, lineView.starts_with("#BPM ") ? atol(line + 5) : (lineLen > 7 ? atol(line + 7) : 0));
+			}
+			else if (lineLen > 5 && IsDigitAscii(line[1]) && IsDigitAscii(line[2]) && IsDigitAscii(line[3]) && IsDigitAscii(line[4]) && IsDigitAscii(line[5])) {
+				//TOFIX : There is no need to decrease variable data, still it does. it makes karinote include invisible and longnote(0.5 to 1)
+				//TODO : This part can't use CHANNEL directly because they are not converted to LR2's inner channel
+				int data = (line[4] - '0') * 10 + line[5] - '0';
+				if (CHANNEL_1P_LN_1 <= data && data <= CHANNEL_2P_LN_END) {
+					data -= 40;
+					meta->longnote = 1;
+				}
+				if (CHANNEL_1P_HIDDEN_1 <= data && data <= CHANNEL_2P_HIDDEN_END) {
+					data -= 20;
+				}
+				if (meta->keymode != 9) {
+					if (data == 18 || data == 19 || data == 38 || data == 39 || data == 58 || data == 59) {
+						if (meta->keymode == 5) meta->keymode = 7;
+						if (meta->keymode == 10) meta->keymode = 14;
+					}
+					else if (data == 28 || data == 29 || data == 48 || data == 49 || data == 68 || data == 69) {
+						meta->keymode = 14;
+					}
+					else if ((data > CHANNEL_2P_NOTE_SC && data <= CHANNEL_2P_NOTE_END)
+						|| (data > CHANNEL_2P_HIDDEN_SC && data <= CHANNEL_2P_HIDDEN_END)
+						|| (CHANNEL_2P_LN_SC + 1 <= data && data <= CHANNEL_2P_LN_END)) {//TODO: inconsitency
+						if (meta->keymode == 5) meta->keymode = 10;
+						else if(meta->keymode == 7) meta->keymode = 14;	
+					}
+				}
+				
+				if (data == CHANNEL_BPM) {
+					int c = (lineLen - 7) / 2;
+					for (int cur = 7, i = 0; i < c; cur += 2, i++) {
+						UpdateBpmRange(*meta, HEXcharToInt(line[cur], line[cur + 1]));
+					}
+				}
+				else if (CHANNEL_1P_NOTE_1 <= data && data <= CHANNEL_2P_NOTE_END) {
+					int c = (lineLen - 7) / 2;
+					for (int cur = 7, i = 0; i < c; cur += 2, i++) {
+						const int obj = Base36ToInt(line[cur], line[cur + 1]);
+						if (obj && obj != lnobj) {
+							notes++;
+						}
+					}
+				}
+				else if (CHANNEL_1P_LN_1 <= data && data <= CHANNEL_2P_LN_END) {
+					int c = (lineLen - 7) / 2;
+					for (int cur = 7, i = 0; i < c; cur += 2, i++) {
+						const int obj = Base36ToInt(line[cur], line[cur + 1]);
+						if (obj && obj != lnobj) {
+							notes += 0.5;
+						}
+					}
+				}
+				
+			}
+		}
+	}
+
+	fclose(pFile);
+	//TOFIX: find difficulty at left???
+	makeFileHash(filepath, meta->hash); //test : CSTR to char* as oBuf : possible
+	meta->parentfolderpath = filepath.getParentDirectory();
+	meta->filepath = filepath;
+	meta->filename = filepath.getFilename();
+	meta->folderpath = filepath.getDirectory();
+	dir.add("*.txt");
+	if (IsFileExist(dir)) meta->hasTxt = true;
+	meta->notecount = notes;
+	return 1;
+}
+
+int openlr2::adjustFilterKey(CONFIG_SELECT const& cfg_select, int key) {
+	if (cfg_select.ignoreKeyAll && key == 0) key = 1;
+	if (cfg_select.ignoreKeySingle && key == 1) key = 2;
+	if (cfg_select.ignoreKeyDouble && key == 4) key = 5;
+	if (cfg_select.ignoreDP && key >= 4 && key <= 6) key = 7;
+	if (cfg_select.ignorePMS && key == 7) key = 0;
+	if (cfg_select.ignoreKeyAll && key == 0) key = 1;
+	return key;
+}

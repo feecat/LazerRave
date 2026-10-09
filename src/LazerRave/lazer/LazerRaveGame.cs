@@ -1,0 +1,382 @@
+using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Extensions;
+using LazerRave.Bridge;
+using osu.Framework.Allocation;
+using osu.Framework.Audio;
+using osu.Framework.Bindables;
+using osu.Framework.Configuration;
+using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Cursor;
+using osu.Framework.Graphics.Shapes;
+using osu.Framework.Graphics.Sprites;
+using osu.Framework.IO.Stores;
+using osu.Framework.Platform;
+using osu.Framework.Screens;
+using osu.Framework.Threading;
+using osu.Game;
+using osu.Game.Beatmaps;
+using osu.Game.Database;
+using osu.Game.Graphics;
+using osu.Game.Graphics.Sprites;
+using osu.Game.Graphics.UserInterface;
+using osu.Game.Graphics.UserInterfaceV2;
+using osu.Game.IO;
+using osu.Game.Online;
+using osu.Game.Online.API;
+using osu.Game.Online.API.Requests.Responses;
+using osu.Game.Overlays;
+using osu.Game.Rulesets.Mania;
+using osu.Game.Screens;
+using osu.Game.Screens.Select;
+using osu.Game.Screens.Menu;
+using osuTK;
+using osuTK.Graphics;
+
+namespace LazerRave.Lazer;
+
+[Cached]
+internal partial class LazerRaveGame : OsuGame
+{
+    private readonly EngineBridge bridge;
+    private readonly BmsBeatmapStore catalog;
+    private readonly DesktopSettings preferences;
+    private readonly string startupMessage;
+    private readonly CancellationTokenSource lifetime = new();
+    private LazerRaveSettingsPanel settingsPanel = null!;
+    private LazerRaveSongSelect songSelect = null!;
+    private ResourceStore<byte[]> media = null!;
+    private PreviewPlayer preview = null!;
+    private NativeGameViewport? viewport;
+    private OsuDropdown<string> folders = null!;
+    private OsuSpriteText pathText = null!, status = null!, profileName = null!, scoreText = null!;
+    private Sprite avatar = null!;
+    private Container chrome = null!;
+    private bool refreshing, updatingFolders;
+    private readonly BindableDouble menuTrackVolume = new(1);
+    private int previewGeneration;
+    private ScheduledDelegate? pendingSettingsSave;
+    private readonly PerformanceRun? benchmark;
+    private readonly System.Diagnostics.Stopwatch benchmarkClock = new();
+    private bool benchmarkSelected, benchmarkStarted;
+    private double nextFrameSample;
+    private readonly List<string> frontendFrames = ["elapsed_s,draw_fps,update_fps,draw_interval_ms,update_interval_ms"];
+    private void SaveFrontendFrames() => File.WriteAllLines(Path.Combine(bridge.Runtime, "frontend-fps.csv"), frontendFrames);
+    public bool IsChartVisible(BeatmapInfo info) => catalog.IsVisible(info);
+    public int Keys => catalog.Keys;
+    public override bool UseDevelopmentServer => false;
+    public override string Version => "LazerRave 0.1";
+    protected override int UnhandledExceptionsBeforeCrash => 0;
+
+    public LazerRaveGame(EngineBridge bridge, FrontendSettings initial, SongLibrary library, string message, PerformanceRun? benchmark = null)
+    {
+        this.bridge = bridge; startupMessage = message;
+        this.benchmark = benchmark;
+        preferences = new(initial, FrontendSettings.SharedPath, benchmark is not null);
+        catalog = new(); catalog.Replace(library, initial.Roots);
+        var api = new DummyAPIAccess(); api.SetState(APIState.Offline);
+        api.LocalUser.Value = new APIUser { Id = 1, Username = initial.Player };
+        API = api; Name = "LazerRave";
+    }
+
+    protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
+    {
+        var dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
+        dependencies.Cache(this); dependencies.CacheAs<BeatmapStore>(catalog);
+        return dependencies;
+    }
+    public override EndpointConfiguration CreateEndpoints() => new()
+    {
+        WebsiteUrl = "http://127.0.0.1:1", APIUrl = "http://127.0.0.1:1",
+        MetadataUrl = "http://127.0.0.1:1", MultiplayerUrl = "http://127.0.0.1:1", SpectatorUrl = "http://127.0.0.1:1",
+    };
+    protected override OnlineStore CreateOnlineStore() => new NoRemoteResources();
+    private sealed class NoRemoteResources : OnlineStore { protected override string GetLookupUrl(string url) => ""; }
+
+    public override void SetHost(GameHost host)
+    {
+        base.SetHost(host);
+        foreach (var handler in host.AvailableInputHandlers)
+            LazerRaveInputPolicy.Apply(handler);
+        if (host.Window is { } window)
+        {
+            window.Title = "LazerRave";
+            using var icon = typeof(LazerRaveGame).Assembly.GetManifestResourceStream("LazerRave.Branding.logo.png")
+                ?? throw new InvalidDataException("The frontend logo resource is missing.");
+            window.SetIconFromStream(icon);
+        }
+    }
+    protected override IDictionary<FrameworkSetting, object> GetFrameworkConfigDefaults()
+    {
+        var defaults = base.GetFrameworkConfigDefaults();
+        defaults[FrameworkSetting.Locale] = "en";
+        defaults[FrameworkSetting.FrameSync] = FrameSync.Unlimited;
+        if (benchmark is not null)
+        {
+            defaults[FrameworkSetting.WindowMode] = WindowMode.Windowed;
+            defaults[FrameworkSetting.WindowedSize] = new System.Drawing.Size(1280, 800);
+        }
+        return defaults;
+    }
+    protected override Loader CreateLoader() => new LazerRaveLoader();
+    protected override Storage CreateStorage(GameHost host, Storage defaultStorage) => new OsuStorage(host, new NativeStorage(ApplicationPaths.UserData));
+    protected override OsuLogo CreateLogo() => new LazerRaveLogo();
+    protected override SettingsOverlay CreateSettingsOverlay() => settingsPanel = new LazerRaveSettingsPanel(preferences, ApplySettings);
+
+    [BackgroundDependencyLoader]
+    private void load()
+    {
+        Textures.AddTextureSource(Host.CreateTextureLoaderStore(new DllResourceStore(typeof(LazerRaveGame).Assembly)));
+        Ruleset.Value = new ManiaRuleset().RulesetInfo;
+        BeatmapManager.ExternalBeatmapResolver = info => catalog.Resolve(info, Audio, Textures, preferences.Value.Encoding);
+        media = new ResourceStore<byte[]>(); ResetMedia();
+        preview = new PreviewPlayer(Audio, media);
+        Audio.Tracks.AddAdjustment(AdjustableProperty.Volume, menuTrackVolume);
+        Add(catalog);
+    }
+    protected override void LoadComplete()
+    {
+        base.LoadComplete();
+        if (benchmark is not null) benchmarkClock.Start();
+        if (Host.Window is not null) viewport = new NativeGameViewport(Host.Window);
+        ScreenContainer.Add(chrome = new PopoverContainer { RelativeSizeAxes = Axes.Both, Depth = -2 });
+        BuildChrome();
+        chrome.Hide();
+        Beatmap.BindValueChanged(OnSelectionChanged);
+        UpdateLibraryStatus(startupMessage);
+        preferences.Speed.BindValueChanged(_ => QueueSettingsSave());
+        preferences.Offset.BindValueChanged(_ => QueueSettingsSave());
+        foreach (var setting in new[] { preferences.Arrangement, preferences.Encoding, preferences.Roots, preferences.Window,
+            preferences.Player, preferences.Avatar, preferences.FrameLimit, preferences.RenderProfile, preferences.Presentation })
+            setting.BindValueChanged(_ => QueueSettingsSave());
+    }
+
+    private void ResetMedia()
+    {
+        var cache = Path.Combine(ApplicationPaths.Cache, "frontend");
+        var store = new FileMediaStore(preferences.Value.Roots, preferences.Value.Avatar, cache);
+        media.AddStore(store); Textures.AddTextureSource(Host.CreateTextureLoaderStore(store));
+    }
+    private static RoundedButton Button(osu.Framework.Localisation.LocalisableString text, Action action, float width) => new() { Text = text, Width = width, Height = 32, Action = action };
+    private static OsuSpriteText Text(string text, float size, float x, float y) => new TruncatingSpriteText() { Text = text, Font = OsuFont.GetFont(size: size), Position = new Vector2(x, y) };
+
+    private void BuildChrome()
+    {
+        chrome.Clear();
+        chrome.Add(pathText = Text("", 15, 28, 65).With(text => { text.MaxWidth = 470; }));
+        chrome.Add(Button("↑", () => ParentFolder(), 36).With(button => button.Position = new Vector2(26, 88)));
+        folders = new OsuDropdown<string> { Width = 270, Position = new Vector2(70, 88), Items = Array.Empty<string>() };
+        chrome.Add(folders);
+        folders.Current.BindValueChanged(change =>
+        {
+            if (updatingFolders || string.IsNullOrEmpty(change.NewValue)) return;
+            var folder = catalog.ChildFolders.FirstOrDefault(f => (catalog.Directory is null ? f.Path : f.Name) == change.NewValue);
+            if (folder is not null) Navigate(folder.Path);
+        });
+        var keys = new OsuDropdown<string> { Width = 115, Position = new Vector2(350, 88), Items = new[] { "7Key", "5Key", "9Key", "10Key", "14Key", "All" } };
+        keys.Current.Value = catalog.Keys == 0 ? "All" : $"{catalog.Keys}Key";
+        keys.Current.BindValueChanged(change => { catalog.Filter(catalog.Directory, change.NewValue == "All" ? 0 : int.Parse(change.NewValue.Replace("Key", ""))); songSelect?.RefreshKeyFilter(); UpdateLibraryStatus(); });
+        chrome.Add(keys);
+        chrome.Add(status = Text("", 14, 28, -82).With(text => { text.Anchor = Anchor.BottomLeft; text.MaxWidth = 500; }));
+        chrome.Add(profileName = Text(preferences.Value.Player, 19, 84, -138).With(text => text.Anchor = Anchor.BottomLeft));
+        if (preferences.Value.Avatar is null)
+        {
+            chrome.Add(new Circle { Position = new Vector2(28, -146), Anchor = Anchor.BottomLeft, Size = new Vector2(44), Colour = new Color4(102, 79, 167, 255) });
+            chrome.Add(new SpriteIcon { Icon = FontAwesome.Solid.User, Position = new Vector2(39, -135), Anchor = Anchor.BottomLeft, Size = new Vector2(22) });
+        }
+        chrome.Add(avatar = new Sprite { Position = new Vector2(28, -146), Anchor = Anchor.BottomLeft, Size = new Vector2(44), FillMode = FillMode.Fit,
+            Texture = preferences.Value.Avatar is { } file ? Textures.Get(file) : null });
+        chrome.Add(scoreText = Text("", 15, 84, -112).With(text => text.Anchor = Anchor.BottomLeft));
+        UpdateFolderBar();
+    }
+    private void UpdateFolderBar()
+    {
+        updatingFolders = true;
+        try
+        {
+            var root = preferences.Value.Roots.FirstOrDefault(root => string.Equals(root, catalog.Directory, StringComparison.OrdinalIgnoreCase)
+                || catalog.Directory is not null && SongLibrary.ContainsPath(root, catalog.Directory));
+            pathText.Text = root is not null && catalog.Directory is not null
+                ? Path.GetFileName(root) + (string.Equals(root, catalog.Directory, StringComparison.OrdinalIgnoreCase) ? "" : " / " + Path.GetRelativePath(root, catalog.Directory).Replace('\\', '/'))
+                : "Library";
+            folders.Items = new[] { "Folders…" }.Concat(catalog.ChildFolders.Select(folder => catalog.Directory is null ? folder.Path : folder.Name).Order()).ToArray();
+            folders.Current.Value = "Folders…";
+        }
+        finally { updatingFolders = false; }
+    }
+    private void Navigate(string? path)
+    {
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
+        catalog.Filter(path, catalog.Keys); UpdateFolderBar();
+        songSelect.RefreshKeyFilter();
+        UpdateLibraryStatus();
+    }
+    private void UpdateLibraryStatus(string? error = null)
+    {
+        var sets = catalog.GetBeatmapSets(null);
+        int charts = sets.SelectMany(set => set.Beatmaps).Count(catalog.IsVisible);
+        status.Text = !string.IsNullOrEmpty(error) ? error
+            : $"{sets.Count} songs · {charts} charts · {(catalog.Keys == 0 ? "All" : $"{catalog.Keys}Key")}";
+    }
+    public bool ParentFolder()
+    {
+        if (settingsPanel.State.Value == Visibility.Visible) { settingsPanel.Hide(); return true; }
+        if (ScreenStack.CurrentScreen is GamePlayScreen play) { play.RequestReturn(); return true; }
+        var parent = catalog.Library.Folders.FirstOrDefault(folder => string.Equals(folder.Path, catalog.Directory, StringComparison.OrdinalIgnoreCase))?.Parent;
+        if (catalog.Directory is null) return false;
+        Navigate(parent); return true;
+    }
+    public void ToggleSettings() => settingsPanel.ToggleVisibility();
+    public void SelectRandom()
+    {
+        var available = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Where(info => catalog.Keys == 0 || catalog.ChartFor(info)?.Keys == catalog.Keys).ToArray();
+        if (available.Length > 0) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(available[Random.Shared.Next(available.Length)]);
+    }
+    public void StartGame(BeatmapInfo info)
+    {
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
+        if (!SaveSettings()) { settingsPanel.Show(); return; }
+        ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide();
+        CloseAllOverlays();
+        menuTrackVolume.Value = 0;
+        ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned) { RelativeSizeAxes = Axes.Both });
+    }
+    private void OnGameReturned(string? error)
+    {
+        if (benchmark is not null)
+        {
+            SaveFrontendFrames();
+            File.WriteAllText(Path.Combine(bridge.Runtime, "benchmark-result.txt"), error is null ? "PASS: timed session completed.\n" : "FAIL: " + error);
+            Host.Exit();
+            return;
+        }
+        menuTrackVolume.Value = 1;
+        chrome.Show(); if (error is not null) status.Text = error;
+        _ = RefreshAsync(false, error);
+    }
+    private void ApplySettings()
+    {
+        if (!SaveSettings()) return;
+        settingsPanel.Hide(); Rescan();
+    }
+    private void QueueSettingsSave()
+    {
+        pendingSettingsSave?.Cancel();
+        settingsPanel.SetSaveStatus(D("Saving…"), false);
+        pendingSettingsSave = Scheduler.AddDelayed(() => SaveSettings(), 400);
+    }
+    private bool SaveSettings()
+    {
+        pendingSettingsSave?.Cancel();
+        if (!preferences.HasChanges)
+        {
+            settingsPanel.SetSaveStatus(D("Saved"), false);
+            return true;
+        }
+        try
+        {
+            var previous = preferences.Value;
+            preferences.Save();
+            settingsPanel.SetSaveStatus(D("Saved"), false);
+            bool rootsChanged = !previous.Roots.SequenceEqual(preferences.Value.Roots, StringComparer.OrdinalIgnoreCase);
+            if (rootsChanged || previous.Avatar != preferences.Value.Avatar) ResetMedia();
+            if (rootsChanged || previous.Avatar != preferences.Value.Avatar || previous.Player != preferences.Value.Player) BuildChrome();
+            if (rootsChanged || previous.Encoding != preferences.Value.Encoding) Rescan();
+            return true;
+        }
+        catch (Exception error)
+        {
+            settingsPanel.SetSaveStatus(error.Message, true);
+            return false;
+        }
+    }
+    public void Rescan() => _ = RefreshAsync(true);
+    private async Task RefreshAsync(bool sync, string? returnError = null)
+    {
+        if (refreshing) return;
+        refreshing = true; ++previewGeneration; preview.Stop(); status.Text = D("Scanning…");
+        try
+        {
+            var library = await bridge.Catalog(preferences.Value, sync, lifetime.Token);
+            Schedule(() =>
+            {
+                catalog.Replace(library, preferences.Value.Roots); UpdateFolderBar(); songSelect?.RefreshKeyFilter();
+                var selected = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).FirstOrDefault(info => info.ID == Beatmap.Value.BeatmapInfo.ID);
+                if (selected is not null) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(selected);
+                UpdateLibraryStatus(returnError);
+            });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { Schedule(() => status.Text = error.Message); }
+        finally { Schedule(() => refreshing = false); }
+    }
+    private async void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change)
+    {
+        int generation = ++previewGeneration; preview.Stop();
+        if (catalog.ChartFor(change.NewValue.BeatmapInfo) is not { } chart) { scoreText.Text = ""; return; }
+        scoreText.Text = $"{chart.Keys}Key · Lv.{chart.Level} · {chart.Notes} notes" + (chart.Score is { } score ? $" · EX {score}" : "");
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
+        try
+        {
+            var plan = await Task.Run(() => PreviewPlan.Read(chart, preferences.Value.Encoding), lifetime.Token);
+            Schedule(() => { if (generation == previewGeneration && ScreenStack.CurrentScreen is LazerRaveSongSelect) preview.Start(plan, Time.Current); });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { Schedule(() => status.Text = error.Message); }
+    }
+    protected override void ScreenChanged(IOsuScreen? current, IOsuScreen? next)
+    {
+        base.ScreenChanged(current, next);
+        preview?.Stop(); ++previewGeneration;
+        if (next is LazerRaveSongSelect select)
+        {
+            songSelect = select;
+            Ruleset.Value = new ManiaRuleset().RulesetInfo;
+            chrome?.Show();
+        }
+        else chrome?.Hide();
+    }
+    protected override void Update()
+    {
+        base.Update(); preview?.Update(Time.Current);
+        if (benchmark is null || !benchmarkClock.IsRunning) return;
+        if (benchmarkClock.Elapsed.TotalSeconds >= nextFrameSample)
+        {
+            nextFrameSample = benchmarkClock.Elapsed.TotalSeconds + 1;
+            frontendFrames.Add(FormattableString.Invariant($"{benchmarkClock.Elapsed.TotalSeconds:F3},{Host.DrawThread.Clock.FramesPerSecond:F3},{Host.UpdateThread.Clock.FramesPerSecond:F3},{Host.DrawThread.Clock.ElapsedFrameTime:F4},{Host.UpdateThread.Clock.ElapsedFrameTime:F4}"));
+        }
+        if (benchmarkClock.Elapsed.TotalSeconds > (benchmark.Seconds == 0 ? 900 : benchmark.Seconds + 90))
+        {
+            File.WriteAllText(Path.Combine(bridge.Runtime, "benchmark-result.txt"), "FAIL: benchmark timed out.\n");
+            lifetime.Cancel(); Host.Exit(); benchmarkClock.Stop(); return;
+        }
+        if (!benchmarkSelected && ScreenStack.CurrentScreen is LazerRaveMainMenu menu && menu.IsLoaded)
+        {
+            benchmarkSelected = true; CloseAllOverlays(); ScreenStack.Push(new LazerRaveSongSelect());
+        }
+        else if (!benchmarkStarted && ScreenStack.CurrentScreen is LazerRaveSongSelect select && select.IsLoaded)
+        {
+            var info = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps)
+                .FirstOrDefault(info => string.Equals(catalog.ChartFor(info)?.Path, benchmark.Chart, StringComparison.OrdinalIgnoreCase));
+            if (info is null) throw new InvalidDataException("Benchmark chart is absent from the engine catalog.");
+            benchmarkStarted = true; Beatmap.Value = BeatmapManager.GetWorkingBeatmap(info); StartGame(info);
+            if (benchmark.Seconds > 0) Scheduler.AddDelayed(() => { if (ScreenStack.CurrentScreen is GamePlayScreen play) play.RequestReturn(); }, benchmark.Seconds * 1000);
+        }
+    }
+    protected override void Dispose(bool isDisposing)
+    {
+        if (isDisposing && !IsDisposed)
+        {
+            pendingSettingsSave?.Cancel();
+            try { if (preferences.HasChanges) preferences.Save(); }
+            catch (Exception error)
+            {
+                var file = Path.Combine(ApplicationPaths.Logs, "settings-save-error.txt");
+                try { Directory.CreateDirectory(Path.GetDirectoryName(file)!); File.WriteAllText(file, error.ToString()); }
+                catch (Exception logError) when (logError is IOException or UnauthorizedAccessException) { Console.Error.WriteLine(error); }
+            }
+            lifetime.Cancel(); viewport?.Dispose(); preview?.Dispose();
+        }
+        base.Dispose(isDisposing);
+    }
+}

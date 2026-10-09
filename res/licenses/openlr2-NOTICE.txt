@@ -1,0 +1,67 @@
+OpenLR2
+=======
+
+Component:   OpenLR2, a source-rewritten BMS player engine derived from
+             Lunatic Rave 2
+Upstream:    https://github.com/GOMazk/OpenLR2
+Location:    src/OpenLR2/
+Used by:     LazerRave as the native BMS gameplay engine
+
+Reproduced here as a reduced snapshot without a nested Git repository. See
+src/OpenLR2/README.md for upstream build instructions and the list of libraries
+it was derived against.
+
+Licence status: not stated by upstream
+--------------------------------------
+
+At the time this notice was written, the upstream OpenLR2 repository publishes
+no licence file and GitHub reports no declared licence for it. The vendored copy
+in this repository therefore carries no licence text either.
+
+This is an unresolved question for this project, not a settled permission.
+OpenLR2 is described by its author as "rewritten source code of bms player
+Lunatic Rave 2" (https://github.com/GOMazk/OpenLR2). Lunatic Rave 2 is a
+closed-source commercial-era Japanese BMS player, and OpenLR2's README
+references a Ghidra decompiler archive. The provenance and the terms under which
+this code may be redistributed have not been established.
+
+Consequences
+------------
+
+Redistribution of this directory may not be permitted. Before this repository or
+any build containing OpenLR2 is published, distributed or commercially
+shipped, the following must be established:
+
+  1. The licensing terms that apply to GOMazk/OpenLR2.
+  2. Whether those terms permit redistribution, including in source form.
+  3. Whether the code's relationship to Lunatic Rave 2 imposes any further
+     restriction.
+
+Until that is resolved, treat src/OpenLR2/ as carrying unknown redistribution
+terms. The MIT licence of LazerRave does not extend to it.
+
+Third-party components vendored inside OpenLR2
+----------------------------------------------
+
+Vendored under src/OpenLR2/dep/, each with its own upstream terms:
+
+  DxLib         See res/licenses/dxlib-NOTICE.txt in this repository.
+  FMOD Engine   See res/licenses/fmod-engine-NOTICE.txt in this repository.
+                Commercial closed-source middleware; a licence from Firelight
+                Technologies is required to ship it.
+  SQLite        Public domain. https://www.sqlite.org/copyright.html
+  tinyxml       zlib licence. See src/OpenLR2/dep/tinyxml/readme.txt
+  md5.c, md5.h  From https://github.com/Zunawe/md5-c, stated as public domain
+                by that project.
+
+Trademarks and names
+--------------------
+
+"Lunatic Rave 2", "LR2" and "BMS" refer to the work of their respective
+authors and communities. This project is not affiliated with, endorsed by or
+sponsored by any of them, and their names are used only to describe
+compatibility. See also res/README.md on the distribution status of the local
+runtime resources.
+
+This notice records what is and is not known about a third-party component. It
+is not legal advice.

@@ -1,0 +1,50 @@
+1 songProgress
+2 songLoaded
+
+3 level_bar
+
+5 samefolder_beginner_level
+6 samefolder_normal_level
+7 samefolder_hyper_level
+8 samefolder_anotherl_level
+9 samefolder_insane_level
+
+10 1P_EXSCORE_now
+11 1P_EXSCORE_predict
+12 1P_HIGHSCORE_now
+13 1P_HIGHSCORE_predict
+14 2P_target_EXSCORE_now
+15 2P_target_EXSCORE_predict
+
+20 1P_PG_totalnotes
+21 1P_GR_totalnotes
+22 1P_GD_totalnotes
+23 1P_BD_totalnotes
+24 1P_PR_totalnotes
+25 1P_MAXCOMBO_totalnotes
+26 1P_SCORE_200000
+27 1P_EXSCORE_totalnotes__2
+
+
+30 2P_target_PG_totalnotes
+31 2P_target_GR_totalnotes
+32 2P_target_GD_totalnotes
+33 2P_target_BD_totalnotes
+34 2P_target_PR_totalnotes
+35 2P_target_MAXCOMBO_totalnotes
+36 2P_target_SCORE_200000
+37 2P_target_exscore_totalnotes__2
+
+40 HIGHSCORE_PG_totalnotes
+41 HIGHSCORE_GR_totalnotes
+42 HIGHSCORE_GD_totalnotes
+43 HIGHSCORE_BD_totalnotes
+44 HIGHSCORE_PR_totalnotes
+45 HIGHSCORE_MAXCOMBO_totalnotes
+46 HIGHSCORE_SCORE_200000
+47 HIGHSCORE_EXSCORE_totalnotes__2
+
+48 1P_ratio_slow
+49 1P_ratio_fast
+58 2P_ratio_slow
+59 2P_ratio_slow

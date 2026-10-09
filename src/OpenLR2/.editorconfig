@@ -1,0 +1,7 @@
+# https://editorconfig.org/
+root = true
+[*]
+indent_style = tab
+indent_size = 4
+# TODO: trim all files then enable this option.
+# trim_trailing_whitespace = true

@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>LazerRave</AssemblyName>
+    <RootNamespace>LazerRave.Lazer</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>../../osu-lazer/app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../../res/branding/logo.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../res/branding/logo.png" LogicalName="LazerRave.Branding.logo.png" />
+    <ProjectReference Include="../../osu-lazer/osu.Game/osu.Game.csproj" />
+    <ProjectReference Include="../../osu-lazer/osu.Game.Rulesets.Mania/osu.Game.Rulesets.Mania.csproj" />
+    <ProjectReference Include="../resource-pack/LazerRave.ResourcePack.csproj" ReferenceOutputAssembly="false" OutputItemType="_ResourcePackBuilder" Private="false" PrivateAssets="all" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir" />
+    <Compile Include="../engine-bridge/*.cs" Link="Bridge/%(Filename)%(Extension)" />
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+  </ItemGroup>
+  <Target Name="PrepareApplicationLayout" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishSingleFile)' == 'true'">
+    <PropertyGroup>
+      <_ResourcePackPath>$(IntermediateOutputPath)resource-pack/osu.Game.Resources.dll</_ResourcePackPath>
+      <_ResourcePackPolicy>$(MSBuildProjectDirectory)/../resource-pack/removals.tsv</_ResourcePackPolicy>
+      <_ResourcePackHost Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_ResourcePackHost>
+      <_ResourcePackHost Condition="'$(_ResourcePackHost)' == ''">$(MSBuildToolsPath)/../../dotnet.exe</_ResourcePackHost>
+    </PropertyGroup>
+    <ItemGroup>
+      <_ExternalResourcePack Include="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'osu.Game.Resources.dll'" />
+    </ItemGroup>
+    <Error Condition="'@(_ExternalResourcePack)' == '' or '@(_ResourcePackBuilder)' == ''" Text="Resource package input or builder is missing. Build before publishing." />
+    <Exec Command="&quot;$(_ResourcePackHost)&quot; &quot;@(_ResourcePackBuilder)&quot; &quot;@(_ExternalResourcePack)&quot; &quot;$(_ResourcePackPath)&quot; &quot;$(_ResourcePackPolicy)&quot;" />
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.AssetType)' == 'native'">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <_ExternalSatellite Include="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.Filename)').EndsWith('.resources')) and '%(ResolvedFileToPublish.Extension)' == '.dll'" />
+      <_DevelopmentFile Include="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb' or '%(ResolvedFileToPublish.Extension)' == '.lib' or '%(ResolvedFileToPublish.Extension)' == '.exp' or '%(ResolvedFileToPublish.RelativePath)' == 'osu.Game.xml' or '%(ResolvedFileToPublish.RelativePath)' == 'osu.Game.Rulesets.Mania.xml'" />
+      <ResolvedFileToPublish Remove="@(_ExternalSatellite);@(_DevelopmentFile);@(_ExternalResourcePack)" />
+      <_ExternalNativeLibrary Include="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.AssetType)' == 'native'" />
+      <ResolvedFileToPublish Include="$(_ResourcePackPath)">
+        <RelativePath>Resources/osu.Game.Resources.dll</RelativePath>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_ExternalSatellite)">
+        <RelativePath>Localization/%(_ExternalSatellite.RelativePath)</RelativePath>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+  <Target Name="PrepareResourceDependencyLayout" BeforeTargets="_ComputeFilesToBundle" DependsOnTargets="PrepareApplicationLayout" Condition="'$(PublishSingleFile)' == 'true'">
+    <PropertyGroup>
+      <_ResourceDependencyManifest>$(IntermediateOutputPath)resource-pack/$(ProjectDepsFileName)</_ResourceDependencyManifest>
+    </PropertyGroup>
+    <ItemGroup>
+      <_OriginalDependencyManifest Include="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.RelativePath)' == '$(ProjectDepsFileName)'" />
+    </ItemGroup>
+    <Error Condition="'@(_OriginalDependencyManifest)' == ''" Text="Publish dependency manifest is missing." />
+    <Exec Command="&quot;$(_ResourcePackHost)&quot; &quot;@(_ResourcePackBuilder)&quot; --layout-dependencies &quot;@(_OriginalDependencyManifest)&quot; &quot;$(_ResourceDependencyManifest)&quot;" />
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(_OriginalDependencyManifest)" />
+      <ResolvedFileToPublish Include="$(_ResourceDependencyManifest)">
+        <RelativePath>$(ProjectDepsFileName)</RelativePath>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+  <Target Name="WriteApplicationCleanupManifest" AfterTargets="GenerateSingleFileBundle" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <_BundledPackageFile Include="@(FilesToBundle)" />
+      <_BundledPackageFile Remove="@(ResolvedFileToPublish)" />
+      <_BundledPackageFile Remove="@(_BundledPackageFile)" Condition="'%(_BundledPackageFile.RelativePath)' == '$(PublishedSingleFileName)'" />
+      <_PreviousPackageFile Include="@(_BundledPackageFile);@(_ExternalSatellite);@(_DevelopmentFile);@(_ExternalResourcePack)" />
+      <_PreviousPackageFile Include="LazerRave.ResourcePack.runtimeconfig.json" RelativePath="LazerRave.ResourcePack.runtimeconfig.json" />
+      <_PreviousPackageFile Include="LazerRave.ResourcePack.deps.json" RelativePath="LazerRave.ResourcePack.deps.json" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)package-cleanup.txt" Lines="@(_PreviousPackageFile->'%(RelativePath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)native-dependencies.txt" Lines="@(_ExternalNativeLibrary->'%(RelativePath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+</Project>

@@ -1,0 +1,137 @@
+﻿#include "En_timer.h"
+#include <DxLib.h> // for error log
+
+double manualTimer;
+bool flagManualTimer;
+bool flagHighPerformanceTimer;
+
+#ifdef _WIN32
+
+#include <Windows.h>
+
+#else
+
+static DWORD timeGetTime()
+{
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+		.count();
+}
+static void timeBeginPeriod(int /*unused*/) {}
+static void timeEndPeriod(int /*unused*/) {}
+
+#endif // _WIN32
+
+int SetManualTimer(Timer *T, double newTime){
+	manualTimer = newTime;
+	T->movieTimer = newTime;
+	return 1;
+}
+
+int SetHPtimerFlag(char val){
+	flagHighPerformanceTimer = val;
+	return 1;
+}
+
+int SetManualTimerFlag(Timer *T, char flag){
+	T->flagMovieTimer = flag;
+	manualTimer = 0.0;
+	flagManualTimer = flag;
+	return 1;
+}
+
+int MovieTimer(Timer *T){
+	T->movieTimer += (T->movieFramerate > 0.0)? (1000.0 / T->movieFramerate) : 33.33333333333334;
+	manualTimer = T->movieTimer;
+	return 1;
+}
+
+int ResetTimeLapse(int timerID, Timer *T){
+	T->clock[timerID] = -1.0;
+	if (timerID == 140) {
+		T->Rhythm = -1.0;
+		return 1;
+	}
+	return 1;
+}
+
+// logic shortened
+double GetTime(void){
+#ifdef _WIN32
+	LARGE_INTEGER pfc_time;
+	static const LARGE_INTEGER pfc_freq = [] { LARGE_INTEGER frequency{}; QueryPerformanceFrequency(&frequency); return frequency; }();
+	if (flagHighPerformanceTimer){
+		if (pfc_freq.QuadPart > 0) {
+			QueryPerformanceCounter(&pfc_time);
+			return (double)pfc_time.QuadPart*1000 / (double)pfc_freq.QuadPart;
+		}
+	}
+#endif // _WIN32
+
+	DWORD time = timeGetTime();
+	return (double)(time & 0x7fffffff);
+}
+
+double GetTimeWrap(void) {
+	if (flagManualTimer) {
+		return manualTimer;
+	}
+	struct TimerResolution {
+		TimerResolution() { timeBeginPeriod(1); }
+		~TimerResolution() { timeEndPeriod(1); }
+	};
+	static const TimerResolution resolution;
+	double ret = GetTime();
+	return ret;
+}
+
+int InitTimer(Timer *T) {
+	//GetTimeWrap() call seems replaced by compiler
+	T->clock[0] = -1.0;
+	for (int i = 0; i < 499; i++) {
+		T->clock[i + 1] = T->clock[i];
+	}
+
+	T->scratch = GetTimeWrap();
+	T->rhythmTick = GetTimeWrap();
+	T->gameTick = GetTimeWrap();
+	T->tickTime = 0.0;
+	T->Rhythm = -1.0;
+	T->vSyncTick = GetTimeWrap();
+	T->FPSclock = GetTimeWrap();
+	T->FPScount = 0.0;
+	ErrorLogFmtAdd("タイマーを初期化しました\n");
+	return 1;
+}
+
+int CalcFPS(Timer *t){
+	//GetTimeWrap() call seems replaced by compiler
+	t->FPScount = t->FPScount + 1.0;
+	if ( GetTimeWrap() - t->FPSclock > 1000.0) {
+		t->FPS = (t->FPScount * 1000.0 + 499.0) / (GetTimeWrap() - t->FPSclock);
+		t->FPScount = 0.0;
+		t->FPSclock = GetTimeWrap();
+	}
+	return 1;
+}
+
+double GetTimeLapse(uint timerID, Timer *T) {
+	if (500 < timerID) return -1.0;
+	if (timerID == 140) return T->Rhythm;
+
+	if (T->clock[timerID] == -1.0) return -1.0;
+
+	if (T->flagMovieTimer && (0.0 < T->movieFramerate))
+		return T->movieTimer - T->clock[timerID];
+
+	return GetTimeWrap() - T->clock[timerID];
+}
+
+int SetTimeLapse(int timerID, Timer *T){
+	//GetTimeWrap() call seems replaced by compiler
+	if (T->flagMovieTimer && (0.0 < T->movieFramerate)) {
+		T->clock[timerID] = T->movieTimer;
+		//TOFIX : forgot return?
+	}
+	T->clock[timerID] = GetTimeWrap();
+	return 1;
+}

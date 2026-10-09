@@ -1,0 +1,230 @@
+10 HS_1P
+11 HS_2P
+
+12 JUDGE_TIMING
+13 DEFAULT_TARGET_RATE
+
+14 SUD_1P
+15 SUD_2P
+
+
+20 fps
+21 year
+22 month
+23 day
+24 hour
+25 minute
+26 second
+
+
+30 TOTAL_PLAY_COUNT
+31 TOTAL_CLEAR_COUNT
+32 TOTAL_FAIL_COUNT
+
+33 TOTAL_PERFECT
+34 TOTAL_GREAT
+35 TOTAL_GOOD
+36 TOTAL_BAD
+37 TOTAL_POOR
+
+38 RUNNING_COMBO
+39 RUNNING_MAXCOMBO
+
+40 TRIAL_LEVEL
+41 TRIAL_LEVEL_Old
+
+
+45 beginnerSongLevel
+46 normalSongLevel
+47 hyperSongLevel
+48 anotherSongLevel
+49 insaneSongLevel
+
+50 EQ0
+51 EQ1
+52 EQ2
+53 EQ3
+54 EQ4
+55 EQ5
+56 EQ6
+
+57 MASTER_VOLUME
+58 KEY_VOLUME
+59 BGM_VOLUME
+
+60 FX0_P1
+61 FX0_P2
+62 FX1_P1
+63 FX1_P2
+64 FX2_P1
+65 FX2_P2
+
+66 PITCH
+
+70 score
+71 exscore
+72 exscoreMAX
+73 rate
+74 totalnotes
+75 maxcombo
+76 min_bp
+77 playcount
+78 clear
+79 fail
+
+80 perfect
+81 great
+82 good
+83 bad
+84 poor
+85 perfect_percent
+86 great_percent
+87 good_percent
+88 bad_percent
+89 poor_percent
+
+90 bpm_max
+91 bpm_min
+
+92 IR_rank
+93 IR_totalplayer
+94 IR_clearrate
+
+95 IR_diffRival
+
+
+100 score
+101 exscore
+102 rate
+103 rate_point
+104 nowcombo
+105 maxcombo
+106 totalnotes
+107 groovegauge
+108 diffexscore2p
+110 perfect
+111 great
+112 good
+113 bad
+114 poor
+115 total_rate
+116 total_rate_point
+
+
+120 opponent_score
+121 opponent_exscore
+122 opponent_rate
+123 opponent_rate_point
+124 opponent_nowcombo
+125 opponent_maxcombo
+126 opponent_totalnotes
+127 opponent_groovegauge
+128 opponent_diffexscore2p
+130 opponent_perfect
+131 opponent_great
+132 opponent_good
+133 opponent_bad
+134 opponent_poor
+135 opponent_total_rate
+136 opponent_total_rate_point
+
+
+150 Current_Highscore
+151 TargetScore
+152 Diff_Highscore_1P
+153 Diff_Target_1P
+154 DiffNextRank
+155 HighScore_rate
+156 HighScore_ratepoint
+157 Target_rate
+158 Target_ratepoint
+
+
+160 bpm
+161 minute
+162 second
+163 left_minute
+164 left_second
+165 loadPercentage
+
+
+170 OldEXSCORE
+171 NewEXSCORE
+172 DiffEXSCORE
+
+173 OldMAXCOMBO
+174 NewMAXCOMBO
+175 DiffMAXCOMBO
+
+176 OldBP
+177 NewBP
+178 diffBP
+
+179 IR_rank
+180 IR_totalplayer
+181 IR_clearrate
+182 old_IRrank
+
+183 old_rate
+184 old_ratepoint
+
+
+200 IR_TOTALPLAYER
+201 IR_TOTALPLAYCOUNT/1pHitOffset
+
+210 FAILED_PLAYER/1pFastSlow
+211 FAILED_RATE/2pFastSlow
+212 EASY_PLAYER/fastCount
+213 EASY_RATE/2pHitOffset
+214 CLEAR_PLAYER/slowCount
+215 CLEAR_RATE
+216 HARD_PLAYER/comboBreaks
+217 HARD_RATE/RemainNotes
+218 FULLCOMBO_PLAYER/currentNote
+219 FULLCOMBO_RATE
+
+220 remainIRautoUpdateTime
+
+250 CourseLevelStage1
+251 CourseLevelStage2
+252 CourseLevelStage3
+253 CourseLevelStage4
+254 CourseLevelStage5
+
+
+270 rival_score
+271 rival_exscore
+272 rival_exscoreMax
+273 rival_rate
+274 rival_totalnotes
+275 rival_maxcombo
+276 rival_min_bp
+277 rival_playcount
+278 rival_clear
+279 rival_fail
+
+280 rival_perfect
+281 rival_great
+282 rival_good
+283 rival_bad
+284 rival_poor
+285 rival_perfect_percent
+286 rival_great_percent
+287 rival_good_percent
+288 rival_bad_percent
+289 rival_poor_percent
+
+290 rival_bpm_max
+291 rival_bpm_min
+
+292 rival_IR_rank
+293 rival_IR_totalplayer
+294 rival_IR_clearrate
+
+295 1pRandomPattern
+
+418 2pRandomPattern
+
+421 LIFT_1P
+422 LIFT_2P
+

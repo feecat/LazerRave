@@ -1,0 +1,111 @@
+# OpenLR2
+
+本工作区的构建入口位于根目录 `../../build.cmd -EngineOnly`，目录说明与 Windows 构建文档见
+[工作区首页](../../README.md)和[编译说明](../../docs/getting-started/build-and-run.md)。以下保留上游项目说明。
+
+Rewritten source code of BMS player Lunatic Rave 2. Project started in January 2021.
+Original code accessible at [LR2Beta3-v100201](https://github.com/GOMazk/OpenLR2/tree/LR2Beta3-v100201)
+
+## Open source?
+
+After the closure of LR2IR, the project has been made public.
+
+## Installation
+
+- Download unmodified Lunatic Rave 2 beta3 100201 [archive.org Download](
+https://web.archive.org/web/20190802100906/http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=download)
+
+- Place the OpenLR2 executable in the root folder of your freshly downloaded LR2. You can also optionally replace the original LR2body.exe.
+
+> [!CAUTION]
+> OpenLR2 uses the same score DB as the original LR2.
+>
+> To avoid data corruption, it's generally recommended to have a fresh LR2 directory, or use the "-ns" flag.
+>
+> Backing up your "LR2files\Database\Score\" folder is highly recommended.
+
+> [!NOTE]
+> Existing song.db will be refreshed on first OpenLR2 launch.
+> That is normal.
+> This is needed because LR2 didn't account for leap year days in database timestamps.
+
+## New Features
+
+- Proper fullscreen support – The game doesn't crash on Alt+Tab or when toggling window mode with F4 in-game.
+- Gauge Auto Shift (GAS) – Changes the gauge to the easier one automatically if you failed on the selected one. You can access GAS options in MANIAC OPTIONS by pressing F2 in-game and going to the 3rd page using the arrow keys.
+- Native fast/slow support
+- Quick restart – Lets you restart the chart without going to result screen. Press both Start and Select, then quickly release and press either Start for a new random, or Select for the same random you had before.
+- MainBPM Hi-Speed Fix – Hi-Speed anchor is set at the most prevalent BPM in the chart.
+- UTF-8 support – Essentially means you don't need to change the locale in Windows settings to play.
+- Frame Limiter - Replace vSync, which has a problem with tickrate.
+- Unrandomizer - Input '/random 1357246' or any number you want into search bar. Input '/random 0' to reset the unrandomizer.
+- Mordern BMS command support ([Document](../../docs/compatibility/bms.md))
+  * Base62 support – support more keysounds on some newer charts that require them.
+- New skin command support  ([Document](../../docs/compatibility/lr2-skins.md))
+
+## How do I use HD skins with OpenLR2?
+
+<img width="441" height="64" alt="image" src="https://github.com/user-attachments/assets/30f21a53-aa14-430b-ae74-9a11c62f3c49" />
+
+- Add the corresponding #RESOLUTION under #INFORMATION in your .lr2skin files for each of the game scenes (music select, decide, play, result, course result...) Refer to the image above as an example.
+
+- You can also set default resolution in "LR2files/Config/openlr2-config.xml" (0:SD 1:HD 2:FHD)
+
+## Third party tools
+- Launcher (partial support OpenLR2)
+  
+  [lr2-launcher](https://github.com/SayakaIsBaka/lr2-launcher)
+
+  [LR2Nexus](https://github.com/Unengine/LR2Nexus)
+
+
+- Score importer
+  
+  [BokutachiToOpenLR2ScoreImporter](https://github.com/Unengine/BokutachiToOpenLR2ScoreImporter)
+
+- Skin Editor
+
+  [LR2SkinEditor](https://github.com/GOMazk/LR2SkinEditor) (AI slop)
+
+## Known issues
+
+- score save issue on NONSTOP MIX
+- readme left click scroll is faster than original (not important)
+
+# For developers
+
+## Building
+
+Open the project folder in Visual Studio.
+It will automatically pick up the CMake project.
+
+Alternatively, use the .sln build. Open the `OpenLR2.sln` file in Visual Studio. ([you need vcpkg installed](https://devblogs.microsoft.com/cppblog/vcpkg-is-now-included-with-visual-studio/))
+
+### Linux
+
+Only provided for development purposes, not for use in production.
+
+```bash
+make -C ./dep/dxlib-for-linux/DxLib clean
+CXXFLAGS=$(pkg-config --cflags opusfile) make -C ./dep/dxlib-for-linux/DxLib -j$(nproc)
+rm -rf build
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+cmake --build build -j$(nproc)
+```
+
+## Libraries (you don't need to get these)
+
+- DxLib 3.01a => 3.24f (custom old dxa) – currently using custom dxlib to read dxa files.
+- FMODex 4.13.4(080401) => FMOD 2.3.10
+- SQLite 3.6.7
+- tinyxml
+- md5.c, md5.h
+  from https://github.com/Zunawe/md5-c. not in original LR2 but to save time I used this.
+
+## Ghidra archive (decompiler file)
+https://drive.google.com/file/d/1yruE-PLypH40WMsl-zNi2l6uWkoe360u/view?usp=sharing
+
+# Thanks to
+
+- .red who wrote lr2skin specification
+- All contributors

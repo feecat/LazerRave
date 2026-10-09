@@ -1,0 +1,93 @@
+# Repository-wide normalisation. Subdirectory .gitattributes files (for example
+# src/osu-lazer/.gitattributes) take precedence over these rules for their own
+# trees, so this file only needs to cover the first-party files and the vendored
+# src/OpenLR2 snapshot, which has no attributes file of its own.
+#
+# Line endings are decided per family so that a fresh clone reproduces the
+# working tree the project is developed and built against:
+#   - Windows tooling (.cmd/.ps1/.slnx/.csproj) and the C# client use CRLF.
+#   - The native engine, scripts and documentation use LF.
+
+* text=auto
+
+# --- Windows scripts, build and project files --------------------------------
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.slnx text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.targets text eol=crlf
+*.manifest text eol=crlf
+*.vcxproj text eol=crlf
+*.vcxproj.filters text eol=crlf
+
+# --- C# client ---------------------------------------------------------------
+# src/osu-lazer/ carries its own rules; these apply to src/LazerRave/ only.
+*.cs text diff=csharp eol=crlf
+*.resx text eol=crlf
+
+# --- Native engine and dependency sources ------------------------------------
+*.cpp text eol=lf
+*.cc text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.inl text eol=lf
+CMakeLists.txt text eol=lf
+*.cmake text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.editorconfig text eol=lf
+
+# --- Python tools ------------------------------------------------------------
+*.py text eol=lf
+*.pyi text eol=lf
+
+# --- Data, documentation and plain text --------------------------------------
+*.md text eol=lf
+*.tsv text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# --- Legacy Shift-JIS text formats -------------------------------------------
+# LR2/BMS skin, folder and chart files are text, but they are frequently
+# Shift-JIS rather than UTF-8. Mark them text without an eol so that Git stores
+# the bytes as authored (no end-of-line conversion) while still showing diffs.
+*.lr2skin text -eol
+*.lr2folder text -eol
+*.lr2ss text -eol
+*.bms text -eol
+*.bme text -eol
+*.bml text -eol
+*.pms text -eol
+*.bdp text -eol
+*.dft text -eol
+
+# --- Binary assets -----------------------------------------------------------
+# Never apply end-of-line conversion or textual diffs to these.
+*.dll binary
+*.lib binary
+*.so binary
+*.so.* binary
+*.exe binary
+*.pdb binary
+*.ico binary
+*.res binary
+*.db binary
+*.pyc binary
+*.dxa binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.tga binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.mpg binary

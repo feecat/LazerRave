@@ -1,0 +1,41 @@
+# Local tools, generated products and private runtime data
+/.tools/
+/out/
+/archive/
+/res/runtime/
+/res/library/
+/target/
+__pycache__/
+**/.vs/
+**/bin/
+**/obj/
+.venv/
+.idea/
+*.user
+*.suo
+*.log
+*.pdb
+.env
+.env.*
+!.env.example
+
+# Application runtime data. These are written beside the executable and in the
+# repository root when a build output is run or migrated in place; they hold
+# player settings, scores, replays, avatars and custom skins.
+/userdata/
+/cache/
+/LR2files/
+*.db
+*.db-shm
+*.db-wal
+*.realm
+*.realm.lock
+*.realm.management/
+*.realm.note
+
+# MkDocs output. mkdocs.yml sets site_dir to out/site, but keep the default
+# location covered as well in case the configuration changes.
+/site/
+/docs/site/
+
+# Do not globally ignore source .dll/.lib files: the existing FMOD SDK uses them.

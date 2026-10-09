@@ -1,0 +1,52 @@
+FMOD Engine
+===========
+
+Component:   FMOD Engine (FMOD Ex / FMOD Core) runtime and import libraries
+Version:     FMOD 2.3.10 (see dep/FMOD/fmod_common.h, FMOD_VERSION 0x00020310)
+Vendor:      Firelight Technologies Pty Ltd
+Location:    src/OpenLR2/dep/FMOD/
+Used by:     OpenLR2 (native BMS gameplay engine)
+
+This project does not own FMOD and is not affiliated with Firelight
+Technologies. FMOD is commercial, closed-source middleware and is NOT a free
+library.
+
+Redistribution status
+---------------------
+
+The FMOD binaries and headers are stored in this repository because OpenLR2
+links against them. Firelight Technologies permits storing and distributing the
+FMOD headers, import libraries and dynamic libraries in a repository, provided
+users are made aware that FMOD itself is not free to use. See the vendor's
+statements at:
+
+  https://qa.fmod.com/t/can-we-commit-the-fmod-api-to-our-integration-libraries-on-github/15751
+  https://www.fmod.com/licensing
+
+Files covered by this notice:
+
+  fmod.h, fmod.hpp, fmod_common.h, fmod_codec.h, fmod_dsp.h,
+  fmod_dsp_effects.h, fmod_errors.h, fmod_output.h
+  bin64/fmod.dll, bin64/fmodL.dll, bin64/fmod_vc.lib, bin64/fmodL_vc.lib
+  bin64/libfmod.so.14.11, bin64/libfmodL.so.14.11 (and .so/.so.14 placeholders)
+  bin86/fmod.dll, bin86/fmodL.dll, bin86/fmod_vc.lib, bin86/fmodL_vc.lib
+  bin86/libfmod.so.14.11, bin86/libfmodL.so.14.11 (and .so/.so.14 placeholders)
+
+Licensing obligation for users and distributors
+-----------------------------------------------
+
+Using FMOD in a released product requires a licence from Firelight
+Technologies. Before publishing, distributing or commercially shipping a build
+that contains these libraries, obtain the applicable FMOD licence and confirm
+that the terms cover your distribution. The MIT licence of LazerRave does not
+extend to FMOD, and nothing in this repository grants any right to FMOD.
+
+The upstream FMOD licence text is not bundled with this copy of the SDK. The
+authoritative terms are published by Firelight Technologies at
+https://www.fmod.com/licensing and are included in the official FMOD Engine
+download at https://www.fmod.com/download. Refer to those documents rather than
+to this notice for the binding terms.
+
+This notice records the origin and known restrictions of a third-party
+component. It is not legal advice, and it is not a substitute for the vendor's
+licence.

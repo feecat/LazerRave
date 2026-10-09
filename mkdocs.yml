@@ -1,0 +1,41 @@
+site_name: LazerRave 项目文档
+site_description: LazerRave 构建指南、客户端开发、技术架构与兼容标准
+repo_url: https://github.com/feecat/LazerRave
+repo_name: LazerRave
+edit_uri: ''
+docs_dir: docs
+site_dir: out/site
+use_directory_urls: true
+theme:
+  name: readthedocs
+  locale: zh_CN
+  navigation_depth: 3
+  highlightjs: false
+  include_search_page: false
+plugins: []
+markdown_extensions:
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+nav:
+  - 项目概览: index.md
+  - 构建入门: getting-started/build-and-run.md
+  - 客户端开发:
+      - 仓库结构: development/project-layout.md
+      - 客户端与设置: development/client.md
+      - 前端资源包: development/resource-pack.md
+      - 引擎桥接: development/engine-bridge.md
+      - BGA 与帧时间: development/bga-diagnostics.md
+      - 编译与验证范围: development/verification.md
+  - 技术架构:
+      - 模块与技术栈: architecture/overview.md
+      - 多人与云端回放: architecture/multiplayer-and-replay.md
+  - 兼容性:
+      - 质量标准: compatibility/quality.md
+      - BMS 扩展: compatibility/bms.md
+      - LR2 皮肤: compatibility/lr2-skins.md
+  - 开发路线图: roadmap.md
+  - 运维规划: operations/server-capacity.md
+  - 文档维护: development/documentation.md
+  - 文档索引: contents.md
