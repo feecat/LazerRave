@@ -62,19 +62,8 @@ if(WIN32)
     else()
         message(FATAL_ERROR "Unsupported CMAKE_SIZEOF_VOID_P")
     endif()
-elseif(LINUX)
-    add_library(FMOD SHARED IMPORTED GLOBAL)
-    target_include_directories(FMOD INTERFACE dep/FMOD)
-    set_target_properties(
-        FMOD
-        PROPERTIES
-            IMPORTED_LOCATION
-                ${CMAKE_CURRENT_LIST_DIR}/dep/FMOD/bin64/libfmod.so.14
-            IMPORTED_LOCATION_DEBUG
-                ${CMAKE_CURRENT_LIST_DIR}/dep/FMOD/bin64/libfmodL.so.14
-    )
 else()
-    message(FATAL_ERROR "No FMOD for this platform")
+    message(FATAL_ERROR "No FMOD for this platform; only Windows builds are supported")
 endif()
 
 if(WIN32)
@@ -198,46 +187,14 @@ if(WIN32)
             unofficial::theora::theoradec
             unofficial::theora::theoraenc
     )
-    # DxUseCLib seems to want internal Ogg headers
-    target_include_directories(
-        DxLib
-        PUBLIC dep/dxlib-for-linux/DxLib/insufficient_include
-    )
-elseif(LINUX)
-    add_library(DxLib STATIC IMPORTED GLOBAL)
-    set_target_properties(
-        DxLib
-        PROPERTIES
-            IMPORTED_LOCATION
-                ${CMAKE_CURRENT_LIST_DIR}/dep/dxlib-for-linux/DxLib/DxLibMake/libDxLib.a
-    )
-
-    target_include_directories(DxLib INTERFACE dep/dxlib-for-linux/DxLib/DxLib)
-
-    target_link_libraries(
-        DxLib
-        INTERFACE
-            JPEG::JPEG
-            Ogg::ogg
-            Opus::opus
-            OpusFile::opusfile
-            PNG::PNG
-            TIFF::TIFF
-            Vorbis::vorbis
-            Vorbis::vorbisenc
-            Vorbis::vorbisfile
-            ZLIB::ZLIB
-            unofficial::theora::theora
-            unofficial::theora::theoradec
-            unofficial::theora::theoraenc
-    )
-
-    # dxlib-for-linux specific
-    find_package(OpenAL REQUIRED)
-    target_link_libraries(DxLib INTERFACE OpenAL::OpenAL)
-    target_link_libraries(DxLib INTERFACE EGL GL X11 pthread)
+    # DxLib reaches into libvorbis internals: DxUseCLibOgg.h includes os.h and
+    # misc.h when neither DX_NON_OGGVORBIS nor DX_NON_OGGTHEORA is defined.
+    # vcpkg's libvorbis does not ship those, so DxLib carries its own copies.
+    target_include_directories(DxLib PUBLIC dep/DxLib/insufficient_include)
 else()
-    message(FATAL_ERROR "No DxLib for this platform")
+    # dep/dxlib-for-linux was removed from this snapshot: LazerRave targets
+    # Windows 10/11 exclusively and no Linux configure preset is provided.
+    message(FATAL_ERROR "No DxLib for this platform; only Windows builds are supported")
 endif()
 
 add_library(md5 STATIC dep/md5/md5.cpp)

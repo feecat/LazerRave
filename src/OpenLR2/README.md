@@ -83,15 +83,10 @@ Alternatively, use the .sln build. Open the `OpenLR2.sln` file in Visual Studio.
 
 ### Linux
 
-Only provided for development purposes, not for use in production.
-
-```bash
-make -C ./dep/dxlib-for-linux/DxLib clean
-CXXFLAGS=$(pkg-config --cflags opusfile) make -C ./dep/dxlib-for-linux/DxLib -j$(nproc)
-rm -rf build
-cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
-cmake --build build -j$(nproc)
-```
+Removed from the LazerRave snapshot. Upstream provided a development-only
+dxlib-for-linux tree here; LazerRave targets Windows 10/11 exclusively, so
+`dep/dxlib-for-linux/` and the `LINUX` branches of `CMakeLists.txt` were
+dropped. No Linux configure preset is provided.
 
 ## Libraries (you don't need to get these)
 

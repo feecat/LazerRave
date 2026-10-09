@@ -39,3 +39,11 @@ __pycache__/
 /docs/site/
 
 # Do not globally ignore source .dll/.lib files: the existing FMOD SDK uses them.
+#
+# The FMOD SDK ships in directories literally named bin64/ and bin86/, which the
+# **/bin/ rule above would otherwise exclude. Already-tracked files are immune
+# to ignore rules, so the current binaries survive; without these negations any
+# newly added or re-added FMOD file would be ignored silently and the native
+# engine would fail to link. Keep these exceptions in sync with CMakeLists.txt.
+!src/OpenLR2/dep/FMOD/bin64/
+!src/OpenLR2/dep/FMOD/bin86/

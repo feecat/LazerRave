@@ -4,7 +4,7 @@ DX Library (DxLib)
 Component:   DX Library (DxLib), including the custom archive (DXA) reading code
 Version:     DxLib 3.24f based, derived from 3.01a
 Author:      Takumi Yamada (山田 巧)
-Location:    src/OpenLR2/dep/DxLib/ and src/OpenLR2/dep/dxlib-for-linux/
+Location:    src/OpenLR2/dep/DxLib/
 Used by:     OpenLR2 (native BMS gameplay engine)
 
 This project does not own DxLib. DxLib is free to use, including for commercial
@@ -211,8 +211,9 @@ This repository contains DxLib source files and library files under
 src/OpenLR2/dep/DxLib/. DxLib's licence requires the DxLib copyright notice
 above, together with the third-party notices above, to be included in
 documentation or other materials distributed with any distribution of those
-files. A Vorbis licence text is also present in the vendored tree at
-src/OpenLR2/dep/DxLib/insufficient_include/COPYING-vorbis.txt.
+files. DxLib's copy of the libvorbis internal headers and licence text is kept
+at src/OpenLR2/dep/DxLib/insufficient_include/, which also holds
+COPYING-vorbis.txt; the Vorbis terms are reproduced in full above as well.
 
 This notice records the origin and known restrictions of a third-party
 component. It is not legal advice, and it is not a substitute for the author's

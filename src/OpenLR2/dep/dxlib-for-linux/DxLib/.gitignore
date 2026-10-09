@@ -1,7 +1,0 @@
-*.zip
-
-/DxLibMake/
-
-/samples/*
-!/samples/*.cpp
-!/samples/assets/

@@ -50,3 +50,5 @@ osu!、Taiko、Catch、首次运行向导、皮肤布局编辑器和官方活动
 生成的 CMake 与 .NET 中间文件依赖工作目录，迁移后重新生成。工具下载和已安装原生依赖可以复用。运行包可能包含玩家成绩和自定义皮肤，不能按普通编译缓存直接删除。
 
 旧原型、清理前源码和迁移记录保存在仓库外归档或忽略目录。活动源码及构建不依赖这些归档。
+
+本快照相对上游 OpenLR2 删除了只服务 Linux 开发构建的 `dep/dxlib-for-linux/` 及其在 `CMakeLists.txt` 中的 `LINUX` 分支；项目只面向 Windows 10/11，且未提供 Linux 配置预设。`dep/DxLib/insufficient_include/` 必须保留：`DxUseCLibOgg.h` 在未定义 `DX_NON_OGGVORBIS` 与 `DX_NON_OGGTHEORA` 时会直接包含其中的 `os.h` 与 `misc.h`，vcpkg 的 libvorbis 不提供这两个内部头。上游 tinyxml 的 Doxygen 生成 HTML 与裁剪后遗留的空目录已一并移除。
