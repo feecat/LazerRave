@@ -3,7 +3,10 @@ using osu.Game.Screens.Menu;
 using osu.Game.Screens.Select;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Screens;
+using osu.Game.Graphics;
+using osu.Game.Graphics.Sprites;
 
 namespace LazerRave.Lazer;
 
@@ -16,6 +19,22 @@ internal partial class LazerRaveMainMenu : MainMenu
 {
     protected override bool AutomaticallyShowLogin => false;
     protected override bool FlattenPlayMenu => true;
+    protected override Drawable CreatePlayIcon() => new CircularContainer
+    {
+        RelativeSizeAxes = Axes.Both,
+        Masking = true,
+        BorderThickness = 1.5f,
+        BorderColour = Colour4.White,
+        Child = new OsuSpriteText
+        {
+            Text = "LR",
+            Font = OsuFont.TorusAlternate.With(size: 20, weight: FontWeight.SemiBold),
+            Shadow = true,
+            Anchor = Anchor.Centre,
+            Origin = Anchor.Centre,
+            UseFullGlyphHeight = false,
+        },
+    };
     protected override Drawable CreateSupporterDisplay() => Empty();
     protected override Drawable CreateMenuTipDisplay() => new LazerRaveVersionDisplay
     {

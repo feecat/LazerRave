@@ -68,7 +68,9 @@ namespace osu.Game.Screens.Menu
         private readonly Container background;
         private readonly Drawable backgroundContent;
         private readonly Box boxHoverLayer;
-        private readonly SpriteIcon icon;
+        private readonly Container icon;
+
+        public Drawable IconContent { set => icon.Child = value; }
 
         private Vector2 initialSize => BaseSize + Padding.Total;
 
@@ -148,15 +150,19 @@ namespace osu.Game.Screens.Menu
                             },
                             Text = text
                         },
-                        icon = new SpriteIcon
+                        icon = new Container
                         {
-                            Shadow = true,
                             Anchor = Anchor.Centre,
                             Origin = Anchor.Centre,
                             Size = new Vector2(32),
                             Position = new Vector2(0, 0),
                             Margin = new MarginPadding { Top = -4 },
-                            Icon = symbol
+                            Child = new SpriteIcon
+                            {
+                                RelativeSizeAxes = Axes.Both,
+                                Shadow = true,
+                                Icon = symbol,
+                            }
                         }
                     }
                 }

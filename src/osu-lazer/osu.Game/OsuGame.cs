@@ -206,6 +206,7 @@ namespace osu.Game
 
         [CanBeNull]
         private DevBuildBanner devBuildBanner;
+        protected virtual bool ShowDeveloperBuildBanner => true;
 
         [CanBeNull]
 
@@ -1105,7 +1106,7 @@ namespace osu.Game
                 Margin = new MarginPadding(5),
             }, topMostOverlayContent.Add);
 
-            if (!IsDeployedBuild)
+            if (!IsDeployedBuild && ShowDeveloperBuildBanner)
                 loadComponentSingleFile(devBuildBanner = new DevBuildBanner(), ScreenContainer.Add);
 
             loadComponentSingleFile(osuLogo, _ =>

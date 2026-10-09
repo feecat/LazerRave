@@ -137,6 +137,7 @@ internal partial class LazerRaveGame : OsuGame
         Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); UpdateLibraryStatus(); });
     }
     public override bool UseDevelopmentServer => false;
+    protected override bool ShowDeveloperBuildBanner => false;
     public override string Version => ClientVersion.DisplayName;
     protected override int UnhandledExceptionsBeforeCrash => 0;
 
@@ -304,7 +305,6 @@ internal partial class LazerRaveGame : OsuGame
         keys.Current.Value = catalog.Keys == 0 ? "All" : $"{catalog.Keys}Key";
         keys.Current.BindValueChanged(change => { catalog.Filter(catalog.Directory, change.NewValue == "All" ? 0 : int.Parse(change.NewValue.Replace("Key", ""))); songSelect?.RefreshKeyFilter(); UpdateLibraryStatus(); });
         chrome.Add(keys);
-        chrome.Add(new RoundedButton { Text = "Multiplayer", Size = new Vector2(148, 38), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Position = new Vector2(-28, 8), Action = OpenMultiplayer });
         chrome.Add(status = Text("", 14, 28, -82).With(text => { text.Anchor = Anchor.BottomLeft; text.MaxWidth = 500; }));
         chrome.Add(profileName = Text(preferences.Value.Player, 19, 84, -138).With(text => text.Anchor = Anchor.BottomLeft));
         chrome.Add(avatarPlaceholder = new Container { Position = new Vector2(28, -146), Anchor = Anchor.BottomLeft, Size = new Vector2(44),

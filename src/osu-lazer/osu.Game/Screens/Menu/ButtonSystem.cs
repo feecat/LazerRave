@@ -47,6 +47,7 @@ namespace osu.Game.Screens.Menu
         public Action? OnMultiplayer;
         public Action? OnCustomMultiplayer;
         public bool FlattenPlayMenu { get; init; }
+        public Func<Drawable?>? CreatePlayIcon { get; init; }
 
         private readonly IBindable<bool> isIdle = new BindableBool();
 
@@ -146,10 +147,13 @@ namespace osu.Game.Screens.Menu
         {
             if (FlattenPlayMenu)
             {
-                buttonsTopLevel.Add(new MainMenuButton(ButtonSystemStrings.Play, @"button-play-select", OsuIcon.Logo, new Color4(102, 68, 204, 255), (_, _) => OnSolo?.Invoke(), Key.P)
+                var playButton = new MainMenuButton(ButtonSystemStrings.Play, @"button-play-select", OsuIcon.Logo, new Color4(102, 68, 204, 255), (_, _) => OnSolo?.Invoke(), Key.P)
                 {
                     Padding = new MarginPadding { Left = WEDGE_WIDTH },
-                });
+                };
+                if (CreatePlayIcon?.Invoke() is Drawable playIcon)
+                    playButton.IconContent = playIcon;
+                buttonsTopLevel.Add(playButton);
                 buttonsTopLevel.Add(new MainMenuButton(ButtonSystemStrings.Multi, @"button-default-select", OsuIcon.Online, new Color4(94, 63, 186, 255), onMultiplayer, Key.M, Key.L));
             }
             else

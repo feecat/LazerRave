@@ -159,6 +159,23 @@ internal partial class LazerRaveBeatmapCarousel : BeatmapCarousel
             if (CheckModelEquality(items[i].Model, selection.Model!))
                 selection = selection with { CarouselItem = items[i], Index = i };
         }
+
+        if (keyboardSelection.CarouselItem is not null) return;
+        if (selection.CarouselItem is not null)
+        {
+            keyboardSelection = selection;
+            return;
+        }
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].IsVisible && items[i].Model is FolderDefinition)
+            {
+                keyboardSelection = selection = new Selection(items[i].Model, items[i], null, i);
+                ScrollToSelection(immediate: true);
+                break;
+            }
+        }
     }
 
     protected override bool CheckValidForSetSelection(CarouselItem item) => item.Model is FolderDefinition || base.CheckValidForSetSelection(item);

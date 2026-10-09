@@ -17,6 +17,8 @@ namespace LazerRave.Lazer;
 internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action apply) : SettingsOverlay()
 {
     protected override SettingsSection CreateGeneralSection() => new GeneralSection { ShowQuickActions = false };
+    protected override bool IncludeRulesetSettings => false;
+    protected override bool IncludeSection(SettingsSection section) => section is not (OnlineSection or MaintenanceSection or GameplaySection);
     private readonly OsuSpriteText saveStatus = new() { Font = osu.Game.Graphics.OsuFont.GetFont(size: 15), Margin = new MarginPadding { Horizontal = 20, Bottom = 10 } };
     public void SetSaveStatus(LocalisableString text, bool error)
     {
@@ -60,11 +62,6 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
             new SettingsTextBox { LabelText = D("Custom size (width x height)"), Current = settings.Window },
         })));
         AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings)));
-        AddSection(new Section("Player", FontAwesome.Solid.User, new Subsection("Profile", new Drawable[]
-        {
-            new SettingsTextBox { LabelText = D("Display name"), Current = settings.Player },
-            new SettingsTextBox { LabelText = D("Avatar file"), Current = settings.Avatar },
-        })));
     }
 
     private partial class PresentationDropdown : SettingsDropdown<string>

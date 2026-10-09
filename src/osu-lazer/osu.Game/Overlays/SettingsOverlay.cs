@@ -35,6 +35,8 @@ namespace osu.Game.Overlays
         protected override Drawable CreateHeader() => new SettingsHeader(Title, Description);
 
         protected virtual SettingsSection CreateGeneralSection() => new GeneralSection();
+        protected virtual bool IncludeRulesetSettings => true;
+        protected virtual bool IncludeSection(SettingsSection section) => true;
 
         protected override Drawable CreateFooter() => new OsuContextMenuContainer
         {
@@ -82,7 +84,7 @@ namespace osu.Game.Overlays
                 new GameplaySection()
             };
 
-            foreach (Ruleset ruleset in rulesets.AvailableRulesets.Select(info => info.CreateInstance()))
+            foreach (Ruleset ruleset in IncludeRulesetSettings ? rulesets.AvailableRulesets.Select(info => info.CreateInstance()) : Enumerable.Empty<Ruleset>())
             {
                 try
                 {
@@ -110,7 +112,7 @@ namespace osu.Game.Overlays
             if (today.Month == 4 && today.Day == 1)
                 sections.Insert(9, new AfToggleSection());
 
-            foreach (var s in sections)
+            foreach (var s in sections.Where(IncludeSection))
                 AddSection(s);
 
             foreach (var s in subPanels)

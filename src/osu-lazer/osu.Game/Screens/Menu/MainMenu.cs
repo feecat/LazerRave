@@ -56,6 +56,7 @@ namespace osu.Game.Screens.Menu
         public override bool AllowExternalScreenChange => true;
         protected virtual bool AutomaticallyShowLogin => true;
         protected virtual bool FlattenPlayMenu => false;
+        protected virtual Drawable CreatePlayIcon() => null;
 
         public override bool? AllowGlobalTrackControl => true;
 
@@ -145,6 +146,7 @@ namespace osu.Game.Screens.Menu
                         Buttons = new ButtonSystem
                         {
                             FlattenPlayMenu = FlattenPlayMenu,
+                            CreatePlayIcon = CreatePlayIcon,
                             OnSolo = loadSongSelect,
                             OnMultiplayer = () => this.Push(new Multiplayer()),
                             OnExit = e =>
