@@ -243,7 +243,7 @@ namespace osu.Game.Screens.Select
                                                             {
                                                                 TopPadding = TopPadding,
                                                             }),
-                                                            new ShearAligningWrapper(detailsArea = new BeatmapDetailsArea()),
+                                                            new ShearAligningWrapper(detailsArea = CreateDetailsArea()),
                                                         },
                                                     },
                                                 }
@@ -278,13 +278,13 @@ namespace osu.Game.Screens.Select
                                                             }
                                                         }
                                                     },
-                                                    FilterControl = new FilterControl
+                                                    FilterControl = CreateFilterControl().With(control =>
                                                     {
-                                                        Anchor = Anchor.TopRight,
-                                                        Origin = Anchor.TopRight,
-                                                        RelativeSizeAxes = Axes.X,
-                                                        ScopedBeatmapSet = { BindTarget = ScopedBeatmapSet },
-                                                    },
+                                                        control.Anchor = Anchor.TopRight;
+                                                        control.Origin = Anchor.TopRight;
+                                                        control.RelativeSizeAxes = Axes.X;
+                                                        control.ScopedBeatmapSet.BindTo(ScopedBeatmapSet);
+                                                    }),
                                                 }
                                             },
                                         },
@@ -352,6 +352,10 @@ namespace osu.Game.Screens.Select
         /// Creates the carousel used to browse beatmaps. Overridden by derived screens that need to
         /// place additional item types in the list alongside beatmaps.
         /// </summary>
+        protected virtual FilterControl CreateFilterControl() => new FilterControl();
+
+        protected virtual BeatmapDetailsArea CreateDetailsArea() => new BeatmapDetailsArea();
+
         protected virtual BeatmapCarousel CreateCarousel() => new BeatmapCarousel
         {
             BleedTop = FilterControl.HEIGHT_FROM_SCREEN_TOP + 5,

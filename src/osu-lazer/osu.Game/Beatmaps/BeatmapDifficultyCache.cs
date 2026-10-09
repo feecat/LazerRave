@@ -35,6 +35,8 @@ namespace osu.Game.Beatmaps
     /// </summary>
     public partial class BeatmapDifficultyCache : MemoryCachingComponent<BeatmapDifficultyCache.DifficultyCacheLookup, StarDifficulty?>
     {
+        public bool AutomaticCalculationEnabled { get; init; } = true;
+
         // Too many simultaneous updates can lead to stutters. One thread seems to work fine for song select display purposes.
         private readonly ThreadedTaskScheduler updateScheduler = new ThreadedTaskScheduler(1, nameof(BeatmapDifficultyCache));
 
@@ -70,6 +72,8 @@ namespace osu.Game.Beatmaps
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            if (!AutomaticCalculationEnabled) return;
 
             currentRuleset.BindValueChanged(_ => Scheduler.AddOnce(updateTrackedBindables));
 
@@ -131,6 +135,9 @@ namespace osu.Game.Beatmaps
         /// <returns>A bindable that is updated to contain the star difficulty when it becomes available. May be an approximation while in an initial calculating state.</returns>
         public IBindable<StarDifficulty> GetBindableDifficulty(IBeatmapInfo beatmapInfo, CancellationToken cancellationToken = default, int computationDelay = 0)
         {
+            if (!AutomaticCalculationEnabled)
+                return new Bindable<StarDifficulty>(knownDifficulty(beatmapInfo));
+
             var bindable = new BindableStarDifficulty(beatmapInfo, cancellationToken)
             {
                 // Start with an approximate known value instead of zero.
@@ -166,6 +173,9 @@ namespace osu.Game.Beatmaps
         public virtual Task<StarDifficulty?> GetDifficultyAsync(IBeatmapInfo beatmapInfo, IRulesetInfo? rulesetInfo = null, IEnumerable<Mod>? mods = null,
                                                                 CancellationToken cancellationToken = default, int computationDelay = 0)
         {
+            if (!AutomaticCalculationEnabled)
+                return Task.FromResult<StarDifficulty?>(knownDifficulty(beatmapInfo));
+
             // In the case that the user hasn't given us a ruleset, use the beatmap's default ruleset.
             rulesetInfo ??= beatmapInfo.Ruleset;
 
@@ -182,6 +192,9 @@ namespace osu.Game.Beatmaps
             return GetAsync(new DifficultyCacheLookup(localBeatmapInfo, localRulesetInfo, mods), cancellationToken, computationDelay);
         }
 
+        private static StarDifficulty knownDifficulty(IBeatmapInfo beatmapInfo) =>
+            new StarDifficulty(beatmapInfo.StarRating, (beatmapInfo as IBeatmapOnlineInfo)?.MaxCombo ?? 0);
+
         protected override Task<StarDifficulty?> ComputeValueAsync(DifficultyCacheLookup lookup, CancellationToken cancellationToken = default)
         {
             return Task.Factory.StartNew(() =>
@@ -197,6 +210,9 @@ namespace osu.Game.Beatmaps
 
         public Task<List<TimedDifficultyAttributes>> GetTimedDifficultyAttributesAsync(IWorkingBeatmap beatmap, Ruleset ruleset, Mod[] mods, CancellationToken cancellationToken = default)
         {
+            if (!AutomaticCalculationEnabled)
+                return Task.FromResult(new List<TimedDifficultyAttributes>());
+
             return Task.Factory.StartNew(() => ruleset.CreateDifficultyCalculator(beatmap).CalculateTimed(mods, cancellationToken),
                 cancellationToken,
                 TaskCreationOptions.HideScheduler | TaskCreationOptions.RunContinuationsAsynchronously,

@@ -357,4 +357,30 @@
   <data name="Relative paths start in the application folder.">
     <value>Relative paths start in the application folder.</value>
   </data>
+  <data name="Charts" xml:space="preserve"><value>Charts</value></data>
+  <data name="Play records" xml:space="preserve"><value>Play records</value></data>
+  <data name="All difficulties" xml:space="preserve"><value>All difficulties</value></data>
+  <data name="All levels" xml:space="preserve"><value>All levels</value></data>
+  <data name="Select a chart" xml:space="preserve"><value>Select a chart</value></data>
+  <data name="Personal best" xml:space="preserve"><value>Personal best</value></data>
+  <data name="Difficulties" xml:space="preserve"><value>Difficulties</value></data>
+  <data name="Watch replay" xml:space="preserve"><value>Watch replay</value></data>
+  <data name="Submit score" xml:space="preserve"><value>Submit score</value></data>
+  <data name="Recent plays" xml:space="preserve"><value>Recent plays</value></data>
+  <data name="No play records" xml:space="preserve"><value>No play records</value></data>
+  <data name="Practice" xml:space="preserve"><value>Practice</value></data>
+  <data name="Submitting…" xml:space="preserve"><value>Submitting…</value></data>
+  <data name="Score submitted" xml:space="preserve"><value>Score submitted</value></data>
+  <data name="No scores yet" xml:space="preserve"><value>No scores yet</value></data>
+  <data name="Previous page" xml:space="preserve"><value>Previous page</value></data>
+  <data name="Next page" xml:space="preserve"><value>Next page</value></data>
+  <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Easy" xml:space="preserve"><value>Easy</value></data>
+  <data name="Normal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Hard" xml:space="preserve"><value>Hard</value></data>
+  <data name="Full combo" xml:space="preserve"><value>Full combo</value></data>
+  <data name="Finished" xml:space="preserve"><value>Finished</value></data>
+  <data name="This chart is not in the published ranking catalog." xml:space="preserve"><value>This chart is not in the published ranking catalog.</value></data>
+  <data name="Highest SCORE" xml:space="preserve"><value>Highest SCORE</value></data>
 </root>

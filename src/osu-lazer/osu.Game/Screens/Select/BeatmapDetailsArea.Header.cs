@@ -22,6 +22,8 @@ namespace osu.Game.Screens.Select
     {
         public partial class Header : CompositeDrawable
         {
+            public bool RankingOnly { get; init; }
+
             private WedgeSelector<Selection> tabControl = null!;
             private FillFlowContainer leaderboardControls = null!;
 
@@ -59,7 +61,7 @@ namespace osu.Game.Screens.Select
                                 Width = 200,
                                 Height = 22,
                                 Margin = new MarginPadding { Top = 2f },
-                                IsSwitchable = true,
+                                IsSwitchable = !RankingOnly,
                             },
                             leaderboardControls = new FillFlowContainer
                             {
@@ -104,6 +106,13 @@ namespace osu.Game.Screens.Select
                     },
                 };
 
+                if (RankingOnly)
+                {
+                    scopeDropdown.Items = new[] { BeatmapLeaderboardScope.Local, BeatmapLeaderboardScope.Global };
+                    scopeDropdown.Current.Value = BeatmapLeaderboardScope.Local;
+                    selectedModsToggle.Hide();
+                }
+
                 config.BindWith(OsuSetting.BeatmapDetailTab, configDetailTab);
                 config.BindWith(OsuSetting.BeatmapLeaderboardSortMode, configLeaderboardSortMode);
                 config.BindWith(OsuSetting.BeatmapDetailModsFilter, selectedModsToggle.Active);
@@ -113,10 +122,12 @@ namespace osu.Game.Screens.Select
             {
                 base.LoadComplete();
 
-                scopeDropdown.Current.Value = tryMapDetailTabToLeaderboardScope(configDetailTab.Value) ?? scopeDropdown.Current.Value;
+                var savedScope = tryMapDetailTabToLeaderboardScope(configDetailTab.Value);
+                if (!RankingOnly || savedScope is BeatmapLeaderboardScope.Local or BeatmapLeaderboardScope.Global)
+                    scopeDropdown.Current.Value = savedScope ?? scopeDropdown.Current.Value;
                 scopeDropdown.Current.BindValueChanged(_ => updateConfigDetailTab());
 
-                tabControl.Current.Value = configDetailTab.Value == BeatmapDetailTab.Details ? Selection.Details : Selection.Ranking;
+                tabControl.Current.Value = !RankingOnly && configDetailTab.Value == BeatmapDetailTab.Details ? Selection.Details : Selection.Ranking;
                 tabControl.Current.BindValueChanged(v =>
                 {
                     leaderboardControls.FadeTo(v.NewValue == Selection.Ranking ? 1 : 0, 300, Easing.OutQuint);

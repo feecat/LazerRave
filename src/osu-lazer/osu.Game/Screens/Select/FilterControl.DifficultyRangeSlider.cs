@@ -35,9 +35,12 @@ namespace osu.Game.Screens.Select
                                                                           .Skip(1)
                                                                           .Prepend((0.0f, OsuColour.STAR_DIFFICULTY_SPECTRUM.ElementAt(1).Item2)).ToArray();
 
-            public DifficultyRangeSlider()
-                : base(BeatmapsetsStrings.ShowStatsStars)
+            private readonly bool bmsDifficulty;
+
+            public DifficultyRangeSlider(bool bmsDifficulty = false)
+                : base(bmsDifficulty ? (LocalisableString)"Lv." : BeatmapsetsStrings.ShowStatsStars)
             {
+                this.bmsDifficulty = bmsDifficulty;
                 NubWidth = ShearedNub.HEIGHT * 1.16f;
                 DefaultStringUpperBound = "∞";
 
@@ -93,6 +96,12 @@ namespace osu.Game.Screens.Select
             {
                 base.LoadComplete();
 
+                if (bmsDifficulty)
+                {
+                    LowerBoundSlider.KeyboardStep = 1;
+                    UpperBoundSlider.KeyboardStep = 1;
+                }
+
                 LowerBoundSlider.Current.ValueChanged += _ => updateBorderDisplay(false);
                 UpperBoundSlider.Current.ValueChanged += _ => updateBorderDisplay(false);
             }
@@ -118,11 +127,13 @@ namespace osu.Game.Screens.Select
                 borderContainer.ResizeWidthTo(borderEnd - borderStart, instant ? 0 : 250, Easing.OutQuint);
             }
 
-            protected override BoundSliderBar CreateBoundSlider(bool isUpper) => new DifficultyBoundSliderBar(this, isUpper);
+            protected override BoundSliderBar CreateBoundSlider(bool isUpper) => new DifficultyBoundSliderBar(this, isUpper, bmsDifficulty);
 
             private partial class DifficultyBoundSliderBar : BoundSliderBar
             {
                 private readonly bool isUpper;
+                private readonly bool bmsDifficulty;
+                private readonly DifficultyRangeSlider rangeSlider;
 
                 protected override bool FocusIndicator => false;
 
@@ -133,14 +144,16 @@ namespace osu.Game.Screens.Select
                         if (Current.IsDefault && isUpper)
                             return UserInterfaceStrings.NoLimit;
 
-                        return SongSelectStrings.Stars(Current.Value.ToLocalisableString(@"0.##"));
+                        return bmsDifficulty ? (LocalisableString)$"Lv.{Current.Value:0}" : SongSelectStrings.Stars(Current.Value.ToLocalisableString(@"0.##"));
                     }
                 }
 
-                public DifficultyBoundSliderBar(ShearedRangeSlider slider, bool isUpper)
+                public DifficultyBoundSliderBar(DifficultyRangeSlider slider, bool isUpper, bool bmsDifficulty)
                     : base(slider, isUpper)
                 {
+                    rangeSlider = slider;
                     this.isUpper = isUpper;
+                    this.bmsDifficulty = bmsDifficulty;
                 }
 
                 [Resolved]
@@ -164,23 +177,25 @@ namespace osu.Game.Screens.Select
 
                 protected override void UpdateDisplay(double value)
                 {
-                    Colour4 nubColour = ColourUtils.SampleFromLinearGradient(spectrum, (float)Math.Round(value, 2, MidpointRounding.AwayFromZero));
+                    double colourValue = bmsDifficulty ? value / Math.Max(1, rangeSlider.UpperBound.Default) * 10 : value;
+                    Colour4 nubColour = ColourUtils.SampleFromLinearGradient(spectrum, (float)Math.Round(colourValue, 2, MidpointRounding.AwayFromZero));
 
                     // Handle edge case colors for color harmony
-                    if (value >= 7.5 && value < 8.0)
-                        nubColour = Interpolation.ValueAt<Colour4>(value, nubColour, colours.Gray4, 7.5, 8.0);
-                    else if (value >= 8.0)
+                    if (colourValue >= 7.5 && colourValue < 8.0)
+                        nubColour = Interpolation.ValueAt<Colour4>(colourValue, nubColour, colours.Gray4, 7.5, 8.0);
+                    else if (colourValue >= 8.0)
                         nubColour = colours.Gray4;
 
                     Nub.AccentColour = nubColour;
                     Nub.GlowingAccentColour = nubColour.Lighten(0.1f);
                     Nub.ShadowColour = Color4.Black.Opacity(0.2f);
-                    NubText.Colour = colours.ForStarDifficultyText(value);
+                    NubText.Colour = colours.ForStarDifficultyText(colourValue);
                     // Except for infinity, which should be white
                     if (Current.IsDefault && isUpper)
                         NubText.Colour = OsuColour.ForegroundTextColourFor(nubColour);
 
                     base.UpdateDisplay(value);
+                    if (bmsDifficulty && !(Current.IsDefault && isUpper)) NubText.Text = value.ToLocalisableString(@"0");
                 }
             }
         }

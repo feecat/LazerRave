@@ -225,7 +225,7 @@ namespace osu.Game.Screens.Select
 
         private ScheduledDelegate? refetchOperation;
 
-        public void RefetchScores()
+        public virtual void RefetchScores()
         {
             SetScores(Array.Empty<ScoreInfo>());
 
@@ -300,23 +300,12 @@ namespace osu.Game.Screens.Select
             {
                 BeatmapLeaderboardScore.HighlightType? highlightType = null;
 
-                if (s.OnlineID == userScore?.OnlineID)
+                if (s.ID == userScore?.ID || s.OnlineID > 0 && s.OnlineID == userScore?.OnlineID)
                     highlightType = BeatmapLeaderboardScore.HighlightType.Own;
                 else if (api.LocalUserState.Friends.Any(r => r.TargetID == s.UserID) && Scope.Value != BeatmapLeaderboardScope.Friend)
                     highlightType = BeatmapLeaderboardScore.HighlightType.Friend;
 
-                return new BeatmapLeaderboardScore(s)
-                {
-                    Rank = i + 1,
-                    Highlight = highlightType,
-                    SelectedMods = { BindTarget = mods },
-                    Action = songSelect?.CanPresentScore == true
-                        ? () => songSelect.PresentScore(s)
-                        : null,
-                    ShowReplay = songSelect?.CanPresentScore == true
-                        ? info => songSelect.PresentScore(info, ScorePresentType.Gameplay)
-                        : null
-                };
+                return CreateScoreDrawable(s, s.Position ?? i + 1, highlightType, false);
             }), loadedScores =>
             {
                 int delay = 200;
@@ -364,13 +353,7 @@ namespace osu.Game.Screens.Select
             {
                 personalBestDisplay.MoveToX(0, 600, Easing.OutQuint);
                 personalBestDisplay.FadeIn(600, Easing.OutQuint);
-                personalBestScoreContainer.Child = new BeatmapLeaderboardScore(userScore)
-                {
-                    Highlight = BeatmapLeaderboardScore.HighlightType.Own,
-                    Rank = userScore.Position,
-                    SelectedMods = { BindTarget = mods },
-                    Action = () => onLeaderboardScoreClicked(userScore),
-                };
+                personalBestScoreContainer.Child = CreateScoreDrawable(userScore, userScore.Position, BeatmapLeaderboardScore.HighlightType.Own, true);
 
                 scoresScroll.TransformTo(nameof(scoresScroll.Padding), new MarginPadding { Bottom = personal_best_height }, 300, Easing.OutQuint);
 
@@ -380,6 +363,15 @@ namespace osu.Game.Screens.Select
                     personalBestText.Text = BeatmapLeaderboardWedgeStrings.PersonalBest;
             }
         }
+
+        protected virtual BeatmapLeaderboardScore CreateScoreDrawable(ScoreInfo score, int? rank, BeatmapLeaderboardScore.HighlightType? highlight, bool personalBest) => new BeatmapLeaderboardScore(score)
+        {
+            Rank = rank,
+            Highlight = highlight,
+            SelectedMods = { BindTarget = mods },
+            Action = songSelect?.CanPresentScore == true ? () => songSelect.PresentScore(score) : null,
+            ShowReplay = songSelect?.CanPresentScore == true ? info => songSelect.PresentScore(info, ScorePresentType.Gameplay) : null,
+        };
 
         private void clearScores()
         {

@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using osu.Framework.Extensions.Color4Extensions;
@@ -17,7 +17,7 @@ namespace osu.Game.Online.Leaderboards
 {
     public partial class DrawableRank : CompositeDrawable
     {
-        public DrawableRank(ScoreRank rank)
+        public DrawableRank(ScoreRank rank, string? rankLabel = null)
         {
             RelativeSizeAxes = Axes.Both;
             FillMode = FillMode.Fit;
@@ -54,7 +54,7 @@ namespace osu.Game.Online.Leaderboards
                             Padding = new MarginPadding { Top = 5 },
                             Colour = GetRankLetterColour(rank),
                             Font = OsuFont.Numeric.With(size: 25),
-                            Text = GetRankLetter(rank),
+                            Text = rankLabel ?? GetRankLetter(rank),
                             ShadowColour = Color4.Black.Opacity(0.3f),
                             ShadowOffset = new Vector2(0, 0.08f),
                             Shadow = true,

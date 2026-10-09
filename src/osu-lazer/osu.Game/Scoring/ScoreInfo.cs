@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -248,6 +248,9 @@ namespace osu.Game.Scoring
         public bool Passed { get; set; } = true;
 
         public int Combo { get; set; }
+
+        [Ignored]
+        public string? CustomRankLabel { get; set; }
 
         /// <summary>
         /// The position of this score, starting at 1.

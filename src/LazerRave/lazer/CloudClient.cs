@@ -20,7 +20,7 @@ internal sealed record CloudLogin(CloudUser User, string Token);
 internal sealed record CloudLocalChart(string Path, string Title, string Artist, int Keys, int Level);
 internal sealed record CloudClock(long ClientTime, long ServerTime, int Protocol);
 
-internal sealed class CloudClient : IAsyncDisposable
+internal sealed partial class CloudClient : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions json = new(JsonSerializerDefaults.Web);
     private HttpClient? http;

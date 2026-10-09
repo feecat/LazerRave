@@ -45,6 +45,10 @@ namespace osu.Game.Screens.Select
         private SongSelectSearchTextBox searchTextBox = null!;
         private ShearedToggleButton showConvertedBeatmapsButton = null!;
         private DifficultyRangeSlider difficultyRangeSlider = null!;
+        public bool BmsDifficulty { get; init; }
+        public Func<int> MaximumBmsLevel { get; init; } = () => 20;
+        public double? DifficultyMinimum => difficultyRangeSlider.LowerBound.IsDefault ? null : difficultyRangeSlider.LowerBound.Value;
+        public double? DifficultyMaximum => difficultyRangeSlider.UpperBound.IsDefault ? null : difficultyRangeSlider.UpperBound.Value;
         private ShearedDropdown<SortMode> sortDropdown = null!;
         private ShearedDropdown<GroupModeDropdownItem> groupDropdown = null!;
         private readonly Bindable<string> configCollectionFilter = new Bindable<string>();
@@ -150,10 +154,10 @@ namespace osu.Game.Screens.Select
                                     {
                                         new[]
                                         {
-                                            difficultyRangeSlider = new DifficultyRangeSlider
+                                            difficultyRangeSlider = new DifficultyRangeSlider(BmsDifficulty)
                                             {
                                                 RelativeSizeAxes = Axes.X,
-                                                MinRange = 0.1f,
+                                                MinRange = BmsDifficulty ? 0 : 0.1f,
                                             },
                                             Empty(),
                                             showConvertedBeatmapsButton = new ShearedToggleButton
@@ -222,8 +226,17 @@ namespace osu.Game.Screens.Select
         {
             base.LoadComplete();
 
-            difficultyRangeSlider.LowerBound = config.GetBindable<double>(OsuSetting.DisplayStarsMinimum);
-            difficultyRangeSlider.UpperBound = config.GetBindable<double>(OsuSetting.DisplayStarsMaximum);
+            if (BmsDifficulty)
+            {
+                int limit = Math.Max(20, MaximumBmsLevel()) + 1;
+                difficultyRangeSlider.LowerBound = new BindableDouble(0) { Default = 0, MinValue = 0, MaxValue = limit, Precision = 1 };
+                difficultyRangeSlider.UpperBound = new BindableDouble(limit) { Default = limit, MinValue = 0, MaxValue = limit, Precision = 1 };
+            }
+            else
+            {
+                difficultyRangeSlider.LowerBound = config.GetBindable<double>(OsuSetting.DisplayStarsMinimum);
+                difficultyRangeSlider.UpperBound = config.GetBindable<double>(OsuSetting.DisplayStarsMaximum);
+            }
             config.BindWith(OsuSetting.ShowConvertedBeatmaps, showConvertedBeatmapsButton.Active);
             config.BindWith(OsuSetting.SongSelectSortingMode, sortDropdown.Current);
             config.BindWith(OsuSetting.SongSelectCollectionFilter, configCollectionFilter);
@@ -283,9 +296,12 @@ namespace osu.Game.Screens.Select
             collectionsSubscription?.Dispose();
         }
 
-        /// <summary>
-        /// Creates a <see cref="FilterCriteria"/> based on the current state of the controls.
-        /// </summary>
+        public void UseBmsFilters()
+        {
+            showConvertedBeatmapsButton.Hide();
+            groupDropdown.Hide();
+        }
+
         public FilterCriteria CreateCriteria()
         {
             string query = searchTextBox.Current.Value;

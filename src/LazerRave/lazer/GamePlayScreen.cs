@@ -18,6 +18,9 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     private readonly Container area = new() { RelativeSizeAxes = Axes.Both };
     private OsuSpriteText status = null!;
     private bool finished;
+    public PlayRecordStore? Records { get; init; }
+    public string RecordPlayer { get; init; } = "Player";
+    public string? ReplaySource { get; init; }
     public CloudClient? MultiplayerClient { get; init; }
     public Guid? MatchId { get; init; }
     public override string Title => chart.Title;
@@ -53,18 +56,22 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     {
         string? failure = null;
         await using var scores = MultiplayerClient is { } client && MatchId is { } match ? new CloudScoreSession(client, match) : null;
+        var run = Guid.NewGuid();
+        GameplaySnapshot latest = GameplaySnapshot.Empty;
+        string? hash = null;
         void Score(GameplaySnapshot value)
         {
-            scores!.Update(value);
-            if (value.Finished && !value.Aborted) Schedule(() => session.Cancel());
+            latest = value; scores?.Update(value);
+            if (scores is not null && value.Finished && !value.Aborted) Schedule(() => session.Cancel());
         }
-        Action<GameplaySnapshot>? report = scores is null ? null : Score;
+        Action<GameplaySnapshot> report = Score;
         try
         {
+            hash = await PlayRecordStore.HashChart(chart.Path, session.Token);
             if (settings.Presentation == "standalone")
             {
                 Schedule(() => status.Text = D("Playing in a separate window…"));
-                await bridge.Play(settings, chart, session.Token, progress: report);
+                await bridge.Play(settings, chart, session.Token, progress: report, replaySource: ReplaySource, replayDestination: ReplaySource is null ? Records?.ReplayPath(run) : null);
             }
             else
             {
@@ -73,7 +80,7 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
                 {
                     viewport.BindEngine(window, process);
                     Schedule(() => status.Hide());
-                }, report);
+                }, report, ReplaySource, ReplaySource is null ? Records?.ReplayPath(run) : null);
             }
         }
         catch (OperationCanceledException) { }
@@ -82,6 +89,14 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
         {
             try { if (settings.Presentation == "embedded") await viewport.CloseAsync(); }
             catch (Exception error) { failure ??= error.Message; }
+            if (ReplaySource is null && Records is not null && hash is not null && latest.Finished && !latest.Aborted)
+            {
+                try
+                {
+                    Records.Save(run, hash, chart, RecordPlayer, settings, latest);
+                }
+                catch (Exception error) { failure ??= "Cannot save play record: " + error.Message; }
+            }
             if (scores is not null)
             {
                 try { await scores.Finish(); }

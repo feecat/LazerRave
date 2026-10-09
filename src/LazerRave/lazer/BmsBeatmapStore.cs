@@ -29,6 +29,33 @@ internal partial class BmsBeatmapStore : BeatmapStore
     public SongLibrary Library { get; private set; } = new();
     public string? Directory { get; private set; }
     public int Keys { get; private set; } = 7;
+    public string Query { get; private set; } = "";
+    public int DifficultyFilter { get; private set; }
+    public int? LevelFilter { get; private set; }
+    public double? LevelMinimum { get; private set; }
+    public double? LevelMaximum { get; private set; }
+    public void SetLevelRange(double? minimum, double? maximum)
+    {
+        lock (gate)
+        {
+            if (LevelMinimum == minimum && LevelMaximum == maximum) return;
+            LevelMinimum = minimum; LevelMaximum = maximum; FilterCore(Directory, Keys);
+        }
+    }
+    private bool Matches(Chart chart) => (Keys == 0 || Keys == chart.Keys) &&
+        (DifficultyFilter == 0 || chart.Difficulty == DifficultyFilter) && (LevelFilter is null || chart.Level == LevelFilter) &&
+        (LevelMinimum is null || chart.Level >= LevelMinimum) && (LevelMaximum is null || chart.Level <= LevelMaximum);
+    public void SetSearch(string query)
+    {
+        lock (gate)
+        {
+            query = query.Trim(); if (Query == query) return;
+            Query = query; FilterCore(Directory, Keys);
+        }
+    }
+    public void SetDifficulty(int difficulty, int? level)
+    { lock (gate) { DifficultyFilter = difficulty; LevelFilter = level; FilterCore(Directory, Keys); } }
+
     public override IBindableList<BeatmapSetInfo> GetBeatmapSets(CancellationToken? cancellationToken) => visible;
     public static int Columns(int keys) => keys switch { 5 or 7 => keys + 1, 10 or 14 => keys + 2, _ => keys };
     public static Guid StableId(string path) => new(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())).AsSpan(0, 16));
@@ -55,7 +82,7 @@ internal partial class BmsBeatmapStore : BeatmapStore
                     Metadata = new BeatmapMetadata
                     {
                         Title = chart.Title, TitleUnicode = chart.Title, Artist = chart.Artist, ArtistUnicode = chart.Artist,
-                        Source = Path.GetFileName(song.Directory), Tags = song.Directory, PreviewTime = 0,
+                        Source = Path.GetFileName(song.Directory), Tags = $"{song.Directory} {Path.GetFileName(chart.Path)} {chart.Label} Lv.{chart.Level}", PreviewTime = 0,
                         AudioFile = song.Directory, BackgroundFile = chart.Path,
                     },
                 });
@@ -72,12 +99,14 @@ internal partial class BmsBeatmapStore : BeatmapStore
         Filter(Directory, Keys);
     }
 
-    private Entry[] EntriesHere => Library.Browse(Directory, "", Keys == 0 ? null : Keys, 0);
+    private Entry[] EntriesHere => Library.Browse(Directory, Query, Keys == 0 ? null : Keys, 0)
+        .Where(entry => entry.Song is { } song ? song.Charts.Any(Matches) : Library.Songs.Any(song =>
+            (song.Directory.Equals(entry.Id, StringComparison.OrdinalIgnoreCase) || SongLibrary.ContainsPath(entry.Id, song.Directory)) && song.Charts.Any(Matches))).ToArray();
     public IEnumerable<Folder> ChildFolders
     {
         get
         {
-            lock (gate) return EntriesHere.Where(entry => entry.IsFolder)
+            lock (gate) return (Query.Length > 0 ? Array.Empty<Entry>() : EntriesHere).Where(entry => entry.IsFolder)
                 .Select(entry => Library.Folders.Single(folder => folder.Path.Equals(entry.Id, StringComparison.OrdinalIgnoreCase))).ToArray();
         }
     }
@@ -96,7 +125,7 @@ internal partial class BmsBeatmapStore : BeatmapStore
     public bool HasParent => Directory is not null;
     public bool IsVisible(BeatmapInfo info)
     {
-        lock (gate) return charts.TryGetValue(info.ID, out var chart) && (Keys == 0 || Keys == chart.Keys)
+        lock (gate) return charts.TryGetValue(info.ID, out var chart) && Matches(chart)
             && visible.Any(set => set.Beatmaps.Any(candidate => candidate.ID == info.ID));
     }
     public Chart? ChartFor(BeatmapInfo info) { lock (gate) return charts.GetValueOrDefault(info.ID); }
@@ -104,7 +133,14 @@ internal partial class BmsBeatmapStore : BeatmapStore
     private void FilterCore(string? directory, int keys)
     {
         Directory = string.IsNullOrEmpty(directory) ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)); Keys = keys;
-        var selected = SongsHere.Select(song => sets[song.Directory]).ToArray();
+        var selected = (Query.Length > 0 ? Library.Songs.Where(song => song.Charts.Any(Matches)) : SongsHere).Select(song =>
+        {
+            var source = sets[song.Directory];
+            var filtered = new BeatmapSetInfo { ID = source.ID, Hash = source.Hash, DateAdded = source.DateAdded };
+            foreach (var info in source.Beatmaps.Where(info => Matches(charts[info.ID]))) filtered.Beatmaps.Add(info);
+            foreach (var file in source.Files) filtered.Files.Add(file);
+            return filtered;
+        }).ToArray();
         visible.Clear(); visible.AddRange(selected);
     }
 
@@ -122,14 +158,17 @@ internal partial class BmsBeatmapStore : BeatmapStore
         : WorkingBeatmap(info, audio)
     {
         private readonly Lazy<PreviewPlan> media = new(() => PreviewPlan.Read(chart, encoding));
+        private readonly Lazy<BmsTimeline> timeline = new(() => BmsTimeline.Read(chart, encoding));
         protected override IBeatmap GetBeatmap()
         {
             var value = new ManiaBeatmap(new StageDefinition(Columns(chart.Keys))) { BeatmapInfo = BeatmapInfo };
-            value.ControlPointInfo.Add(0, new TimingControlPoint { BeatLength = 60000 / Math.Max(1, chart.Bpm) });
+            BeatmapInfo.Length = timeline.Value.Length;
+            foreach (var tempo in timeline.Value.Tempos)
+                value.ControlPointInfo.Add(tempo.Time, new TimingControlPoint { BeatLength = 60000 / tempo.Bpm });
             return value;
         }
         public override Texture GetBackground() => media.Value.Cover is { } cover ? textures.Get(cover) : null!;
-        protected override Track GetBeatmapTrack() => GetVirtualTrack(26000);
+        protected override Track GetBeatmapTrack() => GetVirtualTrack(Math.Max(1, timeline.Value.Length));
         protected override ISkin GetSkin() => null!;
         public override Stream GetStream(string storagePath) => Stream.Null;
     }

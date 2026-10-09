@@ -407,8 +407,8 @@ namespace osu.Game.Screens.Select
                         rankBackground.Colour = ColourInfo.GradientVertical(
                             OsuColour.ForRank(value.Rank).Opacity(0f),
                             OsuColour.ForRank(value.Rank).Opacity(0.5f));
-                        rankContainer.Child = new DrawableRank(value.Rank);
-                        totalScore.Current = scoreManager.GetBindableTotalScoreString(value);
+                        rankContainer.Child = new DrawableRank(value.Rank, value.CustomRankLabel);
+                        totalScore.Current = value.CustomRankLabel is null ? scoreManager.GetBindableTotalScoreString(value) : new Bindable<string>($"EX {value.TotalScore:N0}");
                     }
                 }
 

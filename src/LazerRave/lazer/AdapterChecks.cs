@@ -31,6 +31,7 @@ internal static class AdapterChecks
                 "Folder scope included a nested chart or a sibling folder.");
         }
         CheckNestedFolders(directory);
+        CheckPlayRecords(directory);
         CheckClientCapabilities();
         CheckCloudPanelDrawing();
         CheckCloudIdentity();
@@ -268,7 +269,7 @@ internal static class AdapterChecks
         foreach (var path in paths) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path, "#TITLE Fixture"); }
         var document = new XDocument(new XElement("lazerrave", new XAttribute("status", "ok"), paths.Select((path, index) =>
             new XElement("chart", new XAttribute("path", path), new XAttribute("title", "Fixture " + index),
-                new XAttribute("keys", index == 1 ? 5 : 7), new XAttribute("level", index + 1)))));
+                new XAttribute("keys", index == 1 ? 5 : 7), new XAttribute("difficulty", index == 1 ? 4 : 2), new XAttribute("level", index + 1)))));
         var library = SongLibrary.Parse(document, directory, [root]);
         var store = new BmsBeatmapStore(); store.Replace(library, [root + Path.DirectorySeparatorChar]);
         void Expect(int songs, int charts, int folders)
@@ -303,12 +304,62 @@ internal static class AdapterChecks
         Expect(0, 0, 1);
         if (store.ChildFolders.Single().Path != root || store.Ancestry.Length != 0 || store.HasParent)
             throw new InvalidDataException("The library overview cannot navigate back to its roots.");
+        store.SetSearch("Fixture");
+        if (store.GetBeatmapSets(null).Count != 4 || store.ChildFolders.Any())
+            throw new InvalidDataException("Search did not span nested collections without duplicate sets.");
+        store.SetDifficulty(4, 2);
+        if (store.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Count() != 1 || store.GetBeatmapSets(null).Single().Beatmaps.Single().DifficultyName.Contains("NORMAL"))
+            throw new InvalidDataException("Difficulty category and BMS level filters did not remove other charts.");
+        store.SetDifficulty(0, null);
+        store.SetLevelRange(2, 4);
+        var rangeCharts = store.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).ToArray();
+        if (rangeCharts.Length != 3 || rangeCharts.Any(info => store.ChartFor(info)!.Level is < 2 or > 4))
+            throw new InvalidDataException("BMS level ranges must include both endpoints and filter individual difficulties.");
+        store.SetLevelRange(3, 3);
+        if (store.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Count() != 1)
+            throw new InvalidDataException("Equal level bounds must select an exact BMS level.");
+        store.SetLevelRange(4, null);
+        if (store.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Count() != 2)
+            throw new InvalidDataException("Unlimited upper levels must retain higher difficulties.");
+        store.SetLevelRange(null, 2);
+        if (store.GetBeatmapSets(null).Count != 1 || store.GetBeatmapSets(null).Single().Beatmaps.Count != 2)
+            throw new InvalidDataException("Level filtering must preserve song grouping.");
+        store.SetLevelRange(null, null);
+        store.SetSearch(""); store.SetDifficulty(0, null);
+        Expect(0, 0, 1);
         var folders = store.ChildFolders;
         store.Replace(library, [root]);
         Expect(0, 0, 1);
         store.Replace(new SongLibrary(), [root]);
         if (folders.Single().Path != root)
             throw new InvalidDataException("A folder snapshot changed when the library was replaced.");
+    }
+
+    private static void CheckPlayRecords(string directory)
+    {
+        var store = new PlayRecordStore(Path.Combine(directory, "records"));
+        var chartPath = Path.Combine(directory, "record.bms"); File.WriteAllText(chartPath, "#TITLE Record fixture");
+        var chart = new Chart(chartPath, "Record fixture", "Test", 7, 12, 4, 150, 100, null);
+        string hash = PlayRecordStore.HashChart(chartPath).GetAwaiter().GetResult();
+        var movedChart = Path.Combine(directory, "moved.bms"); File.Copy(chartPath, movedChart);
+        if (hash != PlayRecordStore.HashChart(movedChart).GetAwaiter().GetResult()) throw new InvalidDataException("Moving a chart changed its record identity.");
+        var settings = new FrontendSettings([directory]);
+        var score = new GameplaySnapshot(160, 0, 80, 2, 1, 4, true, false)
+            { NormalScore = 170000, Perfect = 70, Great = 20, Good = 8, Bad = 1, Poor = 1, TotalNotes = 100, Eligible = true };
+        var run = Guid.NewGuid(); string replay = store.ReplayPath(run); Directory.CreateDirectory(Path.GetDirectoryName(replay)!);
+        File.WriteAllBytes(replay, [1, 2, 3, 4]); store.Save(run, hash, chart, "Fixture", settings, score);
+        store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ExScore = 180, NormalScore = 190000 });
+        store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ExScore = 200, Eligible = false });
+        store.Save(Guid.NewGuid(), hash, chart, "Other", settings, score with { ExScore = 195 });
+        if (store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { Aborted = true }) is not null)
+            throw new InvalidDataException("Aborted play was saved as a complete score.");
+        File.WriteAllText(Path.Combine(directory, "records", "scores", hash, "broken.xml"), "<broken>");
+        var records = store.Read(hash);
+        if (records.Length != 4 || records.Single(value => value.Id == run).Score != score ||
+            records.Single(value => value.Id == run).ReplayPath != replay || PlayRecordStore.PersonalBest(records, "Fixture")?.Score.ExScore != 180)
+            throw new InvalidDataException("Play records lost judgements, replay linkage, personal best eligibility or player separation.");
+        File.Delete(replay);
+        if (store.Read(hash).Single(value => value.Id == run).ReplayPath is not null) throw new InvalidDataException("A deleted replay is still available for playback.");
     }
 
     private static void CheckDifficultyGrouping(osu.Game.Beatmaps.BeatmapSetInfo set)

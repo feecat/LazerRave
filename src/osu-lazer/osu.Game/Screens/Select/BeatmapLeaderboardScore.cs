@@ -59,6 +59,8 @@ namespace osu.Game.Screens.Select
         public int? Rank { get; init; }
         public HighlightType? Highlight { get; init; }
         public Action<ScoreInfo>? ShowReplay { get; init; }
+        public MenuItem[]? ContextMenuItemsOverride { get; init; }
+        public Bindable<string>? DisplayScore { get; init; }
 
         [Resolved]
         private OverlayColourProvider colourProvider { get; set; } = null!;
@@ -393,7 +395,7 @@ namespace osu.Game.Screens.Select
                                         Spacing = new Vector2(-2),
                                         Colour = DrawableRank.GetRankLetterColour(Score.Rank),
                                         Font = OsuFont.Numeric.With(size: 14),
-                                        Text = DrawableRank.GetRankLetter(Score.Rank),
+                                        Text = Score.CustomRankLabel ?? DrawableRank.GetRankLetter(Score.Rank),
                                         ShadowColour = Color4.Black.Opacity(0.3f),
                                         ShadowOffset = new Vector2(0, 0.08f),
                                         Shadow = true,
@@ -438,7 +440,7 @@ namespace osu.Game.Screens.Select
                                                         Anchor = Anchor.TopRight,
                                                         Origin = Anchor.TopRight,
                                                         UseFullGlyphHeight = false,
-                                                        Current = scoreManager.GetBindableTotalScoreString(Score),
+                                                        Current = DisplayScore ?? scoreManager.GetBindableTotalScoreString(Score),
                                                         Spacing = new Vector2(-1.5f),
                                                         Font = OsuFont.Style.Subtitle.With(weight: FontWeight.Light, fixedWidth: true),
                                                         Shear = sheared ? -OsuGame.SHEAR : Vector2.Zero,
@@ -615,6 +617,8 @@ namespace osu.Game.Screens.Select
         {
             get
             {
+                if (ContextMenuItemsOverride != null) return ContextMenuItemsOverride;
+
                 List<MenuItem> items = new List<MenuItem>();
 
                 // system mods should never be copied across regardless of anything.

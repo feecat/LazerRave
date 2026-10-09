@@ -27,14 +27,14 @@ namespace osu.Game.Screens.Select
         {
             const float header_height = 35f;
 
+            header = CreateHeader();
+            header.Shear = -OsuGame.SHEAR;
+            header.RelativeSizeAxes = Axes.X;
+            header.Height = header_height;
+
             InternalChildren = new Drawable[]
             {
-                new ShearAligningWrapper(header = new Header
-                {
-                    Shear = -OsuGame.SHEAR,
-                    RelativeSizeAxes = Axes.X,
-                    Height = header_height,
-                }),
+                new ShearAligningWrapper(header),
                 new ShearAligningWrapper(contentContainer = new Container
                 {
                     Shear = -OsuGame.SHEAR,
@@ -84,12 +84,11 @@ namespace osu.Game.Screens.Select
                     break;
 
                 case Header.Selection.Ranking:
-                    currentContent = new BeatmapLeaderboardWedge
-                    {
-                        Scope = { BindTarget = header.Scope },
-                        Sorting = { BindTarget = header.Sorting },
-                        FilterBySelectedMods = { BindTarget = header.FilterBySelectedMods },
-                    };
+                    var leaderboard = CreateLeaderboard();
+                    leaderboard.Scope.BindTo(header.Scope);
+                    leaderboard.Sorting.BindTo(header.Sorting);
+                    leaderboard.FilterBySelectedMods.BindTo(header.FilterBySelectedMods);
+                    currentContent = leaderboard;
 
                     break;
             }
@@ -98,7 +97,11 @@ namespace osu.Game.Screens.Select
             currentContent.Show();
         }
 
-        public void Refresh()
+        protected virtual Header CreateHeader() => new Header();
+
+        protected virtual BeatmapLeaderboardWedge CreateLeaderboard() => new BeatmapLeaderboardWedge();
+
+        public virtual void Refresh()
         {
             if (currentContent is BeatmapLeaderboardWedge leaderboardWedge)
                 leaderboardWedge.RefetchScores();

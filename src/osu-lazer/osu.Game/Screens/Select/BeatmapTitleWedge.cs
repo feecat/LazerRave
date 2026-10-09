@@ -268,7 +268,7 @@ namespace osu.Game.Screens.Select
                 int bpmMin = FormatUtils.RoundBPM(beatmap.ControlPointInfo.BPMMinimum, rate);
                 int mostCommonBPM = FormatUtils.RoundBPM(60000 / beatmap.GetMostCommonBeatLength(), rate);
 
-                double drainLength = Math.Round(beatmap.CalculateDrainLength() / rate);
+                double drainLength = Math.Round((beatmap.HitObjects.Count == 0 ? beatmapInfo.Length : beatmap.CalculateDrainLength()) / rate);
                 double hitLength = Math.Round(beatmapInfo.Length / rate);
 
                 Schedule(() =>

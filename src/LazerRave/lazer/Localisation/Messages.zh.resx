@@ -357,4 +357,30 @@
   <data name="Relative paths start in the application folder.">
     <value>相对路径以程序所在文件夹为基准。</value>
   </data>
+  <data name="Charts" xml:space="preserve"><value>谱面</value></data>
+  <data name="Play records" xml:space="preserve"><value>游玩记录</value></data>
+  <data name="All difficulties" xml:space="preserve"><value>全部难度</value></data>
+  <data name="All levels" xml:space="preserve"><value>全部等级</value></data>
+  <data name="Select a chart" xml:space="preserve"><value>请选择谱面</value></data>
+  <data name="Personal best" xml:space="preserve"><value>个人最高分</value></data>
+  <data name="Difficulties" xml:space="preserve"><value>难度</value></data>
+  <data name="Watch replay" xml:space="preserve"><value>观看回放</value></data>
+  <data name="Submit score" xml:space="preserve"><value>上传成绩</value></data>
+  <data name="Recent plays" xml:space="preserve"><value>最近游玩</value></data>
+  <data name="No play records" xml:space="preserve"><value>暂无游玩记录</value></data>
+  <data name="Practice" xml:space="preserve"><value>练习</value></data>
+  <data name="Submitting…" xml:space="preserve"><value>正在上传…</value></data>
+  <data name="Score submitted" xml:space="preserve"><value>成绩已上传</value></data>
+  <data name="No scores yet" xml:space="preserve"><value>暂无成绩</value></data>
+  <data name="Previous page" xml:space="preserve"><value>上一页</value></data>
+  <data name="Next page" xml:space="preserve"><value>下一页</value></data>
+  <data name="Refresh" xml:space="preserve"><value>刷新</value></data>
+  <data name="Failed" xml:space="preserve"><value>失败</value></data>
+  <data name="Easy" xml:space="preserve"><value>EASY CLEAR</value></data>
+  <data name="Normal" xml:space="preserve"><value>CLEAR</value></data>
+  <data name="Hard" xml:space="preserve"><value>HARD CLEAR</value></data>
+  <data name="Full combo" xml:space="preserve"><value>全连</value></data>
+  <data name="Finished" xml:space="preserve"><value>完成</value></data>
+  <data name="This chart is not in the published ranking catalog." xml:space="preserve"><value>该谱面尚未收录于网络排行曲库。</value></data>
+  <data name="Highest SCORE" xml:space="preserve"><value>最高 SCORE</value></data>
 </root>

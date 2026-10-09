@@ -92,6 +92,9 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         if (!IsLoaded) return;
         FilterControl.ApplyRequiredCriteria = criteria =>
         {
+            game.SetLibrarySearch(criteria.SearchText);
+            game.SetLibraryLevelRange(FilterControl.DifficultyMinimum, FilterControl.DifficultyMaximum);
+            criteria.UserStarDifficulty.Min = null; criteria.UserStarDifficulty.Max = null;
             if (game.Keys == 0) return;
             int columns = BmsBeatmapStore.Columns(game.Keys);
             criteria.CircleSize.Min = columns; criteria.CircleSize.Max = columns;
@@ -99,7 +102,10 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         };
         RefreshFilter();
     }
-    protected override void LoadComplete() { base.LoadComplete(); RefreshKeyFilter(); }
+    protected override BeatmapDetailsArea CreateDetailsArea() => new LazerRaveRankingArea();
+    protected override FilterControl CreateFilterControl() => new FilterControl { BmsDifficulty = true, MaximumBmsLevel = () => game.MaximumChartLevel };
+    protected override void LoadComplete() { base.LoadComplete(); FilterControl.UseBmsFilters(); RefreshKeyFilter(); }
+    public void ClearSearch() => FilterControl.Search(string.Empty);
     protected override bool OnKeyDown(KeyDownEvent e)
     {
         if (e.Key == Key.Delete) return true;
