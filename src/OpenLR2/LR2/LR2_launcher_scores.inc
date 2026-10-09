@@ -1,6 +1,8 @@
 namespace {
 struct LiveScore {
     int exscore = 0, combo = 0, maxCombo = 0, misses = 0, clear = 0;
+    int normalScore = 0, perfect = 0, great = 0, good = 0, bad = 0, poor = 0, totalNotes = 0;
+    bool eligible = false;
     double progress = 0;
     bool finished = false, aborted = false;
 };
@@ -22,6 +24,15 @@ public:
         const auto& player = state.gameplay.player[PLAYER_1];
         LiveScore score;
         score.exscore = std::max(0, player.exscore);
+        score.normalScore = std::max(0, player.score);
+        score.perfect = std::max(0, player.judgecount[5]);
+        score.great = std::max(0, player.judgecount[4]);
+        score.good = std::max(0, player.judgecount[3]);
+        score.bad = std::max(0, player.judgecount[2]);
+        score.poor = std::max(0, player.judgecount[1]);
+        score.totalNotes = std::max(0, player.totalnotes);
+        score.eligible = !state.cmd_nosave && !state.gameplay.isNosave && !state.gameplay.isAutoplay &&
+            state.gameplay.replay.status != 2 && CheckScoreSaveConditon(&state);
         score.combo = std::max(0, player.now_combo);
         score.maxCombo = std::max(0, player.max_combo);
         score.misses = std::max(0, player.judgecount[1] + player.judgecount[2]);
@@ -48,6 +59,14 @@ public:
                         auto root = new TiXmlElement("score");
                         root->SetAttribute("protocol", "LAZERRAVE_SCORE_STREAM_V1");
                         root->SetAttribute("ex-score", value.exscore);
+                        root->SetAttribute("normal-score", value.normalScore);
+                        root->SetAttribute("perfect", value.perfect);
+                        root->SetAttribute("great", value.great);
+                        root->SetAttribute("good", value.good);
+                        root->SetAttribute("bad", value.bad);
+                        root->SetAttribute("poor", value.poor);
+                        root->SetAttribute("total-notes", value.totalNotes);
+                        root->SetAttribute("eligible", value.eligible ? 1 : 0);
                         root->SetAttribute("combo", value.combo);
                         root->SetAttribute("max-combo", value.maxCombo);
                         root->SetAttribute("misses", value.misses);

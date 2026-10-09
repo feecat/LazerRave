@@ -16,6 +16,7 @@ struct Request {
     std::string mode;
     std::filesystem::path file;
     std::string chart;
+    std::string replaySource;
     int speed = 200;
     int offset = 0;
     int arrangement = 0;
@@ -33,6 +34,8 @@ void ApplyLibraryRoots(CONFIG_JUKEBOX& jukebox);
 int RunHeadless(const Request& request, game& state);
 void PublishScore(const Request& request, const game& state, bool exiting = false);
 void FlushScores();
+int LoadSessionReplay(const Request& request, game& state);
+void SaveSessionReplay(const Request& request, const game& state);
 void ApplyPlay(const Request& request, game& state);
 void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow = 0, const game* effectiveState = nullptr);
 }

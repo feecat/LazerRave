@@ -76,6 +76,8 @@ internal static class RenderProfiles
 internal sealed record Chart(string Path, string Title, string Artist, int Keys, int Level, int Difficulty,
     double Bpm, int Notes, int? Score)
 {
+    public string? Md5 { get; init; }
+    public string? LegacyReplayPath { get; init; }
     public string Label => Difficulty switch { 1 => "BEGINNER", 2 => "NORMAL", 3 => "HYPER", 4 => "ANOTHER", 5 => "INSANE", _ => "UNKNOWN" };
 }
 internal sealed record Song(string Directory, string Title, string Artist, Chart[] Charts);
@@ -105,7 +107,7 @@ internal sealed class SongLibrary
             int Int(string key) => int.TryParse((string?)row.Attribute(key), out var n) ? n : 0;
             var chart = new Chart(path, (string?)row.Attribute("title") ?? "", (string?)row.Attribute("artist") ?? "", Int("keys"),
                 Int("level"), Int("difficulty"), double.TryParse((string?)row.Attribute("bpm"), CultureInfo.InvariantCulture, out var bpm) ? bpm : 0,
-                Int("notes"), row.Attribute("score") is null ? null : Int("score"));
+                Int("notes"), row.Attribute("score") is null ? null : Int("score")) { Md5 = (string?)row.Attribute("md5"), LegacyReplayPath = (string?)row.Attribute("replay") };
             var directory = Path.GetDirectoryName(path)!;
             if (!songs.TryGetValue(directory, out var charts)) songs[directory] = charts = [];
             if (!charts.Any(existing => existing.Path.Equals(path, StringComparison.OrdinalIgnoreCase))) charts.Add(chart);

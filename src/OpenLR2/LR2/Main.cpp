@@ -921,7 +921,7 @@ int main(int argc, char** argv) {
 		gs.sSelect.flag_folderlamp = 0;
 		gs.sSelect.cur_song = 0;
 		ProcS_Select(&gs);
-		gs.gameplay.replay.status = 0;
+		gs.gameplay.replay.status = launchRequest.replaySource.empty() ? 0 : 2;
 		gs.gameplay.isAutoplay = (gs.cmd_auto != 0);
 		if ((gs.auto2avi != 0) || (gs.is_recordmode != 0)) {
 			gs.gameplay.flag_closingPhase = 0;
@@ -1285,7 +1285,7 @@ int main(int argc, char** argv) {
 						SetObjectString(15, sd.subartist, gs.txtStruct.objectStr);
 					}
 					gs.skstruct.flag_flip = false;
-					if (gs.gameplay.replay.status == 2 || gs.config.play.replay == 0) {
+					if (gs.gameplay.replay.status == 2 || (gs.config.play.replay == 0 && !(launchRequest.active && launchRequest.telemetry))) {
 						if (gs.gameplay.replay.status == 1) {
 							AllocReplayBuffer(&gs.gameplay.replay);
 							AddReplayDataHeader(&gs.config.play, &gs.gameplay.replay, &gs.audio, &gs.gameplay);
@@ -1296,9 +1296,15 @@ int main(int argc, char** argv) {
 								flagLoadSuccess = LoadReplayFileCourse(&gs.gameplay.replay, gs.sSelect.bmsList[gs.sSelect.cur_song].hash,gs.gameplay.courseStageNow, gs.config.player.id);
 							}
 							else {
-								flagLoadSuccess = LoadReplayFile(&gs.gameplay.replay, gs.sSelect.bmsList[gs.sSelect.cur_song].hash, gs.config.player.id);
+								flagLoadSuccess = launchRequest.replaySource.empty()
+                                    ? LoadReplayFile(&gs.gameplay.replay, gs.sSelect.bmsList[gs.sSelect.cur_song].hash, gs.config.player.id)
+                                    : launcher::LoadSessionReplay(launchRequest, gs);
 							}
-							if (flagLoadSuccess == -1 && gs.rec.recMode == 2 && gs.is_recordmode) return 0;
+							if (flagLoadSuccess != 1 && !launchRequest.replaySource.empty()) {
+                                launcher::Reply(launchRequest, false, "Cannot load replay data");
+                                DxLib_End(); return 2;
+                            }
+                            if (flagLoadSuccess == -1 && gs.rec.recMode == 2 && gs.is_recordmode) return 0;
 							SetReplayConfig(&gs.gameplay.replay, &gs, &gs.audio, &gs.gameplay, &gs.KeyInput, &gs.timer1);
 						}
 					}
@@ -1893,6 +1899,7 @@ int main(int argc, char** argv) {
 								}
 							}
 						}
+						launcher::SaveSessionReplay(launchRequest, gs);
 						ReleaseReplayBuffer(&gs.gameplay.replay);
 					}
 

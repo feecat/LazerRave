@@ -8,7 +8,7 @@ int LogGraphPlayData(GRAPHDATA * grp, PLAYERSTATUS * pstat, int time, int endtim
 int LogGraphData(GRAPHDATAB * grp, int val, int time, int endtime);
 int LogGraphPlayerDataToEnd(GRAPHDATA * grp, PLAYERSTATUS * pstat);
 
-bool CheckScoreSaveConditon(game * g);
+bool CheckScoreSaveConditon(const game * g);
 int CheckClearLampChallenge(game * g);
 int CheckMission(game *g);
 

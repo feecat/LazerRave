@@ -6,6 +6,14 @@ namespace LazerRave.Bridge;
 
 internal sealed record GameplaySnapshot(int ExScore, int Combo, int MaxCombo, int Misses, double Progress, int ClearType, bool Finished, bool Aborted)
 {
+    public int NormalScore { get; init; }
+    public int Perfect { get; init; }
+    public int Great { get; init; }
+    public int Good { get; init; }
+    public int Bad { get; init; }
+    public int Poor { get; init; }
+    public int TotalNotes { get; init; }
+    public bool Eligible { get; init; }
     public static GameplaySnapshot Empty => new(0, 0, 0, 0, 0, 0, false, false);
     public static GameplaySnapshot Read(string path)
     {
@@ -17,6 +25,8 @@ internal sealed record GameplaySnapshot(int ExScore, int Combo, int MaxCombo, in
         var score = new GameplaySnapshot(Number("ex-score"), Number("combo"), Number("max-combo"), Number("misses"), progress, Number("clear-type"), Number("finished") == 1, Number("aborted") == 1);
         if (score.ExScore is < 0 or > 3000000 || score.Combo is < 0 or > 1000000 || score.MaxCombo is < 0 or > 1000000 || score.Misses is < 0 or > 1000000
             || !double.IsFinite(progress) || progress is < 0 or > 1 || score.ClearType is < 0 or > 9) throw new InvalidDataException("Invalid engine score snapshot.");
-        return score;
+        int Optional(string name) => root.Attribute(name) is { } value ? int.Parse(value.Value, CultureInfo.InvariantCulture) : 0;
+        return score with { NormalScore = Optional("normal-score"), Perfect = Optional("perfect"), Great = Optional("great"),
+            Good = Optional("good"), Bad = Optional("bad"), Poor = Optional("poor"), TotalNotes = Optional("total-notes"), Eligible = Optional("eligible") == 1 };
     }
 }

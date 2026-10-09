@@ -4,7 +4,7 @@
 #include "LR2.h"
 #include "Scene02_Songselect.h" //objstr in CheckMission()
 
-bool CheckScoreSaveConditon(game *g){ //TOFIX : p2_assist == 1 but no battle, doesn't match with actual condition
+bool CheckScoreSaveConditon(const game *g){ //TOFIX : p2_assist == 1 but no battle, doesn't match with actual condition
 	if (g->config.play.battle != OPTION_BATTLE_OFF && g->config.play.battle != OPTION_BATTLE_GBATTLE)	return false;
 	if (g->config.play.m_isExtra)									return false;
 	if (g->config.play.m_addlong != 0)								return false;

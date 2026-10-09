@@ -3,6 +3,7 @@
 #include "LR2_songmanage.h"
 #include "LR2_configsave.h"
 #include "LR2_statlong.h"
+#include "LR2_statplay.h"
 #include "En_fileutil.h"
 #include <tinyxml.h>
 #include <fstream>
@@ -185,6 +186,7 @@ Request ReadRequest(int argc, char** argv) {
                 request.telemetry = true;
             }
             else if (name == "chart") request.chart = text;
+            else if (name == "replay") request.replaySource = text;
             else if (name == "render-profile") request.renderProfile = text;
             else if (name == "encoding") request.encoding = text;
             else if (name == "root") request.roots.push_back(text);
@@ -248,6 +250,10 @@ Request ReadRequest(int argc, char** argv) {
                 !std::filesystem::is_regular_file(std::filesystem::u8path(request.chart)) || !IsBmsFile(request.chart.c_str()))
                 throw std::runtime_error("Selected chart is missing or unsupported");
         }
+        if (!request.replaySource.empty() && ((request.mode != "play" && request.mode != "validate") ||
+            !std::filesystem::u8path(request.replaySource).is_absolute() ||
+            !std::filesystem::is_regular_file(std::filesystem::u8path(request.replaySource))))
+            throw std::runtime_error("Replay file is missing");
         return request;
     }
     return request;
@@ -309,7 +315,8 @@ void ApplyPlay(const Request& request, game& state) {
     for (const auto& [name, value] : request.playOptions) FindPlayOption(name).apply(state, value);
     if (state.config.play.hsmin > state.config.play.hsmax)
         throw std::runtime_error("Minimum speed must not exceed maximum speed");
-    if (state.cmd_auto) state.cmd_nosave = 1;
+    if (state.cmd_auto || !request.replaySource.empty()) state.cmd_nosave = 1;
+    if (!request.replaySource.empty()) state.cmd_auto = 0;
     if (request.renderProfile == "no-bga") state.config.play.bga = 0;
 }
 
@@ -319,6 +326,8 @@ int RunHeadless(const Request& request, game& state) {
         SetBmsTextCodepage(EncodingCodepage(request.encoding));
         if (request.mode == "validate") {
             ApplyPlay(request, state);
+            if (!request.replaySource.empty() && LoadSessionReplay(request, state) != 1)
+                throw std::runtime_error("Cannot load replay data");
             BMSMETA meta;
             if (!ParseBMSMETA(&meta, request.chart.c_str(), 0)) throw std::runtime_error("Cannot parse selected chart");
             Reply(request, true, "chart=" + request.chart + "; keys=" + std::to_string(meta.keymode) +
@@ -402,6 +411,13 @@ int RunHeadless(const Request& request, game& state) {
                 chart->SetAttribute(names[i], value ? reinterpret_cast<const char*>(value) : "");
             }
             const auto hash = sqlite3_column_text(statement, 8);
+            if (hash) {
+                chart->SetAttribute("md5", reinterpret_cast<const char*>(hash));
+                auto replay = std::filesystem::path("LR2files") / "Replay" / state.config.player.id.body /
+                    (std::string(reinterpret_cast<const char*>(hash)) + ".lr2rep");
+                if (std::filesystem::is_regular_file(replay))
+                    chart->SetAttribute("replay", Utf8Path(std::filesystem::absolute(replay)).c_str());
+            }
             const auto score = hash ? scores.find(reinterpret_cast<const char*>(hash)) : scores.end();
             if (score != scores.end()) chart->SetAttribute("score", score->second);
             root->LinkEndChild(chart);
@@ -415,5 +431,30 @@ int RunHeadless(const Request& request, game& state) {
         Reply(request, false, error.what());
         return 2;
     }
+}
+}
+
+namespace launcher {
+int LoadSessionReplay(const Request& request, game& state) {
+    std::ifstream input(std::filesystem::u8path(request.replaySource), std::ios::binary | std::ios::ate);
+    const auto size = input.tellg();
+    if (!input || size <= 0 || size > 32 * 1024 * 1024 || size % sizeof(ReplayData) != 0) return -1;
+    auto& replay = state.gameplay.replay;
+    replay.data = static_cast<ReplayData*>(malloc(static_cast<size_t>(size)));
+    if (!replay.data) return -1;
+    input.seekg(0);
+    input.read(reinterpret_cast<char*>(replay.data), size);
+    if (!input) { free(replay.data); replay.data = nullptr; return -1; }
+    replay.max = static_cast<int>(size / sizeof(ReplayData));
+    replay.count = 0;
+    return 1;
+}
+void SaveSessionReplay(const Request& request, const game& state) {
+    const auto& replay = state.gameplay.replay;
+    if (!request.active || !request.telemetry || !request.replaySource.empty() ||
+        state.gameplay.isAutoplay || !CheckScoreSaveConditon(&state) || replay.status != 1 || !replay.data || replay.count <= 0) return;
+    auto path = request.file; path += ".replay.lr2rep";
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char*>(replay.data), replay.count * sizeof(ReplayData));
 }
 }

@@ -42,7 +42,7 @@ internal sealed class EngineBridge(string runtime)
         return new(root);
     }
     public async Task<XDocument> Exchange(string mode, FrontendSettings settings, Chart? chart = null, CancellationToken cancellation = default,
-        EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null)
+        EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null, string? replaySource = null, string? replayDestination = null)
     {
         if (!File.Exists(Executable)) throw new FileNotFoundException("OpenLR2_x64.exe is missing from the application folder.");
         var capabilities = System.Text.Encoding.ASCII.GetString(await File.ReadAllBytesAsync(Executable, cancellation));
@@ -61,6 +61,7 @@ internal sealed class EngineBridge(string runtime)
             var request = Path.Combine(directory, "request.xml");
             var document = Request(mode, settings, chart, embedding);
             if (mode == "play" && progress is not null) document.Root!.Add(new XElement("telemetry", "LAZERRAVE_SCORE_STREAM_V1"));
+            if (replaySource is not null) document.Root!.Add(new XElement("replay", Path.GetFullPath(replaySource)));
             document.Save(request);
             var start = new ProcessStartInfo(Executable) { WorkingDirectory = Runtime, UseShellExecute = false, CreateNoWindow = true };
             start.ArgumentList.Add("--lazerrave-request"); start.ArgumentList.Add(request);
@@ -95,7 +96,19 @@ internal sealed class EngineBridge(string runtime)
                 throw new IOException((string?)replyDocument.Root?.Element("message") ?? $"OpenLR2 exited with code {process.ExitCode}.");
             return replyDocument;
         }
-        finally { System.IO.Directory.Delete(directory, true); }
+        finally
+        {
+            try
+            {
+                var replay = Path.Combine(directory, "request.xml.replay.lr2rep");
+                if (replayDestination is not null && File.Exists(replay))
+                {
+                    System.IO.Directory.CreateDirectory(Path.GetDirectoryName(replayDestination)!);
+                    File.Copy(replay, replayDestination, false);
+                }
+            }
+            finally { System.IO.Directory.Delete(directory, true); }
+        }
     }
     private static async Task WatchScores(string path, Action<GameplaySnapshot> callback, CancellationToken cancellation)
     {
@@ -181,10 +194,10 @@ internal sealed class EngineBridge(string runtime)
         if (!process.HasExited) process.Kill(true);
         await process.WaitForExitAsync(CancellationToken.None);
     }
-    public async Task Play(FrontendSettings settings, Chart chart, CancellationToken cancellation, EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null)
+    public async Task Play(FrontendSettings settings, Chart chart, CancellationToken cancellation, EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null, string? replaySource = null, string? replayDestination = null)
     {
-        await Exchange("validate", settings, chart, cancellation, embedding);
-        if (embedding is not null) { await Exchange("play", settings, chart, cancellation, embedding, ready, progress); return; }
+        await Exchange("validate", settings, chart, cancellation, embedding, replaySource: replaySource);
+        if (embedding is not null) { await Exchange("play", settings, chart, cancellation, embedding, ready, progress, replaySource, replayDestination); return; }
         var start = new ProcessStartInfo("powershell.exe") { WorkingDirectory = Runtime, UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         foreach (var value in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(Runtime, "set-window.ps1"),
             "-RuntimeDirectory", Runtime, "-Width", settings.Width.ToString(CultureInfo.InvariantCulture), "-Height", settings.Height.ToString(CultureInfo.InvariantCulture) }) start.ArgumentList.Add(value);
@@ -192,6 +205,6 @@ internal sealed class EngineBridge(string runtime)
         var error = configure.StandardError.ReadToEndAsync(cancellation);
         await configure.WaitForExitAsync(cancellation);
         if (configure.ExitCode != 0) throw new IOException(await error);
-        await Exchange("play", settings, chart, cancellation, progress: progress);
+        await Exchange("play", settings, chart, cancellation, progress: progress, replaySource: replaySource, replayDestination: replayDestination);
     }
 }
