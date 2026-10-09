@@ -19,7 +19,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     document.documentElement.lang = locale;
-    document.querySelector('meta[name="description"]')?.setAttribute('content', locale === 'zh-CN' ? 'LazerRave — BMS 曲包、网络排名与多人游戏。' : 'LazerRave — BMS charts, Internet Ranking and multiplayer.');
+    document.querySelector('meta[name="description"]')?.setAttribute('content', locale === 'zh-CN' ? 'LazerRave — BMS 谱面、曲包与网络排名。' : 'LazerRave — BMS charts, song packs and Internet Ranking.');
   }, [locale]);
   useEffect(() => {
     const changed = (event: StorageEvent) => {

@@ -21,7 +21,7 @@ test('Language dropdown translates pages and errors, preserves form input and su
   await page.reload();
   await expect(page.getByLabel('语言', { exact: true })).toHaveValue('zh-CN');
   expect(await page.evaluate(() => localStorage.getItem('lazerrave.language'))).toBe('zh-CN');
-  for (const [path, heading] of [['/', '找到你的节奏。 挑战更高的目标。'], ['/packs', '发现下一首心仪的曲目'], ['/rankings', '同一张谱面，更高的目标。'], ['/tables', '发现新的挑战'], ['/multiplayer', '共同挑战'], ['/account/password', null], ['/register', '创建账号']] as const) {
+  for (const [path, heading] of [['/', '找到你的节奏。 挑战更高的目标。'], ['/packs', '发现下一首心仪的曲目'], ['/rankings', '同一张谱面，更高的目标。'], ['/tables', '发现新的挑战'], ['/account/password', null], ['/register', '创建账号']] as const) {
     await page.goto(path);
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible();
     if (heading) await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -175,7 +175,9 @@ test('Change password, cookie revocation and direct password login', async ({ pa
   await expect(page.getByRole('heading', { name: username })).toBeVisible();
 });
 
-test('Browser registration, profile save, cookie authentication and room controls', async ({ page }) => {
+test('Browser registration, profile save and cookie authentication without multiplayer connections', async ({ page }) => {
+  const realtimeRequests: string[] = [];
+  page.on('request', request => { if (/\/(hubs|api\/rooms)(\/|$)/.test(new URL(request.url()).pathname)) realtimeRequests.push(request.url()); });
   const username = 'web_' + Date.now();
   await page.goto('/register');
   await page.getByLabel('Username', { exact: true }).fill(username);
@@ -190,13 +192,11 @@ test('Browser registration, profile save, cookie authentication and room control
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('heading', { name: 'Browser Player' })).toBeVisible();
   await expect(page.getByText('<script>plain profile text</script>')).toBeVisible();
-  await page.getByRole('navigation').getByRole('link', { name: 'Multiplayer' }).click();
-  await expect(page.getByText('Connected', { exact: true }).first()).toBeVisible();
-  await page.getByLabel('Room name').fill('Browser room');
-  await page.getByRole('button', { name: 'Create room' }).click();
-  await expect(page.getByRole('heading', { name: 'Browser room' })).toBeVisible();
-  await page.getByRole('button', { name: 'Leave room' }).click();
-  await expect(page.getByRole('heading', { name: 'Open rooms' })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Multiplayer' })).toHaveCount(0);
+  await page.goto('/multiplayer');
+  await expect(page.getByText('Page not found.', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('Room name')).toHaveCount(0);
+  expect(realtimeRequests).toEqual([]);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('navigation').getByRole('link', { name: 'Sign in' })).toBeVisible();
 });

@@ -1,10 +1,10 @@
 import { LanguageSelect, LocaleProvider, useI18n } from './i18n';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
-import { AuthProvider, LiveProvider, useAuth, useLive } from './state';
+import { AuthProvider, useAuth } from './state';
 import { Avatar, Empty } from './components';
 import { api } from './api';
-import { Home, Authentication, ChangePassword, Profile, Packs, PackDetail, Rankings, Admin, Multiplayer } from './pages';
+import { Home, Authentication, ChangePassword, Profile, Packs, PackDetail, Rankings, Admin } from './pages';
 import { Tables, TableDetail } from './tables';
 import { Icon, type IconName } from './Icon';
 import { Downloads } from './Downloads';
@@ -16,14 +16,12 @@ const navigation: { path: string; label: string; icon: IconName }[] = [
   { path: '/rankings', label: 'Rankings', icon: 'ranking' },
   { path: '/packs', label: 'Song packs', icon: 'pack' },
   { path: '/tables', label: 'Difficulty tables', icon: 'table' },
-  { path: '/multiplayer', label: 'Multiplayer', icon: 'players' },
   { path: '/admin', label: 'Admin', icon: 'admin' },
 ];
 
 function Shell() {
   const { t } = useI18n();
   const { user, loaded, setUser } = useAuth();
-  const { connected } = useLive();
   const navigate = useNavigate();
   async function logout() {
     try { await api('/auth/logout', { method: 'POST' }); setUser(null); navigate('/'); }
@@ -40,10 +38,10 @@ function Shell() {
       <Route path="/" element={<Home />} /><Route path="/login" element={<Authentication />} /><Route path="/register" element={<Authentication register />} />
       <Route path="/download" element={<Downloads />} /><Route path="/account/password" element={<ChangePassword />} />
       <Route path="/players/:username" element={<Profile />} /><Route path="/players/id/:uid" element={<Profile />} /><Route path="/tables" element={<Tables />} /><Route path="/tables/:tableId" element={<TableDetail />} /><Route path="/tables/:tableId/:level" element={<TableDetail />} /><Route path="/packs" element={<Packs />} /><Route path="/packs/:id" element={<PackDetail />} />
-      <Route path="/rankings" element={<Rankings />} /><Route path="/rankings/:chartId" element={<Rankings />} /><Route path="/admin" element={<Admin />} /><Route path="/multiplayer" element={<Multiplayer />} />
+      <Route path="/rankings" element={<Rankings />} /><Route path="/rankings/:chartId" element={<Rankings />} /><Route path="/admin" element={<Admin />} />
       <Route path="*" element={<Empty>{t("Page not found. ")}<Link to="/">{t("Return home")}</Link></Empty>} />
     </Routes>}</main>
-    <footer className="footer"><Link className="footer-brand" to="/">LazerRave</Link><span>{t("BMS. One chart, many possibilities.")}</span><Link to="/download">{t("Download")}</Link><a href={repositoryUrl} target="_blank" rel="noopener noreferrer">GitHub</a><span className="connection-label"><i className={connected ? 'online-dot' : ''} />{user ? connected ? t('Community connected') : t('Community offline') : 'LazerRave.com'}</span></footer>
+    <footer className="footer"><Link className="footer-brand" to="/">LazerRave</Link><span>{t("BMS. One chart, many possibilities.")}</span><Link to="/download">{t("Download")}</Link><a href={repositoryUrl} target="_blank" rel="noopener noreferrer">GitHub</a><span className="connection-label">LazerRave.com</span></footer>
   </>;
 }
-createRoot(document.getElementById('root')!).render(<LocaleProvider><BrowserRouter><AuthProvider><LiveProvider><Shell /></LiveProvider></AuthProvider></BrowserRouter></LocaleProvider>);
+createRoot(document.getElementById('root')!).render(<LocaleProvider><BrowserRouter><AuthProvider><Shell /></AuthProvider></BrowserRouter></LocaleProvider>);
