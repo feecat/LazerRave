@@ -18,7 +18,7 @@
 | `scripts/tests/test_engine_bridge.py` | 在指定独立运行环境中检查引擎协议 |
 | `LazerRave.exe --check report.txt` | BMS 层级与难度分组、演奏参数保存与类型校验、六种排列与 63 个引擎字段映射、规则集与裁剪模块 |
 | `scripts/performance/` | 经明确启动的窗口与帧时间诊断 |
-| `src/Cloud/tests/` | 房间权限、容量、状态、ZIP 校验与成绩资格 |
+| `src/Cloud/tests/` | 房间权限、容量、状态、ZIP 与清单校验、Shared 安装、真实桌面网络客户端传输及到期清理、成绩资格 |
 | 云端网页 `tests/` | 显式指定独立数据库的 HTTP/SignalR 与无窗口浏览器检查 |
 
 桥接集成测试仅在提供 `LAZERRAVE_TEST_ENGINE` 和 `LAZERRAVE_TEST_FMOD` 时执行引擎请求。性能诊断使用标记的独立运行目录，不以正式成绩数据作为测试输入。构建脚本不调用这些工具。

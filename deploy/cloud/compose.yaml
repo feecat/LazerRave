@@ -16,21 +16,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [cloud]
+    networks:
+      cloud: { ipv4_address: 172.30.86.4 }
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
   storage-init:
     image: alpine:3.22
     user: root
     command: ["sh", "-c", "chown 1654:1654 /data && chmod 700 /data"]
     volumes: ["content:/data"]
-    networks: [cloud]
+    networks:
+      cloud: { ipv4_address: 172.30.86.5 }
   api:
     build: .
     restart: unless-stopped
     mem_limit: 320m
     cpus: 0.75
     environment:
-      ConnectionStrings__Postgres: Host=db;Database=lazerrave;Username=lazerrave;Password=${POSTGRES_PASSWORD};Maximum Pool Size=10;Timeout=10;Command Timeout=15
+      ConnectionStrings__Postgres: Host=db;Database=lazerrave;Username=lazerrave;Password=${POSTGRES_PASSWORD};Maximum Pool Size=10;Timeout=10;Command Timeout=15;GSS Encryption Mode=Disable
       Cloud__PublicOrigin: https://${DOMAIN:-lazerrave.com}
       Cloud__StoragePath: /data
       Cloud__SecureCookies: "true"
@@ -38,6 +40,7 @@ services:
       Cloud__MaxUploadBytes: "134217728"
       Cloud__MaxExpandedBytes: "536870912"
       Cloud__MaxStorageBytes: "8589934592"
+      Cloud__MaxTemporaryBytes: "2147483648"
       ReverseProxyAddress: "172.30.86.2"
       Logging__LogLevel__Microsoft.AspNetCore: Warning
       ASPNETCORE_TEMP: /data/tmp
@@ -46,7 +49,8 @@ services:
     depends_on:
       db: { condition: service_healthy }
       storage-init: { condition: service_completed_successfully }
-    networks: [cloud]
+    networks:
+      cloud: { ipv4_address: 172.30.86.3 }
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
   proxy:
     image: caddy:2-alpine
@@ -55,7 +59,6 @@ services:
     cpus: 0.25
     environment:
       DOMAIN: ${DOMAIN:-lazerrave.com}
-      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

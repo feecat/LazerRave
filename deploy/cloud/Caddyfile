@@ -1,5 +1,7 @@
 {
-    email {$ACME_EMAIL}
+    cert_issuer acme {
+        dir https://acme-v02.api.letsencrypt.org/directory
+    }
 }
 {$DOMAIN} {
     encode zstd gzip

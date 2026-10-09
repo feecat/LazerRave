@@ -14,13 +14,17 @@ The project is under active development and currently targets **Windows 10/11 x6
 - **Reused lazer interface:** retain its menu, song carousel, animations, and settings components. New primary interface text is available in English, Simplified Chinese, and Japanese; complete localization and display-scaling validation remain in progress.
 - **Unified Windows build:** compile the client and engine and assemble their dependencies into one runtime directory through a single build entry point.
 
-Current BMS gameplay runs through OpenLR2, rather than the retained Mania ruleset. The client does not import `.osu` charts or osu! replay files. Editor and online-service components are retained as development foundations; BMS editing and desktop online integration are not yet available. A separate cloud website and service now provide accounts, submitted-score rankings, administrator-managed ZIP packs, rooms and chat; replay verification and synchronized desktop gameplay remain future work.
+Current BMS gameplay runs through OpenLR2, rather than the retained Mania ruleset. The client does not import `.osu` charts or osu! replay files. Editor components are retained as a foundation for future BMS editing. The cloud website and service provide accounts, submitted-score rankings, administrator-managed ZIP packs, rooms and chat. Desktop room access and temporary song sharing are implemented; replay verification and synchronized desktop gameplay remain future work.
 
 ## Cloud website and service
 
 The cloud module uses React and TypeScript with an ASP.NET Core 10 API, SignalR rooms/chat, and PostgreSQL. Build it independently with `build.cmd -Cloud`; the deployment bundle is written to `out/cloud/`. It includes Docker Compose and Caddy configuration for **LazerRave.com**, with limits suited to an initial 1 vCPU / 1 GiB Ubuntu host.
 
-See [Cloud implementation](docs/development/cloud.md) and [Deployment](docs/operations/cloud-deployment.md) for setup and current boundaries. New scores are client submissions, not replay-verified rankings. The server has not yet been deployed, and the desktop game is not connected to these services.
+The desktop Multiplayer panel supports login, room creation and joining, and host selection of a local chart. Hosts can package the song with maximum ZIP compression and upload it; missing players explicitly start downloads with progress and cancellation support. Verified songs are installed under `Shared/` beside the executable and imported into the common BMS library. Temporary server copies expire two hours after upload validation; installed local songs remain available.
+
+Accounts have stable numeric UIDs alongside internal UUIDs. Internet Ranking displays LR2IR-style judgement and option fields, with independent best-score, clear-lamp and minimum-BP records. Administrators can import and publish BMS difficulty tables; visitors browse levels and follow matching charts into their rankings. Course score storage is prepared for future gameplay integration.
+
+The initial cloud service is available at [lazerrave.com](https://lazerrave.com), with automatically renewed Let's Encrypt HTTPS certificates. See [Cloud implementation](docs/development/cloud.md) and [Deployment](docs/operations/cloud-deployment.md) for setup and current boundaries. New scores are client submissions, not replay-verified rankings. Synchronized gameplay launch and live gameplay statistics are not yet connected to the desktop engine.
 
 ## Roadmap
 
@@ -75,13 +79,14 @@ After packaging, launch `out/app/LazerRave.exe`. Application assemblies and the 
 
 ### Source and documentation
 
-The client stores its settings and database in `userdata/` beside the executable, with logs under `userdata/logs/` and rebuildable caches under `cache/`. On the first normal launch, existing settings and client data are copied from the previous AppData locations without replacing portable files or deleting the originals. Keep `userdata/` and `LR2files/` when updating or moving the application. Normal operation does not require administrator privileges when the application directory is writable.
+The client stores its settings and database in `userdata/` beside the executable, with logs under `userdata/logs/` and rebuildable caches under `cache/`. Downloaded shared songs are stored in `Shared/`; incomplete transfers under `Shared/.incoming/` are excluded from library scans. On the first normal launch, existing settings and client data are copied from the previous AppData locations without replacing portable files or deleting the originals. Keep `userdata/`, `Shared/`, and `LR2files/` when updating or moving the application. Normal operation does not require administrator privileges when the application directory is writable.
 
 | Path | Purpose |
 | --- | --- |
 | `src/LazerRave/` | Application entry point, BMS integration, and engine bridge |
 | `src/osu-lazer/` | Reduced and adapted osu!lazer source snapshot |
 | `src/OpenLR2/` | Native gameplay engine and its dependencies |
+| `src/Cloud/` | Web portal, API, shared song protocol, and server tests |
 | `res/` | Runtime resources, local library, and third-party notices |
 | `res/branding/` | LazerRave logo, Windows icon, and generated branding assets |
 | `scripts/` | Internal build, packaging, and maintenance tools |
@@ -96,6 +101,8 @@ Open `LazerRave.slnx` for C# development. See [Build and run](docs/getting-start
 Full builds publish directly into `out/app/`; there is no separate publish staging copy. Before updating the package, the build script automatically closes LazerRave and OpenLR2 instances running from the destination directory, terminating them if they do not exit within three seconds. Save any active work before rebuilding. Compile-only builds leave running applications open. When clearing project build caches, remove only `out/build/` and retain dependency caches and player data.
 
 The build entry point requests English .NET and MSVC diagnostics and uses UTF-8 for native console communication, including under Windows PowerShell 5.1. The original process environment and console encodings are restored when the script exits.
+
+Desktop packaging sets the local .NET host, destination directory and its files to Windows Medium integrity, preventing inherited Low integrity labels from affecting local builds. Publication ignores persistent build servers so previously launched Low-integrity workers cannot write the runtime package. Other access permissions remain unchanged. This does not provide a digital signature or SmartScreen reputation for downloaded releases.
 
 Debug symbols, link libraries, generated API documentation, and the ExampleIR sample remain in development build outputs and are omitted from the runtime package. After successful publication, the build script removes previous loose copies of bundled files and relocated translations using an MSBuild-generated manifest. Player data is retained.
 
