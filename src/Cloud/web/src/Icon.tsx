@@ -6,6 +6,9 @@ const paths = {
   admin: ['m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z', 'm9 12 2 2 4-4'],
   globe: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z', 'M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z'],
   chevron: ['m6 9 6 6 6-6'],
+  download: ['M12 3v12m-5-5 5 5 5-5', 'M4 16v5h16v-5'],
+  code: ['m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16'],
+  windows: ['M3 5l8-1v7H3V5Zm10-1 8-1v8h-8V4ZM3 13h8v7l-8-1v-6Zm10 0h8v8l-8-1v-7Z'],
 };
 
 export type IconName = keyof typeof paths;

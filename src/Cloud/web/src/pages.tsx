@@ -7,6 +7,8 @@ import { useAuth, useLive } from './state';
 import type { Chart, ChatMessage, Pack, Room, Score, User } from './types';
 import { DifficultyTableAdmin } from './tables';
 import { IrScoreTable } from './ir';
+import { RhythmVisual } from './RhythmVisual';
+import { Icon } from './Icon';
 
 export function Home() {
   const { t } = useI18n();
@@ -17,16 +19,9 @@ export function Home() {
         <span className="eyebrow">{t("THE NEXT CHART IS WAITING")}</span>
         <h1>{t("Find your rhythm.")}<br /><em>{t("Raise the bar.")}</em></h1>
         <p>{t("Your home for BMS. Discover song packs, chase an EX SCORE, and bring the next session together.")}</p>
-        <div className="hero-actions"><Link className="button primary" to="/packs">{t("Explore song packs ")}<span>↗</span></Link><Link className="button secondary" to="/rankings">{t("Internet Ranking")}</Link></div>
+        <div className="hero-actions"><Link className="button primary" to="/download"><Icon name="download" />{t("Download LazerRave")}</Link><Link className="button secondary" to="/packs">{t("Explore song packs ")}<span>↗</span></Link></div>
       </div>
-      <div className="rhythm-art" aria-hidden="true">
-        <div className="art-halo" />
-        <div className="art-orbit" /><div className="art-orbit second" />
-        <div className="art-disc"><img src="/logo.svg" alt="" /></div>
-        <div className="art-note a" /><div className="art-note b" /><div className="art-note c" />
-        <div className="art-equalizer"><i /><i /><i /><i /><i /><i /><i /></div>
-        <span className="art-caption">BMS / 5K · 7K · 9K · DP</span>
-      </div>
+      <RhythmVisual />
     </section>
     <section className="feature-grid"><Link to="/rankings" className="feature"><span className="feature-symbol">01</span><h2>{t("Every point counts")}</h2><p>{t("Chart rankings, clear records, and your next personal best.")}</p><span>{t("See the rankings ↗")}</span></Link><Link to="/packs" className="feature"><span className="feature-symbol">02</span><h2>{t("A new discovery")}</h2><p>{t("Browse the catalog and download a pack for your next session.")}</p><span>{t("Browse song packs ↗")}</span></Link><Link to="/multiplayer" className="feature"><span className="feature-symbol">03</span><h2>{t("Play together")}</h2><p>{t("Up to 16 players. One chart. A shared challenge.")}</p><span>{t("Find a room ↗")}</span></Link></section>
     <section><div className="section-title"><div><span className="eyebrow">{t("THE CATALOG")}</span><h2>{t("Recently added")}</h2></div><Link to="/packs">{t("View all packs →")}</Link></div><Alert message={error} />{packs?.length ? <div className="pack-grid">{packs.slice(0, 3).map(pack => <PackCard key={pack.id} pack={pack} />)}</div> : <Empty>{t("Song packs will appear here when published.")}</Empty>}</section>
