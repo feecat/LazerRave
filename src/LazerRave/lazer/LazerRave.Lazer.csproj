@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../version.props" />
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -8,7 +9,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.1.0</Version>
     <ApplicationManifest>../../osu-lazer/app.manifest</ApplicationManifest>
     <ApplicationIcon>../../../res/branding/logo.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
@@ -24,6 +24,7 @@
     <Compile Include="../../Cloud/protocol/*.cs" Link="CloudProtocol/%(Filename)%(Extension)" />
     <PackageReference Include="Tomlyn" Version="0.19.0" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
   <Target Name="PrepareApplicationLayout" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishSingleFile)' == 'true'">
     <PropertyGroup>

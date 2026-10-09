@@ -9,8 +9,9 @@ internal static class ApplicationPaths
     public static string Logs => Path.Combine(UserData, "logs");
     public static string Cache => Path.Combine(AppContext.BaseDirectory, "cache");
     public static string Shared => Path.Combine(AppContext.BaseDirectory, "Shared");
+    public static string ResolveLibraryRoot(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path, AppContext.BaseDirectory));
     public static string[] LibraryRoots(IEnumerable<string> configured) => configured.Concat(Directory.Exists(Shared) ? new[] { Shared } : [])
-        .Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        .Select(ResolveLibraryRoot).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     public static void Initialize(bool migrateLegacy)
     {
@@ -18,6 +19,7 @@ internal static class ApplicationPaths
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Cache);
         Directory.CreateDirectory(Shared);
+        Directory.CreateDirectory(ResolveLibraryRoot("BMS"));
         string marker = Path.Combine(UserData, "migration-complete.txt");
         if (!migrateLegacy || File.Exists(marker)) return;
 

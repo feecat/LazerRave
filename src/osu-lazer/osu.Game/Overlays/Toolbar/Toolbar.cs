@@ -126,7 +126,7 @@ namespace osu.Game.Overlays.Toolbar
                                         Masking = false,
                                         Children = new Drawable[]
                                         {
-                                            rulesetSelector = new ToolbarRulesetSelector()
+                                            CreateIdentityDisplay()
                                         }
                                     },
                                     new Box
@@ -160,24 +160,7 @@ namespace osu.Game.Overlays.Toolbar
                                         Direction = FillDirection.Horizontal,
                                         RelativeSizeAxes = Axes.Y,
                                         AutoSizeAxes = Axes.X,
-                                        Children = new Drawable[]
-                                        {
-                                            new ToolbarNewsButton(),
-                                            new ToolbarChangelogButton(),
-                                            new ToolbarWikiButton(),
-                                            new ToolbarRankingsButton(),
-                                            new ToolbarBeatmapListingButton(),
-                                            new ToolbarChatButton(),
-                                            new ToolbarSocialButton(),
-                                            new ToolbarMusicButton(),
-                                            //new ToolbarButton
-                                            //{
-                                            //    Icon = FontAwesome.Solid.search
-                                            //},
-                                            userButton = new ToolbarUserButton(),
-                                            new ToolbarClock(),
-                                            new ToolbarNotificationButton(),
-                                        }
+                                        Children = CreateRightButtons()
                                     },
                                 }
                             },
@@ -200,8 +183,20 @@ namespace osu.Game.Overlays.Toolbar
         {
             base.LoadComplete();
 
-            rulesetSelector.Current.BindTo(ruleset);
+            rulesetSelector?.Current.BindTo(ruleset);
         }
+
+        protected virtual Drawable CreateIdentityDisplay() => rulesetSelector = new ToolbarRulesetSelector();
+
+        protected ToolbarUserButton CreateUserButton() => userButton = new ToolbarUserButton();
+
+        protected virtual Drawable[] CreateRightButtons() => new Drawable[]
+        {
+            new ToolbarNewsButton(), new ToolbarChangelogButton(), new ToolbarWikiButton(),
+            new ToolbarRankingsButton(), new ToolbarBeatmapListingButton(), new ToolbarChatButton(),
+            new ToolbarSocialButton(), new ToolbarMusicButton(), CreateUserButton(),
+            new ToolbarClock(), new ToolbarNotificationButton(),
+        };
 
         public partial class ToolbarBackground : Container
         {

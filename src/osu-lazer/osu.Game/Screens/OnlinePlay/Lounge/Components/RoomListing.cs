@@ -181,12 +181,8 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         {
             foreach (var room in rooms)
             {
-                var drawableRoom = new LoungeRoomPanel(room)
-                {
-                    SelectedRoom = selectedRoom,
-                    Anchor = Anchor.Centre,
-                    Origin = Anchor.Centre,
-                };
+                var drawableRoom = CreateRoomPanel(room, selectedRoom);
+                drawableRoom.Anchor = drawableRoom.Origin = Anchor.Centre;
 
                 roomFlow.Add(drawableRoom);
 
@@ -195,6 +191,9 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
 
             applyFilterCriteria(Filter.Value);
         }
+
+        protected virtual LoungeRoomPanel CreateRoomPanel(Room room, Bindable<Room?> selection) =>
+            new LoungeRoomPanel(room) { SelectedRoom = selection };
 
         private void removeRooms(IEnumerable<Room> rooms)
         {

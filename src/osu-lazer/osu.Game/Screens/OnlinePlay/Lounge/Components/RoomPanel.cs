@@ -56,6 +56,8 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         protected Container ButtonsContainer { get; private set; } = null!;
 
         protected bool ShowExternalLink { get; init; } = true;
+        protected bool ShowUserProfiles { get; init; } = true;
+        protected bool ShowBeatmapStatus { get; init; } = true;
 
         public bool ShowDescription { get; init; }
 
@@ -65,6 +67,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         private CornerIcon? pinnedIcon;
         private EndDateInfo? endDateInfo;
         private RoomNameLine? roomName;
+        private TruncatingSpriteText? descriptionText;
         private DelayedLoadWrapper wrapper = null!;
         private CancellationTokenSource? beatmapLookupCancellation;
 
@@ -110,7 +113,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                 {
                     Height = height + 16;
 
-                    yield return new TruncatingSpriteText
+                    yield return descriptionText = new TruncatingSpriteText
                     {
                         RelativeSizeAxes = Axes.X,
                         Text = Room.Description,
@@ -119,10 +122,11 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                     };
                 }
 
-                yield return new RoomStatusText(Room)
-                {
-                    Beatmap = { BindTarget = currentBeatmap }
-                };
+                if (ShowBeatmapStatus)
+                    yield return new RoomStatusText(Room)
+                    {
+                        Beatmap = { BindTarget = currentBeatmap }
+                    };
             }
 
             InternalChildren = new Drawable[]
@@ -263,7 +267,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                                                 Children = new Drawable[]
                                                 {
                                                     ButtonsContainer,
-                                                    drawableRoomParticipantsList = new DrawableRoomParticipantsList(Room)
+                                                    drawableRoomParticipantsList = new DrawableRoomParticipantsList(Room, ShowUserProfiles)
                                                     {
                                                         Anchor = Anchor.CentreRight,
                                                         Origin = Anchor.CentreRight,
@@ -334,6 +338,9 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         {
             switch (e.PropertyName)
             {
+                case nameof(Room.Description):
+                    if (descriptionText != null) descriptionText.Text = Room.Description ?? string.Empty;
+                    break;
                 case nameof(Room.RoomID):
                     updateRoomID();
                     break;

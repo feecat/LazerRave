@@ -94,11 +94,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge
 
             InternalChildren = new Drawable[]
             {
-                listingPoller = new LoungeListingPoller
-                {
-                    RoomsReceived = onListingReceived,
-                    Filter = { BindTarget = filter }
-                },
+                listingPoller = CreateListingPoller(onListingReceived, filter),
                 popoverContainer = new PopoverContainer
                 {
                     Name = @"Rooms area",
@@ -108,11 +104,11 @@ namespace osu.Game.Screens.OnlinePlay.Lounge
                         Horizontal = WaveOverlayContainer.WIDTH_PADDING,
                         Top = Header.HEIGHT + controls_area_height + 20,
                     },
-                    Child = roomListing = new RoomListing
+                    Child = roomListing = CreateRoomListing().With(listing =>
                     {
-                        RelativeSizeAxes = Axes.Both,
-                        Filter = { BindTarget = filter },
-                    }
+                        listing.RelativeSizeAxes = Axes.Both;
+                        listing.Filter.BindTo(filter);
+                    })
                 },
                 loadingLayer = new LoadingLayer(true),
                 new Container
@@ -456,6 +452,9 @@ namespace osu.Game.Screens.OnlinePlay.Lounge
         }
 
         protected abstract OsuButton CreateNewRoomButton();
+        protected virtual RoomListing CreateRoomListing() => new RoomListing();
+        protected virtual LoungeListingPoller CreateListingPoller(Action<Room[]> received, IBindable<LoungeFilterCriteria?> criteria) =>
+            new LoungeListingPoller { RoomsReceived = received, Filter = { BindTarget = criteria } };
 
         /// <summary>
         /// Creates a new room.

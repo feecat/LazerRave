@@ -23,7 +23,6 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
     private readonly Bindable<string> endpoint = new("https://lazerrave.com");
     private readonly Bindable<string> username = new("");
     private readonly Bindable<string> password = new("");
-    private readonly Bindable<string> roomName = new("LazerRave room");
     private FillFlowContainer body = null!;
     private OsuSpriteText status = null!;
     private Box progress = null!;
@@ -33,8 +32,8 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
     private readonly CancellationTokenSource lifetime = new();
     public void OpenLobby()
     {
-        Show();
-        if (client.User is not null && !client.Connected) _ = Run(() => client.Connect(lifetime.Token));
+        enterMultiplayer = true; Show();
+        if (client.User is not null && !client.Connected) _ = Run(ConnectAndEnter);
     }
     protected override void LoadContent()
     {
@@ -111,75 +110,57 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
         try { File.WriteAllText(temporary, Toml.FromModel(table)); File.Move(temporary, path, true); }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
+    private bool enterMultiplayer;
+    private async Task ConnectAndEnter()
+    {
+        await client.Connect(lifetime.Token);
+        EnterAfterLogin();
+    }
+    private async Task RestoreAndEnter()
+    {
+        await client.Restore(lifetime.Token);
+        if (client.User is { } user && client.Server is { } server)
+            Schedule(() => { endpoint.Value = server.AbsoluteUri; username.Value = user.Username; });
+        EnterAfterLogin();
+    }
+    private void EnterAfterLogin() => Schedule(() =>
+    {
+        if (!enterMultiplayer || !client.Connected) return;
+        enterMultiplayer = false; Hide(); game.OpenMultiplayer();
+    });
     private void BuildBody()
     {
         body.Clear();
         if (client.User is null)
         {
+            if (client.HasSavedSession) Button("Retry saved sign-in", RestoreAndEnter);
             body.Add(new FormTextBox { Caption = "Server", Current = endpoint, RelativeSizeAxes = Axes.X });
             body.Add(new FormTextBox { Caption = "Username or email", Current = username, RelativeSizeAxes = Axes.X });
             body.Add(new FormPasswordTextBox { Caption = "Password", Current = password, RelativeSizeAxes = Axes.X });
-            Button("Sign in", async () => { await client.Login(endpoint.Value, username.Value, password.Value, lifetime.Token); password.Value = ""; SaveConnection(); });
+            Button("Sign in", async () =>
+            {
+                await client.Login(endpoint.Value, username.Value, password.Value, lifetime.Token);
+                password.Value = ""; SaveConnection(); EnterAfterLogin();
+            });
             Button("Create an account on the website", () => { game.OpenCloudWebsite(new Uri(CloudClient.ServerUri(endpoint.Value), "register").ToString()); return Task.CompletedTask; });
             return;
         }
-        body.Add(Label(client.User!.DisplayName, 23));
+        body.Add(Label(client.User.DisplayName, 23));
         body.Add(Label("UID " + client.User.Uid, 16));
+        Button("Profile on the website", () => { game.OpenCloudWebsite(new Uri(CloudClient.ServerUri(endpoint.Value), "players/" + client.User.Uid).ToString()); return Task.CompletedTask; });
         Button("Change password on the website", () => { game.OpenCloudWebsite(new Uri(CloudClient.ServerUri(endpoint.Value), "account/password").ToString()); return Task.CompletedTask; });
-        if (!client.Connected)
+        Button(client.Connected ? "Enter multiplayer" : "Connect multiplayer", async () =>
         {
-            Button("Connect multiplayer", () => client.Connect(lifetime.Token));
-            Button("Sign out", client.Disconnect);
-            return;
-        }
-        if (client.Room is not { } room)
-        {
-            body.Add(Label("Multiplayer lobby", 24));
-            body.Add(new FormTextBox { Caption = "Room name", Current = roomName, RelativeSizeAxes = Axes.X });
-            Button("Create room", () => client.CreateRoom(roomName.Value, lifetime.Token));
-            if (client.Rooms.Length == 0) body.Add(Label("No rooms available. Create a room to begin.", 17));
-            foreach (var open in client.Rooms)
-                Button($"{open.Name} · {open.Members.Length}/16 · {open.Chart?.Title ?? "Choosing a song"}", () => client.JoinRoom(open.Id, lifetime.Token), open.Members.Length < 16 && open.State is "lobby" or "results");
-            Button("Sign out", client.Disconnect);
-            return;
-        }
-        bool host = room.HostId == client.User.Id;
-        body.Add(Label(room.Name + " · " + room.Members.Length + "/16", 24));
-        body.Add(Label(room.Chart?.Title ?? "Choose a song", 21));
-        if (host && room.State is "lobby" or "results")
-        {
-            Button("Choose song in library", () => { Hide(); game.OpenRoomLibrary(); return Task.CompletedTask; });
-            Button("Select current song and difficulty", () =>
-            {
-                var selected = game.SelectedChart ?? throw new InvalidOperationException("Choose a BMS chart in the library first.");
-                return client.SelectChart(new(selected.Path, selected.Title, selected.Artist, selected.Keys, selected.Level), lifetime.Token);
-            }, game.SelectedChart is not null);
-        }
-        if (room.Chart is { } chart)
-        {
-            if (chart.ExpiresAt is { } expiry)
-                body.Add(Label("Share expires at " + expiry.ToLocalTime().ToString("HH:mm"), 16));
-            if (host)
-                Button("Upload and share song", () => client.Upload(lifetime.Token), client.AvailableChart is not null && !client.Busy &&
-                    room.Members.Any(m => m.ContentState != "available") && (chart.ExpiresAt is null || chart.ExpiresAt <= DateTime.UtcNow));
-            if (client.AvailableChart is null)
-                Button("Download song / continue", () => client.Download(lifetime.Token), chart.ShareId is not null && chart.ExpiresAt > DateTime.UtcNow && !client.Busy);
-            else
-            {
-                body.Add(Label("Song available · " + chart.Keys + "Key", 16));
-                Button("Open selected song in library", () => { Hide(); game.OpenSharedChart(client.AvailableChart); return Task.CompletedTask; });
-                Button(room.Members.First(m => m.Id == client.User.Id).Ready ? "Not ready" : "Ready", () => client.Ready(lifetime.Token), room.State == "lobby" && !client.Busy);
-            }
-            if (client.Busy) body.Add(new RoundedButton { Text = "Cancel transfer", RelativeSizeAxes = Axes.X, Height = 40, Action = client.CancelTransfer });
-        }
-        foreach (var member in room.Members)
-            body.Add(Label((member.Id == room.HostId ? "★ " : "") + member.DisplayName + " · " + (member.Ready ? "Ready" : member.ContentState), 17));
-        Button("Leave room", () => client.LeaveRoom(lifetime.Token), !client.Busy);
+            enterMultiplayer = true;
+            if (!client.Connected) await ConnectAndEnter(); else EnterAfterLogin();
+        });
+        Button("Sign out", client.Disconnect);
     }
     protected override void LoadComplete()
     {
         base.LoadComplete();
         username.BindValueChanged(_ => MarkDirty()); password.BindValueChanged(_ => MarkDirty());
+        _ = Run(RestoreAndEnter);
     }
     protected override void Update()
     {
@@ -190,12 +171,11 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
             (p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1048576d:F1} MiB/s · {TimeSpan.FromSeconds(Math.Max(0, (p.Total - p.Completed) / p.BytesPerSecond)):mm\\:ss} remaining" : "");
         status.Colour = error.Length > 0 ? Color4.OrangeRed : Color4.White;
         progress.Width = (float)(p?.Fraction ?? 0);
-        var next = $"{client.Connected}/{client.User?.Id}/{client.Room?.Id}/{client.Room?.Version}/{client.Busy}/{working}/{client.AvailableChart}/{client.Room?.Chart?.ExpiresAt <= DateTime.UtcNow}/" +
-            string.Join(';', client.Rooms.Select(room => $"{room.Id}:{room.Version}"));
+        var next = $"{client.Connected}/{client.User}/{working}";
         if (next != signature) { signature = next; BuildBody(); }
     }
     protected override void PopIn() { MarkDirty(); this.FadeIn(180); }
-    protected override void PopOut() => this.FadeOut(180);
+    protected override void PopOut() { enterMultiplayer = false; this.FadeOut(180); }
     protected override void Dispose(bool isDisposing)
     {
         if (isDisposing) { client.Changed -= MarkDirty; lifetime.Cancel(); }

@@ -3,6 +3,7 @@ param(
     [ValidateSet('Release', 'Debug', 'RelWithDebInfo')][string]$Configuration,
     [ValidateRange(1, 64)][int]$Jobs = 4,
     [switch]$CompileOnly,
+    [switch]$PackageZip,
     [switch]$Cloud,
     [switch]$BuildEngine,
     [string]$RuntimeSource = '',
@@ -52,6 +53,9 @@ try {
         throw '-CompileOnly, -BuildEngine and -Destination apply to the complete client.'
     }
     if (!$Configuration) { $Configuration = if ($EngineOnly) { 'RelWithDebInfo' } else { 'Release' } }
+    if ($PackageZip -and ($CompileOnly -or $Cloud -or $EngineOnly -or $Configuration -ne 'Release')) {
+        throw '-PackageZip requires a complete Release client build.'
+    }
     $logDirectory = Join-Path $workspace 'out/logs'
     New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
     $log = Join-Path $logDirectory ('build-lazerrave-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
@@ -97,6 +101,11 @@ try {
         }
         & $script @arguments *>&1 | Tee-Object -FilePath $log -Append
         if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)." }
+        if ($PackageZip) {
+            $releaseArguments = @{}
+            if ($Destination) { $releaseArguments.ApplicationDirectory = $Destination }
+            & (Join-Path $PSScriptRoot 'package-release.ps1') @releaseArguments *>&1 | Tee-Object -FilePath $log -Append
+        }
     } catch {
         $_ | Out-String | Add-Content -LiteralPath $log
         Write-Host "Build failed. Log: $log"

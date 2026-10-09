@@ -12,6 +12,7 @@ struct CONFIG_JUKEBOX;
 namespace launcher {
 struct Request {
     bool active = false;
+    bool telemetry = false;
     std::string mode;
     std::filesystem::path file;
     std::string chart;
@@ -30,6 +31,8 @@ struct Request {
 Request ReadRequest(int argc, char** argv);
 void ApplyLibraryRoots(CONFIG_JUKEBOX& jukebox);
 int RunHeadless(const Request& request, game& state);
+void PublishScore(const Request& request, const game& state, bool exiting = false);
+void FlushScores();
 void ApplyPlay(const Request& request, game& state);
 void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow = 0, const game* effectiveState = nullptr);
 }

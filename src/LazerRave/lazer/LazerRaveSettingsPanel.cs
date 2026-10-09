@@ -10,11 +10,13 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Localisation;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
+using osu.Game.Overlays.Settings.Sections;
 
 namespace LazerRave.Lazer;
 
 internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action apply) : SettingsOverlay()
 {
+    protected override SettingsSection CreateGeneralSection() => new GeneralSection { ShowQuickActions = false };
     private readonly OsuSpriteText saveStatus = new() { Font = osu.Game.Graphics.OsuFont.GetFont(size: 15), Margin = new MarginPadding { Horizontal = 20, Bottom = 10 } };
     public void SetSaveStatus(LocalisableString text, bool error)
     {
@@ -57,10 +59,7 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
             new SettingsDropdown<string> { LabelText = D("Preset"), Items = new[] { "640x480", "1024x768", "1280x720", "1920x1080", "2560x1440", settings.Window.Value }.Distinct(), Current = settings.Window },
             new SettingsTextBox { LabelText = D("Custom size (width x height)"), Current = settings.Window },
         })));
-        AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new Subsection("Directories", new Drawable[]
-        {
-            new SettingsTextBox { LabelText = D("BMS folders (separate with ;)"), Current = settings.Roots },
-        })));
+        AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings)));
         AddSection(new Section("Player", FontAwesome.Solid.User, new Subsection("Profile", new Drawable[]
         {
             new SettingsTextBox { LabelText = D("Display name"), Current = settings.Player },

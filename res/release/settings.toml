@@ -1,0 +1,9 @@
+directories = ["BMS"]
+display_name = "Player"
+window_width = 1920
+window_height = 1080
+frontend_frame_limit = "240"
+game_frame_limit = 240
+game_render_profile = "discard"
+game_presentation = "embedded"
+speed = 2.0

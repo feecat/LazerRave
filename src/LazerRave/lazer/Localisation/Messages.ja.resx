@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -329,5 +329,32 @@
   </data>
   <data name="Ghost Battle requires rival selection in the classic menu.">
     <value>Ghost Battle はクラシックメニューで対戦相手を選択してください。</value>
+  </data>
+  <data name="Website">
+    <value>ウェブサイト</value>
+  </data>
+  <data name="Internet Ranking">
+    <value>インターネットランキング</value>
+  </data>
+  <data name="Song packs">
+    <value>楽曲パック</value>
+  </data>
+  <data name="Difficulty tables">
+    <value>難易度表</value>
+  </data>
+  <data name="Download">
+    <value>ダウンロード</value>
+  </data>
+  <data name="GitHub">
+    <value>GitHub</value>
+  </data>
+  <data name="Add folder">
+    <value>フォルダーを追加</value>
+  </data>
+  <data name="Folder path">
+    <value>フォルダーパス</value>
+  </data>
+  <data name="Relative paths start in the application folder.">
+    <value>相対パスはアプリのフォルダーが基準です。</value>
   </data>
 </root>

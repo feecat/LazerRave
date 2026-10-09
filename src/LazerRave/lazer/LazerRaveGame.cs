@@ -11,6 +11,10 @@ using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.IO.Stores;
+using osu.Framework.Input.Handlers;
+using osu.Framework.Input.Handlers.Joystick;
+using osu.Framework.Input.Handlers.Midi;
+using osu.Framework.Input.Handlers.Touch;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
 using osu.Framework.Threading;
@@ -26,6 +30,8 @@ using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Overlays;
+using osu.Game.Overlays.Settings;
+using osu.Game.Overlays.Toolbar;
 using osu.Game.Rulesets.Mania;
 using osu.Game.Screens;
 using osu.Game.Screens.Select;
@@ -44,6 +50,7 @@ internal partial class LazerRaveGame : OsuGame
     private readonly DesktopSettings preferences;
     private readonly CloudClient cloud;
     private LazerRaveCloudPanel cloudPanel = null!;
+    private LazerRaveMultiplayer? multiplayer;
     private readonly string startupMessage;
     private readonly CancellationTokenSource lifetime = new();
     private LazerRaveSettingsPanel settingsPanel = null!;
@@ -65,6 +72,9 @@ internal partial class LazerRaveGame : OsuGame
     private readonly BindableDouble menuTrackVolume = new(1);
     private int previewGeneration;
     private ScheduledDelegate? pendingSettingsSave;
+    private Bindable<FrameSync>? frameworkFrameSync;
+    private bool applyingFrameLimit;
+    private Guid? launchedCloudMatch;
     private readonly PerformanceRun? benchmark;
     private readonly System.Diagnostics.Stopwatch benchmarkClock = new();
     private bool benchmarkSelected, benchmarkStarted;
@@ -87,15 +97,35 @@ internal partial class LazerRaveGame : OsuGame
     public DesktopSettings PlaySettings => preferences;
     public Chart? SelectedChart => catalog.ChartFor(Beatmap.Value.BeatmapInfo);
     public void ToggleCloud() => cloudPanel.ToggleVisibility();
-    public void OpenMultiplayer() => cloudPanel.OpenLobby();
-    public void OpenCloudWebsite(string url) => Host.OpenUrlExternally(url);
-    public void OpenRoomLibrary()
+    public void OpenMultiplayer()
     {
-        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) ScreenStack.Push(new LazerRaveSongSelect());
+        if (!cloud.Connected) { cloudPanel.OpenLobby(); return; }
+        CloseAllOverlays();
+        if (multiplayer is { ValidForResume: true }) { multiplayer.MakeCurrent(); return; }
+        ScreenStack.Push(multiplayer = new LazerRaveMultiplayer());
+    }
+    public void OpenCloudAccount() => cloudPanel.Show();
+    public void OpenCloudWebsite(string url) => Host.OpenUrlExternally(url);
+    public void OpenRoomLibrary(bool chooseSong = true)
+    {
+        var room = cloud.Room ?? throw new InvalidOperationException("Join a room first.");
+        if (chooseSong && room.HostId != cloud.User?.Id) throw new InvalidOperationException("Only the host may select a song.");
+        if (ScreenStack.CurrentScreen is LazerRaveSongSelect) return;
+        ScreenStack.Push(new LazerRaveSongSelect
+        {
+            ConfirmationText = chooseSong ? "Use selected difficulty" : "Return to room",
+            ConfirmSelection = async (info, cancellation) =>
+            {
+                if (cloud.Room?.Id != room.Id) throw new InvalidOperationException("The room has changed.");
+                if (!chooseSong) return;
+                var chart = catalog.ChartFor(info) ?? throw new InvalidOperationException("Choose a BMS chart first.");
+                await cloud.SelectChart(new(chart.Path, chart.Title, chart.Artist, chart.Keys, chart.Level), cancellation);
+            },
+        });
     }
     public void OpenSharedChart(string path)
     {
-        OpenRoomLibrary();
+        OpenRoomLibrary(false);
         catalog.Filter(Path.GetDirectoryName(path), catalog.Library.Songs.SelectMany(s => s.Charts).FirstOrDefault(c => c.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Keys ?? 7);
         var info = catalog.GetBeatmapSets(null).SelectMany(s => s.Beatmaps).FirstOrDefault(b => catalog.ChartFor(b)?.Path.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
         if (info is not null) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(info);
@@ -107,7 +137,7 @@ internal partial class LazerRaveGame : OsuGame
         Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); UpdateLibraryStatus(); });
     }
     public override bool UseDevelopmentServer => false;
-    public override string Version => "LazerRave 0.1";
+    public override string Version => ClientVersion.DisplayName;
     protected override int UnhandledExceptionsBeforeCrash => 0;
 
     public LazerRaveGame(EngineBridge bridge, FrontendSettings initial, SongLibrary library, string message, PerformanceRun? benchmark = null)
@@ -116,7 +146,8 @@ internal partial class LazerRaveGame : OsuGame
         this.benchmark = benchmark;
         preferences = new(initial, FrontendSettings.SharedPath, benchmark is not null);
         catalog = new(); catalog.Replace(library, ApplicationPaths.LibraryRoots(initial.Roots));
-        cloud = new CloudClient(() => catalog.Library.Songs.Select(s => s.Directory).ToArray(), () => preferences.Value.Encoding, ImportSharedChart);
+        cloud = new CloudClient(() => catalog.Library.Songs.Select(s => s.Directory).ToArray(), () => preferences.Value.Encoding, ImportSharedChart,
+            sessions: new CloudSessionStore(Path.Combine(ApplicationPaths.UserData, "cloud-session.bin")));
         cloud.Changed += CloudChanged;
         var api = new DummyAPIAccess(); api.SetState(APIState.Offline);
         api.LocalUser.Value = CloudIdentity.Create(null, null, initial.Player);
@@ -126,7 +157,7 @@ internal partial class LazerRaveGame : OsuGame
     protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
     {
         var dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
-        dependencies.Cache(this); dependencies.CacheAs<BeatmapStore>(catalog);
+        dependencies.Cache(this); dependencies.Cache(cloud); dependencies.CacheAs<BeatmapStore>(catalog);
         return dependencies;
     }
     public override EndpointConfiguration CreateEndpoints() => new()
@@ -134,10 +165,10 @@ internal partial class LazerRaveGame : OsuGame
         WebsiteUrl = "http://127.0.0.1:1", APIUrl = "http://127.0.0.1:1",
         MetadataUrl = "http://127.0.0.1:1", MultiplayerUrl = "http://127.0.0.1:1", SpectatorUrl = "http://127.0.0.1:1",
     };
-    protected override OnlineStore CreateOnlineStore() => new CloudAvatarStore(() => cloud.AvatarUri);
-    private sealed class CloudAvatarStore(Func<Uri?> avatarUri) : OnlineStore
+    protected override OnlineStore CreateOnlineStore() => new CloudAvatarStore(() => cloud.Server);
+    private sealed class CloudAvatarStore(Func<Uri?> server) : OnlineStore
     {
-        protected override string GetLookupUrl(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri == avatarUri() ? url : "";
+        protected override string GetLookupUrl(string url) => CloudClient.IsAvatarUrl(server(), url) ? url : "";
     }
     private void CloudChanged() => Interlocked.Exchange(ref cloudChanged, 1);
     private void RefreshCloudIdentity(bool force = false)
@@ -175,6 +206,8 @@ internal partial class LazerRaveGame : OsuGame
         var defaults = base.GetFrameworkConfigDefaults();
         defaults[FrameworkSetting.Locale] = "en";
         defaults[FrameworkSetting.FrameSync] = FrameSync.Unlimited;
+        defaults[FrameworkSetting.WindowMode] = WindowMode.Windowed;
+        defaults[FrameworkSetting.WindowedSize] = new System.Drawing.Size(1920, 1080);
         if (benchmark is not null)
         {
             defaults[FrameworkSetting.WindowMode] = WindowMode.Windowed;
@@ -187,6 +220,33 @@ internal partial class LazerRaveGame : OsuGame
     protected override OsuLogo CreateLogo() => new LazerRaveLogo();
     protected override SettingsOverlay CreateSettingsOverlay() => settingsPanel = new LazerRaveSettingsPanel(preferences, ApplySettings);
     protected override LoginOverlay CreateLoginOverlay() => cloudPanel = new LazerRaveCloudPanel(this, cloud);
+    protected override Toolbar CreateToolbar() => new LazerRaveToolbar();
+    protected override NowPlayingOverlay CreateNowPlayingOverlay() => new LazerRaveNowPlayingOverlay();
+    public override SettingsSubsection CreateSettingsSubsectionFor(InputHandler handler) => handler is TouchHandler or JoystickHandler or MidiHandler
+        ? null! : base.CreateSettingsSubsectionFor(handler);
+    public override Drawable CreateFrameLimiterSetting(FrameworkConfigManager config) => new SettingsDropdown<string>
+    {
+        LabelText = osu.Game.Localisation.GraphicsSettingsStrings.FrameLimiter,
+        Current = preferences.FrontendFrameLimit,
+        Items = new[] { "60", "120", "144", "165", "240", "360", "480", "1000", "Display", "2x", "4x", "8x", "Unlimited", preferences.FrontendFrameLimit.Value }.Distinct(),
+    };
+
+    private void ApplyFrontendFrameLimit()
+    {
+        var mode = preferences.FrontendFrameLimit.Value switch
+        {
+            "Display" => FrameSync.VSync, "2x" => FrameSync.Limit2x, "4x" => FrameSync.Limit4x, "8x" => FrameSync.Limit8x,
+            _ => FrameSync.Unlimited,
+        };
+        applyingFrameLimit = true;
+        try
+        {
+            frameworkFrameSync!.Value = mode;
+            if (int.TryParse(preferences.FrontendFrameLimit.Value, out var cap)) Host.MaximumDrawHz = cap;
+            else if (mode == FrameSync.Unlimited) Host.MaximumDrawHz = 0;
+        }
+        finally { applyingFrameLimit = false; }
+    }
 
     [BackgroundDependencyLoader]
     private void load()
@@ -213,7 +273,17 @@ internal partial class LazerRaveGame : OsuGame
         preferences.Speed.BindValueChanged(_ => QueueSettingsSave());
         preferences.Offset.BindValueChanged(_ => QueueSettingsSave());
         foreach (var option in preferences.PlayOptions.Values) option.BindValueChanged(_ => QueueSettingsSave());
-        foreach (var setting in new[] { preferences.Arrangement, preferences.Encoding, preferences.Roots, preferences.Window,
+        preferences.Roots.CollectionChanged += (_, _) => QueueSettingsSave();
+        frameworkFrameSync = Dependencies.Get<FrameworkConfigManager>().GetBindable<FrameSync>(FrameworkSetting.FrameSync);
+        frameworkFrameSync.BindValueChanged(change =>
+        {
+            if (!applyingFrameLimit) preferences.FrontendFrameLimit.Value = change.NewValue switch
+            {
+                FrameSync.VSync => "Display", FrameSync.Limit2x => "2x", FrameSync.Limit4x => "4x", FrameSync.Limit8x => "8x", _ => "Unlimited",
+            };
+        });
+        preferences.FrontendFrameLimit.BindValueChanged(_ => { ApplyFrontendFrameLimit(); QueueSettingsSave(); }, true);
+        foreach (var setting in new[] { preferences.Arrangement, preferences.Encoding, preferences.Window,
             preferences.Player, preferences.Avatar, preferences.FrameLimit, preferences.RenderProfile, preferences.Presentation })
             setting.BindValueChanged(_ => QueueSettingsSave());
     }
@@ -283,7 +353,7 @@ internal partial class LazerRaveGame : OsuGame
     }
     public void StartGame(BeatmapInfo info)
     {
-        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
         if (preferences.PlayOptions["battle"].Value == 4)
         {
             status.Text = D("Ghost Battle requires rival selection in the classic menu.");
@@ -294,6 +364,34 @@ internal partial class LazerRaveGame : OsuGame
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned) { RelativeSizeAxes = Axes.Both });
+    }
+    public void SetLibraryMessage(osu.Framework.Localisation.LocalisableString text) => status.Text = text;
+    private void UpdateMultiplayerStart()
+    {
+        var room = cloud.Room;
+        if (!cloud.Connected || room is not { MatchId: { } match, StartAt: { } start } || launchedCloudMatch == match
+            || room.State is not ("countdown" or "playing") || cloud.ServerNow < start || viewport is null) return;
+        if (ScreenStack.CurrentScreen is GamePlayScreen) return;
+        var member = room.Members.FirstOrDefault(member => member.Id == cloud.User?.Id);
+        if (member is not { Ready: true, ContentState: "available" } || cloud.AvailableChart is not { } path) return;
+        var chart = catalog.Library.Songs.SelectMany(song => song.Charts).FirstOrDefault(chart => chart.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
+        if (chart is null) { launchedCloudMatch = match; cloud.SetGameStatus("The room chart is not in the library. Rescan before starting another round."); return; }
+        if (ScreenStack.CurrentScreen is LazerRaveSongSelect selection) { selection.Exit(); return; }
+        if (ScreenStack.CurrentScreen is not LazerRaveMultiplayer)
+        {
+            if (multiplayer is { ValidForResume: true }) multiplayer.MakeCurrent();
+            return;
+        }
+        launchedCloudMatch = match;
+        if (!SaveSettings()) { settingsPanel.Show(); cloud.SetGameStatus("Game settings could not be saved."); return; }
+        ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide(); CloseAllOverlays(); menuTrackVolume.Value = 0;
+        ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, error =>
+        {
+            menuTrackVolume.Value = 1;
+            cloud.SetGameStatus(error ?? "Returned to room.");
+            _ = RefreshAsync(false, error);
+            ScreenStack.Push(new LazerRaveRoundResults(cloud, match, chart.Title, error) { RelativeSizeAxes = Axes.Both });
+        }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match });
     }
     private void OnGameReturned(string? error)
     {
@@ -393,7 +491,9 @@ internal partial class LazerRaveGame : OsuGame
     protected override void Update()
     {
         base.Update(); preview?.Update(Time.Current);
+        if (int.TryParse(preferences.FrontendFrameLimit.Value, out var cap) && Host.MaximumDrawHz != cap) Host.MaximumDrawHz = cap;
         if (Interlocked.Exchange(ref cloudChanged, 0) != 0) RefreshCloudIdentity();
+        UpdateMultiplayerStart();
 
         if (benchmark is null || !benchmarkClock.IsRunning) return;
         if (benchmarkClock.Elapsed.TotalSeconds >= nextFrameSample)
@@ -424,6 +524,7 @@ internal partial class LazerRaveGame : OsuGame
         if (isDisposing && !IsDisposed)
         {
             pendingSettingsSave?.Cancel();
+            frameworkFrameSync?.UnbindAll();
             try { if (preferences.HasChanges) preferences.Save(); }
             catch (Exception error)
             {

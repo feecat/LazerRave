@@ -12,6 +12,10 @@
 #include <charconv>
 #include <limits>
 #include <algorithm>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
 
 namespace launcher {
 namespace {
@@ -78,7 +82,7 @@ bool InLibrary(const std::string& path, const CONFIG_JUKEBOX& box) {
     }
     return false;
 }
-void SaveXml(const TiXmlDocument& doc, const std::filesystem::path& path) {
+void SaveXml(const TiXmlDocument& doc, const std::filesystem::path& path, bool durable = true) {
     TiXmlPrinter printer;
     doc.Accept(&printer);
     auto temporary = path;
@@ -89,7 +93,7 @@ void SaveXml(const TiXmlDocument& doc, const std::filesystem::path& path) {
         if (!file) throw std::runtime_error("Cannot write launcher response");
     }
 #ifdef _WIN32
-    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | (durable ? MOVEFILE_WRITE_THROUGH : 0)))
         throw std::runtime_error("Cannot replace launcher response");
 #else
     std::filesystem::rename(temporary, path);
@@ -150,6 +154,8 @@ std::unordered_map<std::string, int> ReadScores(game& state, TiXmlElement& respo
 }
 }
 
+#include "LR2_launcher_scores.inc"
+
 Request ReadRequest(int argc, char** argv) {
     Request request;
     for (int i = 1; i < argc; ++i) {
@@ -174,7 +180,11 @@ Request ReadRequest(int argc, char** argv) {
         for (auto element = root->FirstChildElement(); element; element = element->NextSiblingElement()) {
             const std::string name = element->Value();
             const std::string text = element->GetText() ? element->GetText() : "";
-            if (name == "chart") request.chart = text;
+            if (name == "telemetry") {
+                if (text != "LAZERRAVE_SCORE_STREAM_V1" || request.mode != "play") throw std::runtime_error("Invalid score stream request");
+                request.telemetry = true;
+            }
+            else if (name == "chart") request.chart = text;
             else if (name == "render-profile") request.renderProfile = text;
             else if (name == "encoding") request.encoding = text;
             else if (name == "root") request.roots.push_back(text);

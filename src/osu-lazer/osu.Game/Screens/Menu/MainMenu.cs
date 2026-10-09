@@ -54,6 +54,8 @@ namespace osu.Game.Screens.Menu
         public override bool AllowUserExit => false;
 
         public override bool AllowExternalScreenChange => true;
+        protected virtual bool AutomaticallyShowLogin => true;
+        protected virtual bool FlattenPlayMenu => false;
 
         public override bool? AllowGlobalTrackControl => true;
 
@@ -103,9 +105,9 @@ namespace osu.Game.Screens.Menu
         private SongTicker songTicker;
         private Container logoTarget;
         private OnlineMenuBanner onlineMenuBanner;
-        private MenuTipDisplay menuTipDisplay;
+        private Drawable menuTipDisplay;
         private FillFlowContainer bottomElementsFlow;
-        private SupporterDisplay supporterDisplay;
+        private Drawable supporterDisplay;
 
         private Sample reappearSampleSwoosh;
 
@@ -142,6 +144,7 @@ namespace osu.Game.Screens.Menu
                     {
                         Buttons = new ButtonSystem
                         {
+                            FlattenPlayMenu = FlattenPlayMenu,
                             OnSolo = loadSongSelect,
                             OnMultiplayer = () => this.Push(new Multiplayer()),
                             OnExit = e =>
@@ -171,11 +174,7 @@ namespace osu.Game.Screens.Menu
                     Spacing = new Vector2(5),
                     Children = new Drawable[]
                     {
-                        menuTipDisplay = new MenuTipDisplay
-                        {
-                            Anchor = Anchor.TopCentre,
-                            Origin = Anchor.TopCentre,
-                        },
+                        menuTipDisplay = CreateMenuTipDisplay(),
                         onlineMenuBanner = new OnlineMenuBanner
                         {
                             Anchor = Anchor.TopCentre,
@@ -183,12 +182,7 @@ namespace osu.Game.Screens.Menu
                         }
                     }
                 },
-                supporterDisplay = new SupporterDisplay
-                {
-                    Margin = new MarginPadding(5),
-                    Anchor = Anchor.TopLeft,
-                    Origin = Anchor.TopLeft,
-                },
+                supporterDisplay = CreateSupporterDisplay(),
                 holdToExitGameOverlay?.CreateProxy() ?? Empty()
             });
 
@@ -269,6 +263,19 @@ namespace osu.Game.Screens.Menu
             }
         }
 
+        protected virtual Drawable CreateMenuTipDisplay() => new MenuTipDisplay
+        {
+            Anchor = Anchor.TopCentre,
+            Origin = Anchor.TopCentre,
+        };
+
+        protected virtual Drawable CreateSupporterDisplay() => new SupporterDisplay
+        {
+            Margin = new MarginPadding(5),
+            Anchor = Anchor.TopLeft,
+            Origin = Anchor.TopLeft,
+        };
+
         private bool onLogoClick(Func<bool> originalAction)
         {
             if (showMobileDisclaimer.Value)
@@ -291,7 +298,7 @@ namespace osu.Game.Screens.Menu
 
         private void displayLoginIfApplicable()
         {
-            if (loginDisplayed.Value) return;
+            if (!AutomaticallyShowLogin || loginDisplayed.Value) return;
 
             if (!api.IsLoggedIn || api.State.Value == APIState.RequiresSecondFactorAuth)
             {
@@ -354,7 +361,7 @@ namespace osu.Game.Screens.Menu
             musicController.EnsurePlayingSomething();
 
             // Cycle tip on resuming
-            menuTipDisplay.ShowNextTip();
+            (menuTipDisplay as MenuTipDisplay)?.ShowNextTip();
 
             bottomElementsFlow
                 .ScaleTo(1, 1000, Easing.OutQuint)

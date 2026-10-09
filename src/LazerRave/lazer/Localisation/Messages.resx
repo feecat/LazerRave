@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -329,5 +329,32 @@
   </data>
   <data name="Ghost Battle requires rival selection in the classic menu.">
     <value>Ghost Battle requires rival selection in the classic menu.</value>
+  </data>
+  <data name="Website">
+    <value>Website</value>
+  </data>
+  <data name="Internet Ranking">
+    <value>Internet Ranking</value>
+  </data>
+  <data name="Song packs">
+    <value>Song packs</value>
+  </data>
+  <data name="Difficulty tables">
+    <value>Difficulty tables</value>
+  </data>
+  <data name="Download">
+    <value>Download</value>
+  </data>
+  <data name="GitHub">
+    <value>GitHub</value>
+  </data>
+  <data name="Add folder">
+    <value>Add folder</value>
+  </data>
+  <data name="Folder path">
+    <value>Folder path</value>
+  </data>
+  <data name="Relative paths start in the application folder.">
+    <value>Relative paths start in the application folder.</value>
   </data>
 </root>

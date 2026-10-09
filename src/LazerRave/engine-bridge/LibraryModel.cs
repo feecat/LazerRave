@@ -6,26 +6,30 @@ using Tomlyn.Model;
 namespace LazerRave.Bridge;
 
 internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Offset = 0,
-    string Arrangement = "off", string Encoding = "auto", int Width = 1024, int Height = 768,
-    string Player = "Player", string? Avatar = null, int FrameLimit = 0, string RenderProfile = "baseline", string Presentation = "embedded")
+    string Arrangement = "off", string Encoding = "auto", int Width = 1920, int Height = 1080,
+    string Player = "Player", string? Avatar = null, int FrameLimit = 240, string RenderProfile = "discard", string Presentation = "embedded")
 {
+    public string FrontendFrameLimit { get; init; } = "240";
     public IReadOnlyDictionary<string, int> PlayOptions { get; init; } = new Dictionary<string, int>();
     public static FrontendSettings Read(string path)
     {
-        if (!File.Exists(path)) return new([]);
-        var table = Toml.ToModel(File.ReadAllText(path));
+        var table = File.Exists(path) ? Toml.ToModel(File.ReadAllText(path)) : new TomlTable();
         object? Get(string key) => table.TryGetValue(key, out var value) ? value : null;
         double Number(string key, double fallback) => Get(key) is { } n ? Convert.ToDouble(n, CultureInfo.InvariantCulture) : fallback;
         string Text(string key, string fallback) => Get(key) as string ?? fallback;
         var play = Get("play");
         if (play is not null && play is not TomlTable)
             throw new InvalidDataException("Play settings must be a TOML table.");
-        var roots = (Get("directories") as TomlArray ?? []).OfType<string>().Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var directoryValue = Get("directories");
+        if (directoryValue is not null && (directoryValue is not TomlArray directories || directories.Any(item => item is not string)))
+            throw new InvalidDataException("Directories must be an array of paths.");
+        var roots = (directoryValue as TomlArray)?.OfType<string>().Where(root => !string.IsNullOrWhiteSpace(root))
+            .Select(root => root.Trim()).DistinctBy(ApplicationPaths.ResolveLibraryRoot, StringComparer.OrdinalIgnoreCase).ToArray() ?? ["BMS"];
         var settings = new FrontendSettings(roots, Number("speed", 2), (int)Number("offset", 0),
-            Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1024),
-            (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 0), Text("game_render_profile", "baseline"), Text("game_presentation", "embedded"))
+            Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1920),
+            (int)Number("window_height", 1080), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 240), Text("game_render_profile", "discard"), Text("game_presentation", "embedded"))
         {
+            FrontendFrameLimit = Text("frontend_frame_limit", ReadLegacyFrameLimit(path)),
             PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
         };
         if (settings.Speed is < .5 or > 10 || !double.IsFinite(settings.Speed) || Math.Abs(settings.Offset) > 1000
@@ -33,10 +37,26 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
             || settings.FrameLimit is < -1 or > 1000 || settings.FrameLimit is > 0 and < 30
             || !RenderProfiles.Labels.ContainsKey(settings.RenderProfile)
             || !new[] { "embedded", "standalone" }.Contains(settings.Presentation)
+            || !IsValidFrontendFrameLimit(settings.FrontendFrameLimit)
             || !PlayOptionCatalog.Arrangements.Contains(settings.Arrangement)
             || !new[] { "auto", "utf-8", "cp932", "gb18030" }.Contains(settings.Encoding))
             throw new InvalidDataException("Invalid LazerRave play settings.");
         return settings;
+    }
+    public static bool IsValidFrontendFrameLimit(string value) => new[] { "Display", "2x", "4x", "8x", "Unlimited" }.Contains(value)
+        || int.TryParse(value, out var limit) && limit is >= 30 and <= 1000;
+
+    private static string ReadLegacyFrameLimit(string path)
+    {
+        var framework = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "framework.ini");
+        if (!File.Exists(framework)) return "240";
+        foreach (var line in File.ReadLines(framework))
+        {
+            var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length == 2 && parts[0] == "FrameSync")
+                return parts[1] switch { "VSync" => "Display", "Limit2x" => "2x", "Limit4x" => "4x", "Limit8x" => "8x", "Unlimited" => "Unlimited", _ => "240" };
+        }
+        return "240";
     }
     public static string SharedPath => ApplicationPaths.Settings;
 }

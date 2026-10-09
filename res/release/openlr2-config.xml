@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <system><resolution>0</resolution><screenmode>1</screenmode></system>
+  <play><newrandomrestart>1</newrandomrestart></play>
+  <skin><courseresult>LR2files\Theme\LR2\CourseResult\courseresult.lr2skin</courseresult></skin>
+</config>

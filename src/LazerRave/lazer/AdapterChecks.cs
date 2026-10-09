@@ -10,7 +10,7 @@ internal static class AdapterChecks
     public static void Run(FrontendSettings settings, SongLibrary library, string directory)
     {
         static void Require(bool value, string message) { if (!value) throw new InvalidDataException(message); }
-        var store = new BmsBeatmapStore(); store.Replace(library, settings.Roots);
+        var store = new BmsBeatmapStore(); store.Replace(library, ApplicationPaths.LibraryRoots(settings.Roots));
         Require(library.Songs.SelectMany(song => song.Charts).All(chart => BmsBeatmapStore.StableId(chart.Path) == BmsBeatmapStore.StableId(chart.Path.ToUpperInvariant())), "Chart identities must ignore Windows path case.");
         var levels = library.Folders.Where(folder => folder.Parent is null).Select(folder => folder.Path)
             .Concat(library.Folders.Where(folder => folder.Parent is not null).Select(folder => folder.Path))
@@ -34,7 +34,9 @@ internal static class AdapterChecks
         CheckClientCapabilities();
         CheckCloudPanelDrawing();
         CheckCloudIdentity();
+        CheckCloudRoomMapping();
         CheckPlaySettings(directory);
+        CheckLibraryDefaults(directory);
 
         var path = Path.Combine(directory, "settings.toml");
         File.WriteAllText(path, "signature = \"preserved\"\n[play]\nfuture_option = 7\n");
@@ -77,6 +79,51 @@ internal static class AdapterChecks
         Require(rejected && File.ReadAllText(path) == original, "Invalid settings must not replace the saved configuration.");
     }
 
+    private static void CheckLibraryDefaults(string directory)
+    {
+        var fixtures = Path.Combine(directory, "directory-settings");
+        Directory.CreateDirectory(fixtures);
+        var file = Path.Combine(fixtures, "settings.toml");
+        var defaults = FrontendSettings.Read(file);
+        if (!defaults.Roots.SequenceEqual(new[] { "BMS" }) || defaults.Width != 1920 || defaults.Height != 1080
+            || defaults.FrameLimit != 240 || defaults.FrontendFrameLimit != "240" || defaults.RenderProfile != "discard" || defaults.Presentation != "embedded")
+            throw new InvalidDataException("Fresh installations must use BMS, 1920x1080, 240 FPS and embedded E mode.");
+        var second = Path.Combine(fixtures, "Another library");
+        Directory.CreateDirectory(second);
+        var relative = Path.GetRelativePath(AppContext.BaseDirectory, second);
+        var settings = new DesktopSettings(defaults, file, false);
+        settings.Roots.Add(relative);
+        settings.Roots.Add(second);
+        settings.Roots.Add("");
+        settings.Save();
+        var current = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(fixtures);
+            var saved = FrontendSettings.Read(file);
+            if (!saved.Roots.SequenceEqual(new[] { "BMS", relative }) || settings.HasChanges)
+                throw new InvalidDataException("Library settings must retain relative paths and deduplicate resolved directories.");
+            var request = EngineBridge.Request("catalog", saved);
+            var roots = request.Root!.Elements("root").Select(root => root.Value).ToArray();
+            if (!roots.Contains(ApplicationPaths.ResolveLibraryRoot("BMS")) || !roots.Contains(second) || roots.Any(root => !Path.IsPathFullyQualified(root)))
+                throw new InvalidDataException("Relative library paths must resolve from the application folder for both clients.");
+        }
+        finally { Directory.SetCurrentDirectory(current); }
+        settings.Roots.RemoveAt(1);
+        settings.Roots.RemoveAt(1);
+        settings.Roots.RemoveAt(1);
+        settings.FrontendFrameLimit.Value = "120";
+        settings.Save();
+        if (FrontendSettings.Read(file).FrontendFrameLimit != "120" || FrontendSettings.Read(file).Roots.Length != 1)
+            throw new InvalidDataException("Removing library entries and changing the frontend cap must survive restart.");
+        File.WriteAllText(file, "directories = []\nwindow_width = 1280\nwindow_height = 720\ngame_frame_limit = -1\ngame_render_profile = \"baseline\"\ngame_presentation = \"standalone\"\n");
+        File.WriteAllText(Path.Combine(fixtures, "framework.ini"), "FrameSync = Limit4x\n");
+        var legacy = FrontendSettings.Read(file);
+        if (legacy.Roots.Length != 0 || legacy.Width != 1280 || legacy.Height != 720 || legacy.FrameLimit != -1
+            || legacy.RenderProfile != "baseline" || legacy.Presentation != "standalone" || legacy.FrontendFrameLimit != "4x")
+            throw new InvalidDataException("Existing rendering, window and explicitly empty library settings must be preserved.");
+    }
+
     private static void CheckCloudPanelDrawing()
     {
         var client = new CloudClient(() => [], () => "auto", _ => Task.CompletedTask);
@@ -115,6 +162,29 @@ internal static class AdapterChecks
         CloudIdentity.Apply(bound, local, "Local player");
         if (toolbar.Value.Username != "Local player" || toolbar.Value.AvatarUrl is not null)
             throw new InvalidDataException("Signing out did not update the bound toolbar profile.");
+    }
+
+    private static void CheckCloudRoomMapping()
+    {
+        var server = new Uri("https://lazerrave.com");
+        var host = Guid.NewGuid(); var guest = Guid.NewGuid();
+        if (!CloudClient.IsAvatarUrl(server, $"https://lazerrave.com/api/users/{guest}/avatar?v=1") ||
+            CloudClient.IsAvatarUrl(server, $"https://other.example/api/users/{guest}/avatar") ||
+            CloudClient.IsAvatarUrl(server, "https://lazerrave.com/api/auth/token"))
+            throw new InvalidDataException("Participant avatar requests must stay within the cloud avatar endpoint.");
+        var client = new CloudClient(() => [], () => "auto", _ => Task.CompletedTask);
+        try
+        {
+            var room = new CloudRoom(Guid.NewGuid(), "Fixture", host, "lobby", 1, null, null, null,
+                [new(host, "Host", false, "available", "host", null, 1), new(guest, "Guest", true, "missing", "guest", null, 2)], Guid.NewGuid());
+            var map = new CloudRoomMap(); var original = map.Convert(room, client);
+            var changed = map.Convert(room with { State = "playing", Version = 2 }, client);
+            if (original.RoomID != changed.RoomID || map.CloudId(changed) != room.Id || original.Host?.Id != 1 ||
+                original.RecentParticipants.Select(user => user.Id).Distinct().Count() != 2 ||
+                changed.Status != osu.Game.Online.Rooms.RoomStatus.Playing)
+                throw new InvalidDataException("Cloud room mapping lost identity, participants or room state.");
+        }
+        finally { client.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
 
     private partial class CloudPanelDrawingCheck(CloudClient client) : LazerRaveCloudPanel(null!, client)

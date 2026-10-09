@@ -978,6 +978,7 @@ int main(int argc, char** argv) {
 			} else nextFrame = clock::time_point{};
 		}
 		const double embeddedFrameStart = embedding::Enabled() || embedding::TracingEnabled() ? GetTimeWrap() : 0;
+		launcher::PublishScore(launchRequest, gs);
 		if (ProcessMessage() || !gs.procSelecter || gs.auto2avi) break;
 		const double embeddedMessageEnd = embedding::Enabled() || embedding::TracingEnabled() ? GetTimeWrap() : 0;
 
@@ -2668,6 +2669,8 @@ int main(int argc, char** argv) {
 	}
 	//main loop end
 
+	launcher::PublishScore(launchRequest, gs, true);
+	launcher::FlushScores();
 	//phase_exit game
 	if (gs.is_recordmode) {
 		RecordBmsSound(&gs, gs.directoryFilename);

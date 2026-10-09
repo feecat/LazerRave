@@ -861,6 +861,16 @@ namespace osu.Game
 
         protected virtual SettingsOverlay CreateSettingsOverlay() => new SettingsOverlay();
 
+        public virtual Drawable CreateFrameLimiterSetting(FrameworkConfigManager config) => new osu.Game.Overlays.Settings.SettingsItemV2(new osu.Game.Graphics.UserInterfaceV2.FormEnumDropdown<FrameSync>
+        {
+            Caption = osu.Game.Localisation.GraphicsSettingsStrings.FrameLimiter,
+            Current = config.GetBindable<FrameSync>(FrameworkSetting.FrameSync),
+        }) { Keywords = new[] { "fps", "framerate" } };
+
+        protected virtual Toolbar CreateToolbar() => new Toolbar();
+
+        protected virtual NowPlayingOverlay CreateNowPlayingOverlay() => new NowPlayingOverlay();
+
         protected virtual LoginOverlay CreateLoginOverlay() => new LoginOverlay { Anchor = Anchor.TopRight, Origin = Anchor.TopRight };
 
         protected virtual UpdateManager CreateUpdateManager() => new UpdateManager();
@@ -1111,16 +1121,13 @@ namespace osu.Game
             loadComponentSingleFile(statisticsProvider = new LocalUserStatisticsProvider(), Add, true);
             loadComponentSingleFile(difficultyRecommender = new DifficultyRecommender(statisticsProvider), Add, true);
             loadComponentSingleFile(new UserStatisticsWatcher(statisticsProvider), Add, true);
-            loadComponentSingleFile(Toolbar = new Toolbar
+            loadComponentSingleFile(Toolbar = CreateToolbar().With(toolbar => toolbar.OnHome = delegate
             {
-                OnHome = delegate
-                {
-                    CloseAllOverlays(false);
+                CloseAllOverlays(false);
 
-                    if (menuScreen?.GetChildScreen() != null)
-                        menuScreen.MakeCurrent();
-                },
-            }, topMostOverlayContent.Add);
+                if (menuScreen?.GetChildScreen() != null)
+                    menuScreen.MakeCurrent();
+            }), topMostOverlayContent.Add);
 
             loadComponentSingleFile(volume = new VolumeOverlay(), leftFloatingOverlayContent.Add, true);
 
@@ -1159,11 +1166,11 @@ namespace osu.Game
 
             loadComponentSingleFile(loginOverlay = CreateLoginOverlay(), rightFloatingOverlayContent.Add, true);
 
-            loadComponentSingleFile(nowPlayingOverlay = new NowPlayingOverlay
+            loadComponentSingleFile(nowPlayingOverlay = CreateNowPlayingOverlay().With(overlay =>
             {
-                Anchor = Anchor.TopRight,
-                Origin = Anchor.TopRight,
-            }, rightFloatingOverlayContent.Add, true);
+                overlay.Anchor = Anchor.TopRight;
+                overlay.Origin = Anchor.TopRight;
+            }), rightFloatingOverlayContent.Add, true);
 
             loadComponentSingleFile(new AccountCreationOverlay(), topMostOverlayContent.Add, true);
             loadComponentSingleFile<IDialogOverlay>(dialogOverlay = new DialogOverlay(), topMostOverlayContent.Add, true);

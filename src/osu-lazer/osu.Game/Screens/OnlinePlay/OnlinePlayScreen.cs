@@ -55,6 +55,7 @@ namespace osu.Game.Screens.OnlinePlay
         }
 
         private readonly IBindable<APIState> apiState = new Bindable<APIState>();
+        protected virtual bool RequiresOnlineAPI => true;
 
         [BackgroundDependencyLoader]
         private void load()
@@ -86,8 +87,11 @@ namespace osu.Game.Screens.OnlinePlay
 
             screenStack.Push(Lounge = CreateLounge());
 
-            apiState.BindTo(API.State);
-            apiState.BindValueChanged(onlineStateChanged, true);
+            if (RequiresOnlineAPI)
+            {
+                apiState.BindTo(API.State);
+                apiState.BindValueChanged(onlineStateChanged, true);
+            }
         }
 
         private void forcefullyExit()

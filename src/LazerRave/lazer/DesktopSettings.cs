@@ -7,6 +7,7 @@ namespace LazerRave.Lazer;
 
 internal sealed class DesktopSettings(FrontendSettings initial, string path, bool readOnly)
 {
+    private bool frontendFrameLimitSaved = File.Exists(path) && Toml.ToModel(File.ReadAllText(path)).ContainsKey("frontend_frame_limit");
     public FrontendSettings Value { get; private set; } = initial;
     public BindableDouble Speed { get; } = new(initial.Speed) { MinValue = .5, MaxValue = 10, Precision = .05 };
     public BindableInt Offset { get; } = new(initial.Offset) { MinValue = -1000, MaxValue = 1000 };
@@ -14,7 +15,8 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
     public IReadOnlyDictionary<string, BindableInt> PlayOptions { get; } = PlayOptionCatalog.All.ToDictionary(
         option => option.Name, option => new BindableInt(PlayOptionCatalog.Get(initial, option)) { MinValue = option.Min, MaxValue = option.Max });
     public Bindable<string> Encoding { get; } = new(initial.Encoding);
-    public Bindable<string> Roots { get; } = new(string.Join(";", initial.Roots));
+    public BindableList<string> Roots { get; } = new(initial.Roots);
+    public Bindable<string> FrontendFrameLimit { get; } = new(initial.FrontendFrameLimit);
     public Bindable<string> Window { get; } = new($"{initial.Width}x{initial.Height}");
     public Bindable<string> Player { get; } = new(initial.Player);
     public Bindable<string> Avatar { get; } = new(initial.Avatar ?? "");
@@ -24,10 +26,11 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
 
     public Bindable<string> RenderProfile { get; } = new(RenderProfiles.Labels[initial.RenderProfile]);
 
-    public bool HasChanges => PlayOptionCatalog.All.Any(option => PlayOptions[option.Name].Value != PlayOptionCatalog.Get(Value, option))
+    public bool HasChanges => !frontendFrameLimitSaved || PlayOptionCatalog.All.Any(option => PlayOptions[option.Name].Value != PlayOptionCatalog.Get(Value, option))
         || Speed.Value != Value.Speed || Offset.Value != Value.Offset
         || Arrangement.Value != Value.Arrangement || Encoding.Value != Value.Encoding
-        || Roots.Value != string.Join(";", Value.Roots) || Window.Value != $"{Value.Width}x{Value.Height}"
+        || !LibraryDirectories.SequenceEqual(Value.Roots, StringComparer.OrdinalIgnoreCase) || Window.Value != $"{Value.Width}x{Value.Height}"
+        || FrontendFrameLimit.Value != Value.FrontendFrameLimit
         || Player.Value != Value.Player || Avatar.Value != (Value.Avatar ?? "")
         || Presentation.Value != Value.Presentation
         || RenderProfile.Value != RenderProfiles.Labels[Value.RenderProfile]
@@ -35,9 +38,9 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
 
     public void Save()
     {
-        var roots = Roots.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        foreach (var root in roots) if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
+        var roots = LibraryDirectories;
+        foreach (var root in roots) if (!Directory.Exists(ApplicationPaths.ResolveLibraryRoot(root))) throw new DirectoryNotFoundException(root);
+        if (!FrontendSettings.IsValidFrontendFrameLimit(FrontendFrameLimit.Value)) throw new ArgumentException("Invalid frontend frame limit.");
         var size = Window.Value.ToLowerInvariant().Replace('×', 'x').Split('x', StringSplitOptions.TrimEntries);
         if (size.Length != 2 || !int.TryParse(size[0], out int width) || !int.TryParse(size[1], out int height)
             || width is < 320 or > 7680 || height is < 240 or > 4320) throw new ArgumentException("Enter a window size such as 1920x1080.");
@@ -52,7 +55,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             throw new ArgumentException("Select an existing BMP, PNG or JPEG avatar.");
         if (!new[] { "embedded", "standalone" }.Contains(Presentation.Value)) throw new ArgumentException("Invalid game presentation mode.");
         var profile = RenderProfiles.Labels.Single(pair => pair.Value == RenderProfile.Value).Key;
-        var next = Value with { Roots = roots, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
+        var next = Value with { Roots = roots, FrontendFrameLimit = FrontendFrameLimit.Value, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
             Encoding = Encoding.Value, Width = width, Height = height, Player = Player.Value.Trim(), Avatar = avatar.Length > 0 ? Path.GetFullPath(avatar) : null, FrameLimit = frameLimit, RenderProfile = profile, Presentation = Presentation.Value };
         if (!readOnly)
         {
@@ -63,6 +66,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             table["window_width"] = (long)width; table["window_height"] = (long)height; table["display_name"] = next.Player;
             table["avatar_path"] = next.Avatar ?? "";
             table["game_frame_limit"] = (long)next.FrameLimit;
+            table["frontend_frame_limit"] = next.FrontendFrameLimit;
             table["game_render_profile"] = next.RenderProfile;
             table["game_presentation"] = next.Presentation;
             var playTable = table.TryGetValue("play", out var savedPlay) && savedPlay is TomlTable previousPlay ? previousPlay : new TomlTable();
@@ -74,5 +78,8 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
         }
         Value = next;
+        frontendFrameLimitSaved = true;
     }
+    private string[] LibraryDirectories => Roots.Where(root => !string.IsNullOrWhiteSpace(root)).Select(root => root.Trim())
+        .DistinctBy(ApplicationPaths.ResolveLibraryRoot, StringComparer.OrdinalIgnoreCase).ToArray();
 }

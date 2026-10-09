@@ -62,6 +62,8 @@ void Prepare(const launcher::Request& request) {
     if (!SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(Window())))
         throw std::runtime_error("Cannot match the embedding host's DPI context");
     SetWindowVisibleFlag(FALSE);
+    SetDoubleStartValidFlag(TRUE);
+    SetAlwaysRunFlag(TRUE);
     SetKeyExclusiveCooperativeLevelFlag(FALSE);
     SetUseASyncChangeWindowModeFunction(FALSE, nullptr, nullptr);
     SetUseDirect3DVersion(DX_DIRECT3D_11);
@@ -331,7 +333,8 @@ int Probe(const launcher::Request& request) {
         SetDrawScreen(DX_SCREEN_BACK);
         if (!Tick()) throw std::runtime_error("Embedded viewport sizing failed");
         Connect(request);
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(600);
+        // Allow a second engine to initialise while this diagnostic viewport is still alive.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
         int frames = 0;
         while (std::chrono::steady_clock::now() < deadline && Tick() && !ProcessMessage()) {
             DrawBox(0, 0, 640, 480, GetColor(30, 90, 120), TRUE);

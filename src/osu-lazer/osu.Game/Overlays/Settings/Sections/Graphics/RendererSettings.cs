@@ -48,8 +48,7 @@ namespace osu.Game.Overlays.Settings.Sections.Graphics
                 {
                     Keywords = new[] { @"compatibility", @"directx" },
                 },
-                // TODO: this needs to be a custom dropdown at some point
-                new SettingsItemV2(new FormEnumDropdown<FrameSync>
+                game?.CreateFrameLimiterSetting(config) ?? new SettingsItemV2(new FormEnumDropdown<FrameSync>
                 {
                     Caption = GraphicsSettingsStrings.FrameLimiter,
                     Current = config.GetBindable<FrameSync>(FrameworkSetting.FrameSync),

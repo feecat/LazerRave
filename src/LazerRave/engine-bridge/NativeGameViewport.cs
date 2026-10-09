@@ -58,7 +58,8 @@ internal sealed class NativeGameViewport : IDisposable
                 }
                 finally { if (previousDpi != IntPtr.Zero) NativeWindowApi.SetThreadDpiAwarenessContext(previousDpi); }
                 lastBounds = default; UpdateBounds();
-                if (NativeWindowApi.IsWindowVisible(child)) NativeWindowApi.SetFocus(child);
+                if (NativeWindowApi.IsWindowVisible(child) && NativeWindowApi.GetForegroundWindow() == parent)
+                    NativeWindowApi.SetFocus(child);
                 completion.SetResult(new(unchecked((ulong)child.ToInt64()), (uint)Environment.ProcessId));
             }
             catch (Exception error) { CloseOnWindowThread(); completion.SetException(error); }

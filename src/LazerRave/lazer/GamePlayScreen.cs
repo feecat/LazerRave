@@ -18,6 +18,8 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     private readonly Container area = new() { RelativeSizeAxes = Axes.Both };
     private OsuSpriteText status = null!;
     private bool finished;
+    public CloudClient? MultiplayerClient { get; init; }
+    public Guid? MatchId { get; init; }
     public override string Title => chart.Title;
     public override bool ShowFooter => false;
     public override bool CursorVisible => settings.Presentation == "standalone";
@@ -29,7 +31,16 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     {
         base.LoadComplete();
         AddInternal(new Box { RelativeSizeAxes = Axes.Both, Colour = Color4.Black });
-        AddInternal(area);
+        if (MultiplayerClient is { } client && MatchId is { } match)
+        {
+            AddInternal(new GridContainer
+            {
+                RelativeSizeAxes = Axes.Both,
+                ColumnDimensions = [new Dimension(), new Dimension(GridSizeMode.Absolute, 290)],
+                Content = new Drawable?[][] { [area, new CloudLeaderboard(client, match, true) { RelativeSizeAxes = Axes.Both }] },
+            });
+        }
+        else AddInternal(area);
         AddInternal(status = new OsuSpriteText { Text = D("Loading…"), Position = new Vector2(24, 24), Font = OsuFont.GetFont(size: 17) });
     }
     public override void OnEntering(ScreenTransitionEvent e) { base.OnEntering(e); _ = RunAsync(); }
@@ -41,12 +52,19 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     private async Task RunAsync()
     {
         string? failure = null;
+        await using var scores = MultiplayerClient is { } client && MatchId is { } match ? new CloudScoreSession(client, match) : null;
+        void Score(GameplaySnapshot value)
+        {
+            scores!.Update(value);
+            if (value.Finished && !value.Aborted) Schedule(() => session.Cancel());
+        }
+        Action<GameplaySnapshot>? report = scores is null ? null : Score;
         try
         {
             if (settings.Presentation == "standalone")
             {
                 Schedule(() => status.Text = D("Playing in a separate window…"));
-                await bridge.Play(settings, chart, session.Token);
+                await bridge.Play(settings, chart, session.Token, progress: report);
             }
             else
             {
@@ -55,7 +73,7 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
                 {
                     viewport.BindEngine(window, process);
                     Schedule(() => status.Hide());
-                });
+                }, report);
             }
         }
         catch (OperationCanceledException) { }
@@ -64,6 +82,11 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
         {
             try { if (settings.Presentation == "embedded") await viewport.CloseAsync(); }
             catch (Exception error) { failure ??= error.Message; }
+            if (scores is not null)
+            {
+                try { await scores.Finish(); }
+                catch (Exception error) { failure ??= "Result upload failed: " + error.Message; }
+            }
             if (!IsDisposed) Schedule(() => { finished = true; this.Exit(); returned(failure); });
         }
     }

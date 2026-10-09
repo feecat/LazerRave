@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -329,5 +329,32 @@
   </data>
   <data name="Ghost Battle requires rival selection in the classic menu.">
     <value>Ghost Battle 需要在经典菜单中选择对手。</value>
+  </data>
+  <data name="Website">
+    <value>网站</value>
+  </data>
+  <data name="Internet Ranking">
+    <value>网络排名</value>
+  </data>
+  <data name="Song packs">
+    <value>曲包</value>
+  </data>
+  <data name="Difficulty tables">
+    <value>难度表</value>
+  </data>
+  <data name="Download">
+    <value>下载</value>
+  </data>
+  <data name="GitHub">
+    <value>GitHub</value>
+  </data>
+  <data name="Add folder">
+    <value>添加文件夹</value>
+  </data>
+  <data name="Folder path">
+    <value>文件夹路径</value>
+  </data>
+  <data name="Relative paths start in the application folder.">
+    <value>相对路径以程序所在文件夹为基准。</value>
   </data>
 </root>

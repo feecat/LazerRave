@@ -42,7 +42,7 @@ internal sealed class EngineBridge(string runtime)
         return new(root);
     }
     public async Task<XDocument> Exchange(string mode, FrontendSettings settings, Chart? chart = null, CancellationToken cancellation = default,
-        EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null)
+        EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null)
     {
         if (!File.Exists(Executable)) throw new FileNotFoundException("OpenLR2_x64.exe is missing from the application folder.");
         var capabilities = System.Text.Encoding.ASCII.GetString(await File.ReadAllBytesAsync(Executable, cancellation));
@@ -52,18 +52,24 @@ internal sealed class EngineBridge(string runtime)
             throw new InvalidDataException("Rebuild OpenLR2 before using embedded play.");
         if (mode is "play" or "validate" && !capabilities.Contains("LAZERRAVE_PLAY_OPTIONS_V1", StringComparison.Ordinal))
             throw new InvalidDataException("Rebuild OpenLR2 before using gameplay options.");
+        if (mode == "play" && progress is not null && !capabilities.Contains("LAZERRAVE_SCORE_STREAM_V1", StringComparison.Ordinal))
+            throw new InvalidDataException("Rebuild OpenLR2 before using multiplayer scores.");
         var directory = Path.Combine(Runtime, "cache", "engine-requests", Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(directory);
         try
         {
             var request = Path.Combine(directory, "request.xml");
-            Request(mode, settings, chart, embedding).Save(request);
+            var document = Request(mode, settings, chart, embedding);
+            if (mode == "play" && progress is not null) document.Root!.Add(new XElement("telemetry", "LAZERRAVE_SCORE_STREAM_V1"));
+            document.Save(request);
             var start = new ProcessStartInfo(Executable) { WorkingDirectory = Runtime, UseShellExecute = false, CreateNoWindow = true };
             start.ArgumentList.Add("--lazerrave-request"); start.ArgumentList.Add(request);
             using var process = Process.Start(start) ?? throw new IOException("Cannot start OpenLR2.");
             using var ownership = mode is "play" or "embed-probe" ? new OwnedEngineJob(process) : null;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
             if (mode != "play") timeout.CancelAfter(TimeSpan.FromMinutes(10));
+            using var scoreStop = new CancellationTokenSource();
+            var scores = mode == "play" && progress is not null ? WatchScores(request + ".progress.xml", progress, scoreStop.Token) : Task.CompletedTask;
             try
             {
                 if (mode is "play" or "embed-probe" && embedding is not null)
@@ -71,6 +77,11 @@ internal sealed class EngineBridge(string runtime)
                 await process.WaitForExitAsync(timeout.Token);
             }
             catch { await StopOwnedProcess(process, request, mode is "play" or "embed-probe"); throw; }
+            finally
+            {
+                scoreStop.Cancel(); await scores;
+                if (progress is not null && File.Exists(request + ".progress.xml")) progress(GameplaySnapshot.Read(request + ".progress.xml"));
+            }
             if (mode == "play")
             {
                 if (process.ExitCode != 0) throw new IOException($"OpenLR2 exited with code {process.ExitCode}.");
@@ -79,12 +90,29 @@ internal sealed class EngineBridge(string runtime)
                 return new(new XElement("lazerrave", new XAttribute("status", "ok")));
             }
             var reply = request + ".reply.xml";
-            var document = ReadReply(reply);
-            if (process.ExitCode != 0 || (string?)document.Root?.Attribute("status") != "ok")
-                throw new IOException((string?)document.Root?.Element("message") ?? $"OpenLR2 exited with code {process.ExitCode}.");
-            return document;
+            var replyDocument = ReadReply(reply);
+            if (process.ExitCode != 0 || (string?)replyDocument.Root?.Attribute("status") != "ok")
+                throw new IOException((string?)replyDocument.Root?.Element("message") ?? $"OpenLR2 exited with code {process.ExitCode}.");
+            return replyDocument;
         }
         finally { System.IO.Directory.Delete(directory, true); }
+    }
+    private static async Task WatchScores(string path, Action<GameplaySnapshot> callback, CancellationToken cancellation)
+    {
+        GameplaySnapshot? previous = null;
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(120));
+            while (await timer.WaitForNextTickAsync(cancellation))
+            {
+                if (!File.Exists(path)) continue;
+                GameplaySnapshot value;
+                try { value = GameplaySnapshot.Read(path); }
+                catch (Exception error) when (error is IOException or XmlException) { continue; }
+                if (value != previous) { previous = value; callback(value); }
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
     }
     public async Task<SongLibrary> Catalog(FrontendSettings settings, bool sync, CancellationToken cancellation = default) =>
         SongLibrary.Parse(await Exchange(sync ? "sync" : "catalog", settings, cancellation: cancellation), Runtime, ApplicationPaths.LibraryRoots(settings.Roots));
@@ -153,10 +181,10 @@ internal sealed class EngineBridge(string runtime)
         if (!process.HasExited) process.Kill(true);
         await process.WaitForExitAsync(CancellationToken.None);
     }
-    public async Task Play(FrontendSettings settings, Chart chart, CancellationToken cancellation, EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null)
+    public async Task Play(FrontendSettings settings, Chart chart, CancellationToken cancellation, EmbedTarget? embedding = null, Action<IntPtr, int>? ready = null, Action<GameplaySnapshot>? progress = null)
     {
         await Exchange("validate", settings, chart, cancellation, embedding);
-        if (embedding is not null) { await Exchange("play", settings, chart, cancellation, embedding, ready); return; }
+        if (embedding is not null) { await Exchange("play", settings, chart, cancellation, embedding, ready, progress); return; }
         var start = new ProcessStartInfo("powershell.exe") { WorkingDirectory = Runtime, UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         foreach (var value in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(Runtime, "set-window.ps1"),
             "-RuntimeDirectory", Runtime, "-Width", settings.Width.ToString(CultureInfo.InvariantCulture), "-Height", settings.Height.ToString(CultureInfo.InvariantCulture) }) start.ArgumentList.Add(value);
@@ -164,6 +192,6 @@ internal sealed class EngineBridge(string runtime)
         var error = configure.StandardError.ReadToEndAsync(cancellation);
         await configure.WaitForExitAsync(cancellation);
         if (configure.ExitCode != 0) throw new IOException(await error);
-        await Exchange("play", settings, chart, cancellation);
+        await Exchange("play", settings, chart, cancellation, progress: progress);
     }
 }

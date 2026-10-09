@@ -67,7 +67,7 @@ namespace osu.Game.Screens.OnlinePlay
             {
                 set
                 {
-                    pageTitle.Text = value?.ShortTitle.Titleize() ?? default(LocalisableString);
+                    pageTitle.Text = string.IsNullOrEmpty(value?.ShortTitle) ? default(LocalisableString) : value.ShortTitle.Titleize();
                     dot.Alpha = pageTitle.Text == default ? 0 : 1;
                 }
             }

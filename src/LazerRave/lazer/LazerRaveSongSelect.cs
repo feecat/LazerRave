@@ -17,7 +17,12 @@ namespace LazerRave.Lazer;
 internal partial class LazerRaveSongSelect : SoloSongSelect
 {
     [Resolved] private LazerRaveGame game { get; set; } = null!;
-    public override string Title => "Library";
+    public Func<BeatmapInfo, CancellationToken, Task>? ConfirmSelection { get; init; }
+    public string ConfirmationText { get; init; } = "Use selected difficulty";
+    public bool IsRoomSelection => ConfirmSelection is not null;
+    private bool confirming;
+    private readonly CancellationTokenSource selectionLifetime = new();
+    public override string Title => IsRoomSelection ? "Choose song" : "Library";
     public override bool SupportsBeatmapManagement => false;
     public override bool? AllowGlobalTrackControl => false;
     public LazerRaveSongSelect() { ControlGlobalMusic = false; TopPadding = 80; }
@@ -46,11 +51,30 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         NewItemsPresented = CarouselNewItemsPresented,
     };
 
-    protected override void OnStart() => game.StartGame(Beatmap.Value.BeatmapInfo);
+    protected override void OnStart()
+    {
+        if (!IsRoomSelection) game.StartGame(Beatmap.Value.BeatmapInfo);
+        else if (!confirming) _ = ConfirmRoomSelection();
+    }
+    private async Task ConfirmRoomSelection()
+    {
+        confirming = true;
+        bool confirmed = false;
+        game.SetLibraryMessage(D("Checking local song resources…"));
+        try
+        {
+            await ConfirmSelection!(Beatmap.Value.BeatmapInfo, selectionLifetime.Token);
+            confirmed = true;
+            Schedule(() => { if (this.IsCurrentScreen()) this.Exit(); });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { Schedule(() => game.SetLibraryMessage(error.Message)); }
+        finally { if (!confirmed) confirming = false; }
+    }
     public override bool OnBackButton() => game.ParentFolder();
     public override IEnumerable<OsuMenuItem> GetForwardActions(BeatmapInfo beatmap)
     {
-        yield return new OsuMenuItem(D("Play"), MenuItemType.Highlighted, () => SelectAndRun(beatmap, OnStart)) { Icon = FontAwesome.Solid.Play };
+        yield return new OsuMenuItem(D(IsRoomSelection ? ConfirmationText : "Play"), MenuItemType.Highlighted, () => SelectAndRun(beatmap, OnStart)) { Icon = IsRoomSelection ? FontAwesome.Solid.Check : FontAwesome.Solid.Play };
     }
     public override IReadOnlyList<ScreenFooterButton> CreateFooterButtons() => base.CreateFooterButtons().SelectMany(button =>
         button is FooterButtonMods
@@ -81,5 +105,16 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         if (e.Key == Key.Delete) return true;
         if (e.Key == Key.BackSpace) { game.ParentFolder(); return true; }
         return base.OnKeyDown(e);
+    }
+    public override bool OnExiting(ScreenExitEvent e)
+    {
+        if (base.OnExiting(e)) return true;
+        selectionLifetime.Cancel();
+        return false;
+    }
+    protected override void Dispose(bool isDisposing)
+    {
+        if (isDisposing) selectionLifetime.Cancel();
+        base.Dispose(isDisposing);
     }
 }

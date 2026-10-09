@@ -34,6 +34,8 @@ namespace osu.Game.Overlays
 
         protected override Drawable CreateHeader() => new SettingsHeader(Title, Description);
 
+        protected virtual SettingsSection CreateGeneralSection() => new GeneralSection();
+
         protected override Drawable CreateFooter() => new OsuContextMenuContainer
         {
             RelativeSizeAxes = Axes.X,
@@ -73,7 +75,7 @@ namespace osu.Game.Overlays
             var sections = new List<SettingsSection>
             {
                 // This list should be kept in sync with ScreenBehaviour.
-                new GeneralSection(),
+                CreateGeneralSection(),
                 new SkinSection(),
                 new InputSection(createSubPanel(new KeyBindingPanel())),
                 new UserInterfaceSection(),

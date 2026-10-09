@@ -27,6 +27,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         private const float height = 40f;
 
         private readonly Room room;
+        private readonly bool showUserProfiles;
 
         private FillFlowContainer<CircularAvatar> avatarFlow = null!;
         private CircularAvatar hostAvatar = null!;
@@ -34,9 +35,10 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         private HiddenUserCount hiddenUsers = null!;
         private OsuSpriteText totalCount = null!;
 
-        public DrawableRoomParticipantsList(Room room)
+        public DrawableRoomParticipantsList(Room room, bool showUserProfiles = true)
         {
             this.room = room;
+            this.showUserProfiles = showUserProfiles;
 
             AutoSizeAxes = Axes.X;
             Height = height;
@@ -77,7 +79,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                             },
                             Children = new Drawable[]
                             {
-                                hostAvatar = new CircularAvatar
+                                hostAvatar = new CircularAvatar(showUserProfiles)
                                 {
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft,
@@ -227,7 +229,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
         private void addUser(APIUser user)
         {
             if (displayedCircles < NumberOfCircles)
-                avatarFlow.Add(new CircularAvatar { User = user });
+                avatarFlow.Add(new CircularAvatar(showUserProfiles) { User = user });
         }
 
         private void clearUsers()
@@ -280,7 +282,8 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
             if (room.Host != null)
             {
                 hostText.AddText("hosted by ");
-                hostText.AddUserLink(room.Host);
+                if (showUserProfiles) hostText.AddUserLink(room.Host);
+                else hostText.AddText(room.Host.Username);
             }
         }
 
@@ -304,7 +307,11 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                 set => avatar.User = value;
             }
 
-            private readonly UpdateableAvatar avatar = new UpdateableAvatar(showUserPanelOnHover: true) { RelativeSizeAxes = Axes.Both };
+            private readonly UpdateableAvatar avatar;
+            public CircularAvatar(bool interactive = true)
+            {
+                avatar = new UpdateableAvatar(isInteractive: interactive, showUserPanelOnHover: interactive) { RelativeSizeAxes = Axes.Both };
+            }
 
             [BackgroundDependencyLoader]
             private void load(OverlayColourProvider colours)

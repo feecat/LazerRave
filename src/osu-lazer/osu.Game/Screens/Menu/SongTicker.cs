@@ -96,6 +96,14 @@ namespace osu.Game.Screens.Menu
 
         private void show()
         {
+            if (beatmap.Value is DummyWorkingBeatmap)
+            {
+                this.ClearTransforms();
+                title.Text = artist.Text = string.Empty;
+                Alpha = 0;
+                return;
+            }
+
             var metadata = beatmap.Value.Metadata;
 
             title.Text = new RomanisableString(metadata.TitleUnicode, metadata.Title);

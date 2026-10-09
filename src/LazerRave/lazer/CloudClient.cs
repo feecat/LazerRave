@@ -5,17 +5,20 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using LazerRave.Content;
+using LazerRave.Bridge;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace LazerRave.Lazer;
 
 internal sealed record CloudUser(Guid Id, string Username, string DisplayName, long Uid = 0, string? AvatarUrl = null);
 internal sealed record CloudChart(Guid Id, string Title, string Sha256, int Keys, Guid? PackId, string? ContentSha256, Guid? ShareId, DateTime? ExpiresAt);
-internal sealed record CloudMember(Guid Id, string DisplayName, bool Ready, string ContentState);
-internal sealed record CloudRoom(Guid Id, string Name, Guid HostId, string State, long Version, CloudChart? Chart, Guid? MatchId, DateTime? StartAt, CloudMember[] Members, Guid SelectionId);
+internal sealed record CloudMember(Guid Id, string DisplayName, bool Ready, string ContentState, string Username = "", string? AvatarUrl = null, long Uid = 0, int ExScore = 0, int Combo = 0, int Misses = 0, double Progress = 0, bool Finished = false, bool Disconnected = false, int MaxCombo = 0, int ClearType = 0, bool Aborted = false);
+internal sealed record CloudChat(long Id, string Channel, string Text, Guid UserId, string Username, string DisplayName, DateTime CreatedAt);
+internal sealed record CloudRoom(Guid Id, string Name, Guid HostId, string State, long Version, CloudChart? Chart, Guid? MatchId, DateTime? StartAt, CloudMember[] Members, Guid SelectionId, CloudMember[]? Results = null);
 internal sealed record SharedSong(Guid Id, Guid SelectionId, string State, long SizeBytes, long ReceivedBytes, string ArchiveSha256, SongManifest Manifest, DateTime ExpiresAt);
 internal sealed record CloudLogin(CloudUser User, string Token);
 internal sealed record CloudLocalChart(string Path, string Title, string Artist, int Keys, int Level);
+internal sealed record CloudClock(long ClientTime, long ServerTime, int Protocol);
 
 internal sealed class CloudClient : IAsyncDisposable
 {
@@ -25,15 +28,26 @@ internal sealed class CloudClient : IAsyncDisposable
     private string? token;
     private CancellationTokenSource? transfer, inspection;
     private readonly SemaphoreSlim operation = new(1);
+    private readonly object chatLock = new();
     private readonly Func<IEnumerable<string>> songDirectories;
     private readonly Func<string> encoding;
     private readonly Func<string, Task> installed;
     private readonly string applicationRoot;
+    private readonly CloudSessionStore? sessions;
+    public bool HasSavedSession => sessions?.Exists == true;
     private string SharedRoot => Path.Combine(applicationRoot, "Shared");
     private Guid inspectedSelection;
-    private SongManifest? localManifest;
     private string? localChart;
+    private double serverClockOffset;
+    public DateTime ServerNow => DateTime.UtcNow.AddMilliseconds(serverClockOffset);
     public CloudUser? User { get; private set; }
+    public Uri? Server => http?.BaseAddress;
+    internal static bool IsAvatarUrl(Uri? server, string value)
+    {
+        if (server is null || !Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.GetLeftPart(UriPartial.Authority) != server.GetLeftPart(UriPartial.Authority) || uri.UserInfo.Length > 0 || uri.Fragment.Length > 0) return false;
+        var parts = uri.AbsolutePath.Split('/');
+        return parts.Length == 5 && parts[1] == "api" && parts[2] == "users" && Guid.TryParse(parts[3], out _) && parts[4] == "avatar";
+    }
     public Uri? AvatarUri => ResolveAvatar(http?.BaseAddress, User);
     internal static Uri? ResolveAvatar(Uri? server, CloudUser? user)
     {
@@ -48,10 +62,14 @@ internal sealed class CloudClient : IAsyncDisposable
     public string Status { get; private set; } = "";
     public string? AvailableChart { get; private set; }
     public TransferProgress? Progress { get; private set; }
+    public bool CanStartRound => Connected && !Busy && Room is { State: "lobby", Chart: not null } room && room.HostId == User?.Id
+        && AvailableChart is not null && room.Members.Length > 0 && room.Members.All(member => member.Ready && member.ContentState == "available");
+    public CloudChat[] Messages { get; private set; } = [];
     public event Action? Changed;
-    public CloudClient(Func<IEnumerable<string>> songDirectories, Func<string> encoding, Func<string, Task> installed, string? applicationRoot = null)
-    { this.songDirectories = songDirectories; this.encoding = encoding; this.installed = installed; this.applicationRoot = Path.GetFullPath(applicationRoot ?? AppContext.BaseDirectory); }
+    public CloudClient(Func<IEnumerable<string>> songDirectories, Func<string> encoding, Func<string, Task> installed, string? applicationRoot = null, CloudSessionStore? sessions = null)
+    { this.songDirectories = songDirectories; this.encoding = encoding; this.installed = installed; this.applicationRoot = Path.GetFullPath(applicationRoot ?? AppContext.BaseDirectory); this.sessions = sessions; }
     private void Notify() => Changed?.Invoke();
+    public void SetGameStatus(string status) { Status = status; Notify(); }
     private void SetProgress(TransferProgress value) { Progress = value; Status = value.Stage; Notify(); }
     public static Uri ServerUri(string value)
     {
@@ -63,17 +81,68 @@ internal sealed class CloudClient : IAsyncDisposable
     {
         var uri = ServerUri(server);
         await Disconnect();
-        http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = uri, Timeout = TimeSpan.FromMinutes(3) };
-        http.DefaultRequestHeaders.Add("X-LazerRave", "1");
+        CreateHttp(uri);
         var result = await Request<CloudLogin>(HttpMethod.Post, "api/auth/token", new { username, password }, cancellation);
         token = result.Token; User = result.User;
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        http!.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         Status = "Signed in"; Notify();
-        try { await Connect(cancellation); }
+        sessions?.Save(uri, token);
+        await ConnectAfterSignIn(cancellation);
+    }
+    private void CreateHttp(Uri server)
+    {
+        http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = server, Timeout = TimeSpan.FromMinutes(3) };
+        http.DefaultRequestHeaders.Add("X-LazerRave", "1");
+    }
+    public async Task Restore(CancellationToken cancellation)
+    {
+        var session = sessions?.Read();
+        if (session is null) return;
+        Status = "Restoring sign-in…"; Notify();
+        await CloseConnection();
+        CreateHttp(ServerUri(session.Server));
+        token = session.Token;
+        http!.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            using var response = await http.GetAsync("api/me", timeout.Token);
+            await Check(response, timeout.Token);
+            var content = await response.Content.ReadAsStringAsync(timeout.Token);
+            User = string.IsNullOrWhiteSpace(content) ? null : JsonSerializer.Deserialize<CloudUser>(content, json);
+            if (User is null) { await ForgetSession(); return; }
+        }
+        catch (HttpRequestException failure) when (failure.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        { await ForgetSession(); return; }
+        catch (Exception failure) when (!cancellation.IsCancellationRequested && (failure is HttpRequestException or OperationCanceledException or JsonException))
+        {
+            await CloseConnection();
+            Status = "Automatic sign-in unavailable. Retry when the server is reachable."; Notify();
+            return;
+        }
+        Status = "Signed in"; Notify();
+        await ConnectAfterSignIn(cancellation);
+    }
+    private async Task ForgetSession()
+    {
+        sessions?.Clear(); await CloseConnection();
+        Status = "Session expired or revoked. Sign in again."; Notify();
+    }
+    private async Task ConnectAfterSignIn(CancellationToken cancellation)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            await Connect(timeout.Token);
+        }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
             Status = "Signed in. Multiplayer unavailable: " + failure.Message; Notify();
         }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        { Status = "Signed in. Multiplayer connection timed out."; Notify(); }
     }
     public async Task Connect(CancellationToken cancellation)
     {
@@ -86,6 +155,11 @@ internal sealed class CloudClient : IAsyncDisposable
             options.Headers["X-LazerRave"] = "1";
         }).Build();
         hub.On<CloudRoom>("RoomUpdated", UpdateRoom);
+        hub.On<CloudChat>("ChatMessage", message =>
+        {
+            lock (chatLock) Messages = Messages.Append(message).GroupBy(value => value.Id).Select(group => group.First()).OrderBy(value => value.Id).TakeLast(200).ToArray();
+            Notify();
+        });
         hub.On<CloudRoom[]>("RoomsChanged", values =>
         {
             Rooms = values;
@@ -96,9 +170,19 @@ internal sealed class CloudClient : IAsyncDisposable
         });
         hub.Closed += _ => { CancelTransfer(); inspection?.Cancel(); Room = null; Rooms = []; Status = "Multiplayer disconnected. Reconnect, or close extra website tabs or clients if the connection limit was reached."; Notify(); return Task.CompletedTask; };
         await hub.StartAsync(cancellation);
-        await hub.InvokeAsync<object>("Ping", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), cancellation);
+        var sent = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var clock = await hub.InvokeAsync<CloudClock>("Ping", sent, cancellation);
+        serverClockOffset = clock.ServerTime - (sent + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) / 2d;
         Rooms = await Request<CloudRoom[]>(HttpMethod.Get, "api/rooms", null, cancellation);
         Status = "Connected"; Notify();
+    }
+    public async Task SendChat(string channel, string text, CancellationToken cancellation) =>
+        await hub!.InvokeAsync("SendChat", channel, text, cancellation);
+    public async Task LoadChat(string channel, CancellationToken cancellation)
+    {
+        var history = await Request<CloudChat[]>(HttpMethod.Get, "api/chat/" + Uri.EscapeDataString(channel), null, cancellation);
+        lock (chatLock) Messages = Messages.Concat(history).GroupBy(message => message.Id).Select(group => group.First()).OrderBy(message => message.Id).TakeLast(200).ToArray();
+        Notify();
     }
     private async Task<T> Request<T>(HttpMethod method, string path, object? body, CancellationToken cancellation)
     {
@@ -121,9 +205,9 @@ internal sealed class CloudClient : IAsyncDisposable
         if (Room?.Id == value.Id && value.Version < Room.Version) return;
         bool changed = Room?.SelectionId != value.SelectionId || Room?.Id != value.Id;
         Room = value;
-        if (changed) { CancelTransfer(); inspection?.Cancel(); AvailableChart = null; localManifest = null; localChart = null; Progress = null; }
+        if (changed) { CancelTransfer(); inspection?.Cancel(); AvailableChart = null; localChart = null; Progress = null; }
         Notify();
-        if (value.Chart?.ContentSha256 is not null && (changed || inspectedSelection != value.SelectionId))
+        if (value.Chart is not null && (changed || inspectedSelection != value.SelectionId))
         {
             inspectedSelection = value.SelectionId;
             inspection?.Cancel(); inspection = new();
@@ -134,7 +218,7 @@ internal sealed class CloudClient : IAsyncDisposable
     {
         try
         {
-            Status = "Checking local song resources…"; Notify();
+            Status = "Checking local BMS chart…"; Notify();
             foreach (var directory in songDirectories().ToArray())
             {
                 if (!Directory.Exists(directory)) continue;
@@ -142,12 +226,8 @@ internal sealed class CloudClient : IAsyncDisposable
                 {
                     cancellation.ThrowIfCancellationRequested();
                     if (await SongContent.HashFile(path, cancellation) != room.Chart!.Sha256) continue;
-                    SongManifest manifest;
-                    try { manifest = await Task.Run(() => SongTransferFiles.Inspect(path, cancellation, encoding: encoding()), cancellation); }
-                    catch (Exception error) when (error is IOException or InvalidDataException) { continue; }
-                    if (manifest.ContentSha256 != room.Chart.ContentSha256) continue;
                     if (Room?.SelectionId != room.SelectionId) return;
-                    localManifest = manifest; localChart = AvailableChart = path;
+                    localChart = AvailableChart = path;
                     await ReportContent(room, "available", cancellation); Status = "Song available"; Notify(); return;
                 }
             }
@@ -158,7 +238,7 @@ internal sealed class CloudClient : IAsyncDisposable
     }
     private async Task ReportContent(CloudRoom room, string state, CancellationToken cancellation)
     {
-        var updated = await hub!.InvokeAsync<CloudRoom>("ReportContent", room.SelectionId, room.Chart!.ContentSha256, state, cancellation);
+        var updated = await hub!.InvokeAsync<CloudRoom>("ReportContent", room.SelectionId, room.Chart!.Sha256, state, cancellation);
         UpdateRoom(updated);
     }
     public async Task CreateRoom(string name, CancellationToken cancellation) => UpdateRoom(await hub!.InvokeAsync<CloudRoom>("CreateRoom", name, cancellation));
@@ -166,31 +246,46 @@ internal sealed class CloudClient : IAsyncDisposable
     public async Task LeaveRoom(CancellationToken cancellation)
     {
         CancelTransfer(); inspection?.Cancel(); await hub!.InvokeAsync("LeaveRoom", cancellation);
-        Room = null; AvailableChart = null; localManifest = null; localChart = null; inspectedSelection = Guid.Empty; Notify();
+        Room = null; AvailableChart = null; localChart = null; inspectedSelection = Guid.Empty; Notify();
     }
     public async Task SelectChart(CloudLocalChart chart, CancellationToken cancellation)
     {
         var room = Room ?? throw new InvalidOperationException("Join a room first.");
         if (room.HostId != User?.Id) throw new InvalidOperationException("Only the host may select a song.");
-        var progress = new CallbackProgress<TransferProgress>(SetProgress);
-        var manifest = await Task.Run(() => SongTransferFiles.Inspect(chart.Path, cancellation, progress, encoding()), cancellation);
-        var updated = await hub!.InvokeAsync<CloudRoom>("SelectLocalChart", new { sha256 = manifest.ChartSha256, contentSha256 = manifest.ContentSha256, chart.Title, chart.Artist, chart.Keys, chart.Level }, room.Version, cancellation);
+        if (!SongContent.IsChart(chart.Path)) throw new InvalidDataException("Select a BMS chart.");
+        var sha256 = await SongContent.HashFile(chart.Path, cancellation);
+        var updated = await hub!.InvokeAsync<CloudRoom>("SelectLocalChart", new { sha256, contentSha256 = (string?)null, chart.Title, chart.Artist, chart.Keys, chart.Level }, room.Version, cancellation);
         UpdateRoom(updated);
     }
     public async Task Ready(CancellationToken cancellation)
     {
         var room = Room ?? throw new InvalidOperationException("Join a room first.");
-        if (AvailableChart is null) throw new InvalidOperationException("Download and verify the song first.");
+        if (AvailableChart is null || room.Members.Single(m => m.Id == User!.Id).ContentState != "available") throw new InvalidOperationException("The selected BMS chart must be available first.");
         UpdateRoom(await hub!.InvokeAsync<CloudRoom>("SetReady", !room.Members.Single(m => m.Id == User!.Id).Ready, room.Chart!.Sha256, room.Version, cancellation));
+    }
+    public async Task StartRound(CancellationToken cancellation)
+    {
+        if (!CanStartRound) throw new InvalidOperationException("Only the host can start after every player has matched the BMS chart and is ready.");
+        UpdateRoom(await hub!.InvokeAsync<CloudRoom>("StartRound", Room!.Version, cancellation));
+    }
+    public async Task TransferHost(Guid target, CancellationToken cancellation)
+    {
+        UpdateRoom(await hub!.InvokeAsync<CloudRoom>("TransferHost", target, Room!.Version, cancellation));
+    }
+    public async Task ReportScore(Guid match, long sequence, GameplaySnapshot score, bool finish, CancellationToken cancellation)
+    {
+        var input = new { matchId = match, sequence, score.ExScore, score.Combo, score.Misses, score.Progress, score.MaxCombo, score.ClearType, score.Aborted };
+        UpdateRoom(await hub!.InvokeAsync<CloudRoom>(finish ? "FinishRound" : "ReportProgress", input, cancellation));
     }
     public async Task Upload(CancellationToken cancellation)
     {
         await RunTransfer(async ct =>
         {
             var room = Room ?? throw new InvalidOperationException("Join a room first.");
-            var manifest = localManifest ?? throw new InvalidOperationException("Wait for local resource verification before uploading.");
             var chart = localChart ?? throw new InvalidOperationException("The selected local song is unavailable.");
             var progress = new CallbackProgress<TransferProgress>(SetProgress);
+            var manifest = await Task.Run(() => SongTransferFiles.Inspect(chart, ct, progress, encoding()), ct);
+            if (manifest.ChartSha256 != room.Chart?.Sha256) throw new InvalidDataException("The selected BMS file has changed. Select it again.");
             var zip = await Task.Run(() => SongTransferFiles.Pack(chart, manifest, Path.Combine(applicationRoot, "cache", "shared-uploads"), ct, progress), ct);
             var size = new FileInfo(zip).Length;
             var sha = await SongContent.HashFile(zip, ct);
@@ -261,7 +356,7 @@ internal sealed class CloudClient : IAsyncDisposable
             if (await SongContent.HashFile(zip, ct) != song.ArchiveSha256) { File.Delete(zip); throw new InvalidDataException("ZIP checksum failed. Download again."); }
             var path = await Task.Run(() => SongTransferFiles.Install(zip, song.Manifest, SharedRoot, ct, new CallbackProgress<TransferProgress>(SetProgress)), ct);
             if (Room?.SelectionId != room.SelectionId) throw new OperationCanceledException(ct);
-            AvailableChart = localChart = path; localManifest = song.Manifest; File.Delete(zip);
+            AvailableChart = localChart = path; File.Delete(zip);
             await installed(path);
             await ReportContent(room, "available", ct);
             Progress = null; Status = "Installed to Shared"; Notify();
@@ -284,12 +379,24 @@ internal sealed class CloudClient : IAsyncDisposable
     public void CancelTransfer() => transfer?.Cancel();
     public async Task Disconnect()
     {
+        sessions?.Clear();
+        if (http is not null && token is not null)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try { using var response = await http.PostAsync("api/auth/logout", null, timeout.Token); }
+            catch (Exception failure) when (failure is HttpRequestException or OperationCanceledException) { }
+        }
+        await CloseConnection();
+        Status = "Signed out"; Notify();
+    }
+    private async Task CloseConnection()
+    {
         CancelTransfer(); inspection?.Cancel();
         if (hub is not null) { await hub.DisposeAsync(); hub = null; }
-        if (http is not null && token is not null)
-            try { using var response = await http.PostAsync("api/auth/logout", null); } catch (HttpRequestException) { }
-        http?.Dispose(); http = null; token = null; User = null; Room = null; Rooms = []; AvailableChart = null; inspectedSelection = Guid.Empty; Notify();
+        http?.Dispose(); http = null; token = null; User = null; Room = null; Rooms = [];
+        lock (chatLock) Messages = [];
+        AvailableChart = null; inspectedSelection = Guid.Empty; Notify();
     }
-    public async ValueTask DisposeAsync() { await Disconnect(); }
+    public async ValueTask DisposeAsync() { await CloseConnection(); }
     private sealed class CallbackProgress<T>(Action<T> action) : IProgress<T> { public void Report(T value) => action(value); }
 }

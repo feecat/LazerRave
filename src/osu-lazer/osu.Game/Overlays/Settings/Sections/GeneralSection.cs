@@ -15,6 +15,7 @@ namespace osu.Game.Overlays.Settings.Sections
 {
     public partial class GeneralSection : SettingsSection
     {
+        public bool ShowQuickActions { get; init; } = true;
         public override LocalisableString Header => CommonStrings.General;
 
         public override Drawable CreateIcon() => new SpriteIcon
@@ -25,7 +26,7 @@ namespace osu.Game.Overlays.Settings.Sections
         [BackgroundDependencyLoader]
         private void load(UpdateManager? updateManager)
         {
-            Add(new QuickActionSettings());
+            if (ShowQuickActions) Add(new QuickActionSettings());
             Add(new LanguageSettings());
             if (updateManager?.CanCheckForUpdate == true)
                 Add(new UpdateSettings());
