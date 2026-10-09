@@ -11,6 +11,8 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
     public BindableDouble Speed { get; } = new(initial.Speed) { MinValue = .5, MaxValue = 10, Precision = .05 };
     public BindableInt Offset { get; } = new(initial.Offset) { MinValue = -1000, MaxValue = 1000 };
     public Bindable<string> Arrangement { get; } = new(initial.Arrangement);
+    public IReadOnlyDictionary<string, BindableInt> PlayOptions { get; } = PlayOptionCatalog.All.ToDictionary(
+        option => option.Name, option => new BindableInt(PlayOptionCatalog.Get(initial, option)) { MinValue = option.Min, MaxValue = option.Max });
     public Bindable<string> Encoding { get; } = new(initial.Encoding);
     public Bindable<string> Roots { get; } = new(string.Join(";", initial.Roots));
     public Bindable<string> Window { get; } = new($"{initial.Width}x{initial.Height}");
@@ -22,7 +24,8 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
 
     public Bindable<string> RenderProfile { get; } = new(RenderProfiles.Labels[initial.RenderProfile]);
 
-    public bool HasChanges => Speed.Value != Value.Speed || Offset.Value != Value.Offset
+    public bool HasChanges => PlayOptionCatalog.All.Any(option => PlayOptions[option.Name].Value != PlayOptionCatalog.Get(Value, option))
+        || Speed.Value != Value.Speed || Offset.Value != Value.Offset
         || Arrangement.Value != Value.Arrangement || Encoding.Value != Value.Encoding
         || Roots.Value != string.Join(";", Value.Roots) || Window.Value != $"{Value.Width}x{Value.Height}"
         || Player.Value != Value.Player || Avatar.Value != (Value.Avatar ?? "")
@@ -38,8 +41,10 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
         var size = Window.Value.ToLowerInvariant().Replace('×', 'x').Split('x', StringSplitOptions.TrimEntries);
         if (size.Length != 2 || !int.TryParse(size[0], out int width) || !int.TryParse(size[1], out int height)
             || width is < 320 or > 7680 || height is < 240 or > 4320) throw new ArgumentException("Enter a window size such as 1920x1080.");
-        if (!new[] { "off", "mirror", "random" }.Contains(Arrangement.Value) || !new[] { "auto", "utf-8", "cp932", "gb18030" }.Contains(Encoding.Value))
+        if (!PlayOptionCatalog.Arrangements.Contains(Arrangement.Value) || !new[] { "auto", "utf-8", "cp932", "gb18030" }.Contains(Encoding.Value))
             throw new ArgumentException("Invalid play settings.");
+        var playOptions = PlayOptions.ToDictionary(pair => pair.Key, pair => pair.Value.Value);
+        PlayOptionCatalog.Validate(playOptions);
         var avatar = Avatar.Value.Trim();
         int frameLimit = FrameLimit.Value switch { "Display" => 0, "Unlimited" => -1, _ => int.Parse(FrameLimit.Value) };
         if (frameLimit is < -1 or > 1000 || frameLimit is > 0 and < 30) throw new ArgumentException("Invalid game frame limit.");
@@ -47,7 +52,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             throw new ArgumentException("Select an existing BMP, PNG or JPEG avatar.");
         if (!new[] { "embedded", "standalone" }.Contains(Presentation.Value)) throw new ArgumentException("Invalid game presentation mode.");
         var profile = RenderProfiles.Labels.Single(pair => pair.Value == RenderProfile.Value).Key;
-        var next = Value with { Roots = roots, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value,
+        var next = Value with { Roots = roots, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
             Encoding = Encoding.Value, Width = width, Height = height, Player = Player.Value.Trim(), Avatar = avatar.Length > 0 ? Path.GetFullPath(avatar) : null, FrameLimit = frameLimit, RenderProfile = profile, Presentation = Presentation.Value };
         if (!readOnly)
         {
@@ -60,6 +65,9 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             table["game_frame_limit"] = (long)next.FrameLimit;
             table["game_render_profile"] = next.RenderProfile;
             table["game_presentation"] = next.Presentation;
+            var playTable = table.TryGetValue("play", out var savedPlay) && savedPlay is TomlTable previousPlay ? previousPlay : new TomlTable();
+            foreach (var option in playOptions) playTable[option.Key] = (long)option.Value;
+            table["play"] = playTable;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try { File.WriteAllText(temporary, Toml.FromModel(table)); File.Move(temporary, path, true); }

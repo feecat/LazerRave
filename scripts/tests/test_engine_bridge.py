@@ -34,10 +34,14 @@ class EngineBridgeTests(unittest.TestCase):
     def chart(path, title, level):
         path.write_text(f"#TITLE {title}\n#ARTIST Test\n#BPM 150\n#PLAYLEVEL {level}\n#DIFFICULTY 3\n#00118:0100\n", encoding="ascii")
 
-    def call(self, mode, values=(), success=True):
+    def call(self, mode, values=(), success=True, play_options=None):
         root = ET.Element("lazerrave", version="1", mode=mode)
         for key, value in values:
             ET.SubElement(root, key).text = str(value)
+        if play_options is not None:
+            options = ET.SubElement(root, "play-options")
+            for name, value in play_options:
+                ET.SubElement(options, "option", name=name, value=str(value))
         request = self.directory / "request \u53c2\u6570.xml"
         ET.ElementTree(root).write(request, encoding="utf-8")
         reply = Path(str(request) + ".reply.xml")
@@ -90,6 +94,25 @@ class EngineBridgeTests(unittest.TestCase):
         self.call("play", [("chart", self.music / "missing.bms")], success=False)
         self.call("sync", [("root", self.music / "missing")], success=False)
         self.assertFalse((self.directory / "LR2files/Database/song.db").exists())
+
+    def test_invalid_gameplay_options_fail_without_data_changes(self):
+        before = self.config.read_bytes()
+        for options in [
+            [("unknown", 1)], [("gauge", 6)], [("gauge", -1)], [("gauge", "1.5")],
+            [("gauge", "true")], [("gauge", 1), ("gauge", 2)],
+            [("hs_min", 1000), ("hs_max", 10)], [("hs_min", 1000)],
+        ]:
+            with self.subTest(options=options):
+                self.call("validate", [("chart", self.normal)], success=False, play_options=options)
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertFalse((self.directory / "LR2files/Database/song.db").exists())
+
+    def test_partial_gameplay_options_preserve_classic_defaults(self):
+        original = self.call("validate", [("chart", self.normal)])
+        baseline = {option.get("name"): option.get("value") for option in original.find("play-options")}
+        response = self.call("validate", [("chart", self.normal)], play_options=[("gauge", 1)])
+        effective = {option.get("name"): option.get("value") for option in response.find("play-options")}
+        self.assertEqual(effective, baseline | {"gauge": "1"})
 
     def test_invalid_embedding_targets_fail_before_graphics_or_data_changes(self):
         before = self.config.read_bytes()

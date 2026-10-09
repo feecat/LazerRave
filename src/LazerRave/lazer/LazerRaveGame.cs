@@ -48,11 +48,12 @@ internal partial class LazerRaveGame : OsuGame
     private ResourceStore<byte[]> media = null!;
     private PreviewPlayer preview = null!;
     private NativeGameViewport? viewport;
-    private OsuDropdown<string> folders = null!;
-    private OsuSpriteText pathText = null!, status = null!, profileName = null!, scoreText = null!;
+    private LazerRaveFolderBar folderBar = null!;
+    private OsuDropdown<string> keys = null!;
+    private OsuSpriteText status = null!, profileName = null!, scoreText = null!;
     private Sprite avatar = null!;
     private Container chrome = null!;
-    private bool refreshing, updatingFolders;
+    private bool refreshing;
     private readonly BindableDouble menuTrackVolume = new(1);
     private int previewGeneration;
     private ScheduledDelegate? pendingSettingsSave;
@@ -63,7 +64,19 @@ internal partial class LazerRaveGame : OsuGame
     private readonly List<string> frontendFrames = ["elapsed_s,draw_fps,update_fps,draw_interval_ms,update_interval_ms"];
     private void SaveFrontendFrames() => File.WriteAllLines(Path.Combine(bridge.Runtime, "frontend-fps.csv"), frontendFrames);
     public bool IsChartVisible(BeatmapInfo info) => catalog.IsVisible(info);
+
+    /// <summary>
+    /// Folders of the level currently being browsed, for the song select carousel to list as rows.
+    /// </summary>
+    public IReadOnlyList<FolderDefinition> CurrentFolders => catalog.ChildFolders
+        .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
+        .Select(folder => new FolderDefinition(folder.Name, folder.Path))
+        .ToArray();
+
+    /// <summary>Descends into a folder chosen from the carousel.</summary>
+    public void EnterFolder(string path) => Navigate(path);
     public int Keys => catalog.Keys;
+    public DesktopSettings PlaySettings => preferences;
     public override bool UseDevelopmentServer => false;
     public override string Version => "LazerRave 0.1";
     protected override int UnhandledExceptionsBeforeCrash => 0;
@@ -146,6 +159,7 @@ internal partial class LazerRaveGame : OsuGame
         UpdateLibraryStatus(startupMessage);
         preferences.Speed.BindValueChanged(_ => QueueSettingsSave());
         preferences.Offset.BindValueChanged(_ => QueueSettingsSave());
+        foreach (var option in preferences.PlayOptions.Values) option.BindValueChanged(_ => QueueSettingsSave());
         foreach (var setting in new[] { preferences.Arrangement, preferences.Encoding, preferences.Roots, preferences.Window,
             preferences.Player, preferences.Avatar, preferences.FrameLimit, preferences.RenderProfile, preferences.Presentation })
             setting.BindValueChanged(_ => QueueSettingsSave());
@@ -157,23 +171,13 @@ internal partial class LazerRaveGame : OsuGame
         var store = new FileMediaStore(preferences.Value.Roots, preferences.Value.Avatar, cache);
         media.AddStore(store); Textures.AddTextureSource(Host.CreateTextureLoaderStore(store));
     }
-    private static RoundedButton Button(osu.Framework.Localisation.LocalisableString text, Action action, float width) => new() { Text = text, Width = width, Height = 32, Action = action };
     private static OsuSpriteText Text(string text, float size, float x, float y) => new TruncatingSpriteText() { Text = text, Font = OsuFont.GetFont(size: size), Position = new Vector2(x, y) };
 
     private void BuildChrome()
     {
         chrome.Clear();
-        chrome.Add(pathText = Text("", 15, 28, 65).With(text => { text.MaxWidth = 470; }));
-        chrome.Add(Button("↑", () => ParentFolder(), 36).With(button => button.Position = new Vector2(26, 88)));
-        folders = new OsuDropdown<string> { Width = 270, Position = new Vector2(70, 88), Items = Array.Empty<string>() };
-        chrome.Add(folders);
-        folders.Current.BindValueChanged(change =>
-        {
-            if (updatingFolders || string.IsNullOrEmpty(change.NewValue)) return;
-            var folder = catalog.ChildFolders.FirstOrDefault(f => (catalog.Directory is null ? f.Path : f.Name) == change.NewValue);
-            if (folder is not null) Navigate(folder.Path);
-        });
-        var keys = new OsuDropdown<string> { Width = 115, Position = new Vector2(350, 88), Items = new[] { "7Key", "5Key", "9Key", "10Key", "14Key", "All" } };
+        chrome.Add(folderBar = new LazerRaveFolderBar(catalog, Navigate) { Position = new Vector2(28, 8) });
+        keys = new OsuDropdown<string> { Width = 128, Scale = new Vector2(1.25f), Position = new Vector2(464, 8), Items = new[] { "7Key", "5Key", "9Key", "10Key", "14Key", "All" } };
         keys.Current.Value = catalog.Keys == 0 ? "All" : $"{catalog.Keys}Key";
         keys.Current.BindValueChanged(change => { catalog.Filter(catalog.Directory, change.NewValue == "All" ? 0 : int.Parse(change.NewValue.Replace("Key", ""))); songSelect?.RefreshKeyFilter(); UpdateLibraryStatus(); });
         chrome.Add(keys);
@@ -191,18 +195,9 @@ internal partial class LazerRaveGame : OsuGame
     }
     private void UpdateFolderBar()
     {
-        updatingFolders = true;
-        try
-        {
-            var root = preferences.Value.Roots.FirstOrDefault(root => string.Equals(root, catalog.Directory, StringComparison.OrdinalIgnoreCase)
-                || catalog.Directory is not null && SongLibrary.ContainsPath(root, catalog.Directory));
-            pathText.Text = root is not null && catalog.Directory is not null
-                ? Path.GetFileName(root) + (string.Equals(root, catalog.Directory, StringComparison.OrdinalIgnoreCase) ? "" : " / " + Path.GetRelativePath(root, catalog.Directory).Replace('\\', '/'))
-                : "Library";
-            folders.Items = new[] { "Folders…" }.Concat(catalog.ChildFolders.Select(folder => catalog.Directory is null ? folder.Path : folder.Name).Order()).ToArray();
-            folders.Current.Value = "Folders…";
-        }
-        finally { updatingFolders = false; }
+        folderBar?.Refresh();
+
+        if (keys is not null) keys.X = 28 + Math.Max(420, folderBar?.OccupiedWidth ?? 0) + 16;
     }
     private void Navigate(string? path)
     {
@@ -222,8 +217,8 @@ internal partial class LazerRaveGame : OsuGame
     {
         if (settingsPanel.State.Value == Visibility.Visible) { settingsPanel.Hide(); return true; }
         if (ScreenStack.CurrentScreen is GamePlayScreen play) { play.RequestReturn(); return true; }
-        var parent = catalog.Library.Folders.FirstOrDefault(folder => string.Equals(folder.Path, catalog.Directory, StringComparison.OrdinalIgnoreCase))?.Parent;
         if (catalog.Directory is null) return false;
+        var parent = catalog.Library.Folders.FirstOrDefault(folder => string.Equals(folder.Path, catalog.Directory, StringComparison.OrdinalIgnoreCase))?.Parent;
         Navigate(parent); return true;
     }
     public void ToggleSettings() => settingsPanel.ToggleVisibility();
@@ -235,6 +230,11 @@ internal partial class LazerRaveGame : OsuGame
     public void StartGame(BeatmapInfo info)
     {
         if (ScreenStack.CurrentScreen is not LazerRaveSongSelect || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
+        if (preferences.PlayOptions["battle"].Value == 4)
+        {
+            status.Text = D("Ghost Battle requires rival selection in the classic menu.");
+            return;
+        }
         if (!SaveSettings()) { settingsPanel.Show(); return; }
         ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide();
         CloseAllOverlays();
@@ -339,6 +339,7 @@ internal partial class LazerRaveGame : OsuGame
     protected override void Update()
     {
         base.Update(); preview?.Update(Time.Current);
+
         if (benchmark is null || !benchmarkClock.IsRunning) return;
         if (benchmarkClock.Elapsed.TotalSeconds >= nextFrameSample)
         {

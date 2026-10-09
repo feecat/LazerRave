@@ -26,7 +26,10 @@ internal sealed class EngineBridge(string runtime)
             if (chart is null || !File.Exists(chart.Path) || !new[] { ".bms", ".bme", ".bml", ".pms" }.Contains(Path.GetExtension(chart.Path).ToLowerInvariant()))
                 throw new FileNotFoundException("Select an available BMS chart.");
             root.Add(new XElement("chart", chart.Path), new XElement("speed", Math.Round(settings.Speed * 100).ToString(CultureInfo.InvariantCulture)),
-                new XElement("offset", settings.Offset), new XElement("arrangement", settings.Arrangement switch { "mirror" => 1, "random" => 2, _ => 0 }));
+                new XElement("offset", settings.Offset), new XElement("arrangement", Array.IndexOf(PlayOptionCatalog.Arrangements, settings.Arrangement)));
+            PlayOptionCatalog.Validate(settings.PlayOptions);
+            root.Add(new XElement("play-options", PlayOptionCatalog.All.Select(option =>
+                new XElement("option", new XAttribute("name", option.Name), new XAttribute("value", PlayOptionCatalog.Get(settings, option))))));
         }
         if (embedding is not null)
         {
@@ -46,6 +49,8 @@ internal sealed class EngineBridge(string runtime)
             throw new InvalidDataException("OpenLR2 does not support the LazerRave bridge.");
         if (embedding is not null && !capabilities.Contains("LAZERRAVE_EMBED_V1", StringComparison.Ordinal))
             throw new InvalidDataException("Rebuild OpenLR2 before using embedded play.");
+        if (mode is "play" or "validate" && !capabilities.Contains("LAZERRAVE_PLAY_OPTIONS_V1", StringComparison.Ordinal))
+            throw new InvalidDataException("Rebuild OpenLR2 before using gameplay options.");
         var directory = Path.Combine(Runtime, "cache", "engine-requests", Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(directory);
         try

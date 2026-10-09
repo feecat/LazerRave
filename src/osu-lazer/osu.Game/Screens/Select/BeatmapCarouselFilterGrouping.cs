@@ -153,6 +153,7 @@ namespace osu.Game.Screens.Select
 
         public static bool ShouldGroupBeatmapsTogether(FilterCriteria criteria)
         {
+            if (criteria.ForceBeatmapSetsGroupedTogether is { } forced) return forced;
             // In certain cases, we intentionally split out difficulties
             // where it's more relevant or convenient to view them as individual items.
             if (criteria.Sort == SortMode.Difficulty || criteria.Group == GroupMode.Difficulty)

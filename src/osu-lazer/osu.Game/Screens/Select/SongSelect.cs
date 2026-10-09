@@ -271,16 +271,7 @@ namespace osu.Game.Screens.Select
                                                         },
                                                         Children = new Drawable[]
                                                         {
-                                                            carousel = new BeatmapCarousel
-                                                            {
-                                                                BleedTop = FilterControl.HEIGHT_FROM_SCREEN_TOP + 5,
-                                                                BleedBottom = ScreenFooter.HEIGHT + 5,
-                                                                RelativeSizeAxes = Axes.Both,
-                                                                RequestPresentBeatmap = b => SelectAndRun(b, OnStart),
-                                                                RequestSelection = queueBeatmapSelection,
-                                                                RequestRecommendedSelection = requestRecommendedSelection,
-                                                                NewItemsPresented = newItemsPresented,
-                                                            },
+                                                            carousel = CreateCarousel(),
                                                             noResultsPlaceholder = new NoResultsPlaceholder
                                                             {
                                                                 RequestClearFilterText = () => FilterControl.Search(string.Empty)
@@ -338,6 +329,39 @@ namespace osu.Game.Screens.Select
             var recommendedBeatmap = difficultyRecommender?.GetRecommendedBeatmap(groupedBeatmaps.Select(gb => gb.Beatmap)) ?? groupedBeatmaps.First().Beatmap;
             queueBeatmapSelection(groupedBeatmaps.First(bug => bug.Beatmap.Equals(recommendedBeatmap)));
         }
+
+        /// <summary>
+        /// Whether the "no results" placeholder should be suppressed when no beatmaps match. Derived
+        /// screens that list non-beatmap rows in the carousel should override this to true.
+        /// </summary>
+        protected virtual bool SuppressNoResultsPlaceholder => false;
+
+        /// <summary>
+        /// Selection callbacks required by <see cref="BeatmapCarousel"/>, exposed so a derived screen
+        /// constructing its own carousel can wire them up.
+        /// </summary>
+        protected Action<GroupedBeatmap> CarouselRequestSelection => queueBeatmapSelection;
+
+        /// <inheritdoc cref="CarouselRequestSelection"/>
+        protected Action<IEnumerable<GroupedBeatmap>> CarouselRequestRecommendedSelection => requestRecommendedSelection;
+
+        /// <inheritdoc cref="CarouselRequestSelection"/>
+        protected Action<IEnumerable<CarouselItem>> CarouselNewItemsPresented => newItemsPresented;
+
+        /// <summary>
+        /// Creates the carousel used to browse beatmaps. Overridden by derived screens that need to
+        /// place additional item types in the list alongside beatmaps.
+        /// </summary>
+        protected virtual BeatmapCarousel CreateCarousel() => new BeatmapCarousel
+        {
+            BleedTop = FilterControl.HEIGHT_FROM_SCREEN_TOP + 5,
+            BleedBottom = ScreenFooter.HEIGHT + 5,
+            RelativeSizeAxes = Axes.Both,
+            RequestPresentBeatmap = b => SelectAndRun(b, OnStart),
+            RequestSelection = CarouselRequestSelection,
+            RequestRecommendedSelection = CarouselRequestRecommendedSelection,
+            NewItemsPresented = newItemsPresented,
+        };
 
         /// <summary>
         /// Called when a selection is made to progress away from the song select screen.
@@ -917,6 +941,15 @@ namespace osu.Game.Screens.Select
         private void updateNoResultsPlaceholder()
         {
             int count = carousel.MatchedBeatmapsCount;
+
+            // A derived screen may place non-beatmap rows (such as folders) in the carousel, in which
+            // case an empty beatmap match does not mean the list is empty and the placeholder would
+            // otherwise cover those rows.
+            if (count == 0 && SuppressNoResultsPlaceholder)
+            {
+                noResultsPlaceholder.Hide();
+                return;
+            }
 
             if (count == 0)
             {

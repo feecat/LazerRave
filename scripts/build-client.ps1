@@ -109,9 +109,19 @@ try {
     if (!$RuntimeSource) { throw 'Pass -RuntimeSource with a complete LR2 runtime folder.' }
     if (!$Destination) { $Destination = Join-Path $workspace 'out/app' }
     $Destination = [IO.Path]::GetFullPath($Destination)
-    $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.ProcessName -like 'LazerRave*' -or $_.ProcessName -like 'OpenLR2*') })
-    if (@($running | Where-Object { (Split-Path $_.Path -Parent) -eq $Destination }).Count) {
-        throw 'The destination is running. Close it before updating the application.'
+    $destinationDirectory = $Destination.TrimEnd('\')
+    $running = @(Get-Process -Name 'LazerRave', 'OpenLR2*' -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and [string]::Equals((Split-Path $_.Path -Parent), $destinationDirectory, [StringComparison]::OrdinalIgnoreCase)
+    })
+    foreach ($process in $running) {
+        $process.Refresh()
+        if ($process.HasExited) { continue }
+        Write-Host "Closing application before updating: $($process.ProcessName) (PID $($process.Id))"
+        [void]$process.CloseMainWindow()
+        if (!$process.WaitForExit(3000)) {
+            Stop-Process -InputObject $process -Force -ErrorAction Stop
+            if (!$process.WaitForExit(5000)) { throw "Application did not exit: $($process.ProcessName)" }
+        }
     }
     & (Join-Path $PSScriptRoot 'package-client.ps1') -EnginePackage $enginePackage -RuntimeSource $RuntimeSource -Destination $Destination -PrepareOnly
     if ($LASTEXITCODE -ne 0) { throw 'Runtime preparation failed.' }

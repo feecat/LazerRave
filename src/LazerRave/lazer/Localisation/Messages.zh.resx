@@ -1,2 +1,333 @@
-<?xml version='1.0' encoding='utf-8'?>
-<root><resheader name="resmimetype"><value>text/microsoft-resx</value></resheader><resheader name="version"><value>2.0</value></resheader><data name="Apply &amp; rescan" xml:space="preserve"><value>应用并扫描</value></data><data name="Interface" xml:space="preserve"><value>界面</value></data><data name="Language" xml:space="preserve"><value>语言</value></data><data name="Gameplay" xml:space="preserve"><value>游戏</value></data><data name="Scroll speed" xml:space="preserve"><value>谱面速度</value></data><data name="Judgement offset (ms)" xml:space="preserve"><value>判定偏移（毫秒）</value></data><data name="Arrangement" xml:space="preserve"><value>排列</value></data><data name="Chart encoding" xml:space="preserve"><value>谱面编码</value></data><data name="Display" xml:space="preserve"><value>显示</value></data><data name="Game viewport" xml:space="preserve"><value>游戏视口</value></data><data name="Preset" xml:space="preserve"><value>预设</value></data><data name="Custom size (width x height)" xml:space="preserve"><value>自定义尺寸（宽 x 高）</value></data><data name="Library" xml:space="preserve"><value>曲库</value></data><data name="Directories" xml:space="preserve"><value>目录</value></data><data name="BMS folders (separate with ;)" xml:space="preserve"><value>BMS 目录（使用 ; 分隔）</value></data><data name="Player" xml:space="preserve"><value>玩家</value></data><data name="Profile" xml:space="preserve"><value>个人资料</value></data><data name="Display name" xml:space="preserve"><value>显示名称</value></data><data name="Avatar file" xml:space="preserve"><value>头像文件</value></data><data name="Play" xml:space="preserve"><value>开始</value></data><data name="Settings" xml:space="preserve"><value>设置</value></data><data name="Random" xml:space="preserve"><value>随机</value></data><data name="Rescan" xml:space="preserve"><value>重新扫描</value></data><data name="Return to library" xml:space="preserve"><value>返回曲库</value></data><data name="Loading…" xml:space="preserve"><value>加载中…</value></data><data name="Returning…" xml:space="preserve"><value>正在返回…</value></data><data name="Scanning…" xml:space="preserve"><value>扫描中…</value></data><data name="Game frame limit" xml:space="preserve"><value>演奏帧率上限</value></data><data name="Rendering comparison preset" xml:space="preserve"><value>渲染对比预设</value></data><data name="Saving…" xml:space="preserve"><value>正在保存…</value></data><data name="Saved" xml:space="preserve"><value>已保存</value></data><data name="Game presentation" xml:space="preserve"><value>演奏显示方式</value></data><data name="Embedded" xml:space="preserve"><value>同窗口</value></data><data name="Separate window" xml:space="preserve"><value>独立窗口</value></data><data name="Playing in a separate window…" xml:space="preserve"><value>正在独立窗口中演奏…</value></data><data name="Embedded rendering preset" xml:space="preserve"><value>同窗口渲染预设</value></data><data name="Embedded frame limit" xml:space="preserve"><value>同窗口帧率限制</value></data></root>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="Apply &amp; rescan" xml:space="preserve">
+    <value>应用并扫描</value>
+  </data>
+  <data name="Interface" xml:space="preserve">
+    <value>界面</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="Gameplay" xml:space="preserve">
+    <value>游戏</value>
+  </data>
+  <data name="Scroll speed" xml:space="preserve">
+    <value>谱面速度</value>
+  </data>
+  <data name="Judgement offset (ms)" xml:space="preserve">
+    <value>判定偏移（毫秒）</value>
+  </data>
+  <data name="Arrangement" xml:space="preserve">
+    <value>排列</value>
+  </data>
+  <data name="Chart encoding" xml:space="preserve">
+    <value>谱面编码</value>
+  </data>
+  <data name="Display" xml:space="preserve">
+    <value>显示</value>
+  </data>
+  <data name="Game viewport" xml:space="preserve">
+    <value>游戏视口</value>
+  </data>
+  <data name="Preset" xml:space="preserve">
+    <value>预设</value>
+  </data>
+  <data name="Custom size (width x height)" xml:space="preserve">
+    <value>自定义尺寸（宽 x 高）</value>
+  </data>
+  <data name="Library" xml:space="preserve">
+    <value>曲库</value>
+  </data>
+  <data name="Directories" xml:space="preserve">
+    <value>目录</value>
+  </data>
+  <data name="BMS folders (separate with ;)" xml:space="preserve">
+    <value>BMS 目录（使用 ; 分隔）</value>
+  </data>
+  <data name="Player" xml:space="preserve">
+    <value>玩家</value>
+  </data>
+  <data name="Profile" xml:space="preserve">
+    <value>个人资料</value>
+  </data>
+  <data name="Display name" xml:space="preserve">
+    <value>显示名称</value>
+  </data>
+  <data name="Avatar file" xml:space="preserve">
+    <value>头像文件</value>
+  </data>
+  <data name="Play" xml:space="preserve">
+    <value>开始</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Random" xml:space="preserve">
+    <value>随机</value>
+  </data>
+  <data name="Rescan" xml:space="preserve">
+    <value>重新扫描</value>
+  </data>
+  <data name="Return to library" xml:space="preserve">
+    <value>返回曲库</value>
+  </data>
+  <data name="Loading…" xml:space="preserve">
+    <value>加载中…</value>
+  </data>
+  <data name="Returning…" xml:space="preserve">
+    <value>正在返回…</value>
+  </data>
+  <data name="Scanning…" xml:space="preserve">
+    <value>扫描中…</value>
+  </data>
+  <data name="Game frame limit" xml:space="preserve">
+    <value>演奏帧率上限</value>
+  </data>
+  <data name="Rendering comparison preset" xml:space="preserve">
+    <value>渲染对比预设</value>
+  </data>
+  <data name="Saving…" xml:space="preserve">
+    <value>正在保存…</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>已保存</value>
+  </data>
+  <data name="Game presentation" xml:space="preserve">
+    <value>演奏显示方式</value>
+  </data>
+  <data name="Embedded" xml:space="preserve">
+    <value>同窗口</value>
+  </data>
+  <data name="Separate window" xml:space="preserve">
+    <value>独立窗口</value>
+  </data>
+  <data name="Playing in a separate window…" xml:space="preserve">
+    <value>正在独立窗口中演奏…</value>
+  </data>
+  <data name="Embedded rendering preset" xml:space="preserve">
+    <value>同窗口渲染预设</value>
+  </data>
+  <data name="Embedded frame limit" xml:space="preserve">
+    <value>同窗口帧率限制</value>
+  </data>
+  <data name="Gauge">
+    <value>判定槽</value>
+  </data>
+  <data name="2P gauge">
+    <value>2P 判定槽</value>
+  </data>
+  <data name="Play mode">
+    <value>演奏模式</value>
+  </data>
+  <data name="Autoplay">
+    <value>自动演奏</value>
+  </data>
+  <data name="Auto key sound">
+    <value>自动键音</value>
+  </data>
+  <data name="Auto scratch">
+    <value>自动转盘</value>
+  </data>
+  <data name="2P auto scratch">
+    <value>2P 自动转盘</value>
+  </data>
+  <data name="Gauge auto shift">
+    <value>判定槽自动降级</value>
+  </data>
+  <data name="2P scroll speed (×100)">
+    <value>2P 下落速度（×100）</value>
+  </data>
+  <data name="Speed reference">
+    <value>速度基准</value>
+  </data>
+  <data name="Base speed (%)">
+    <value>基础速度（%）</value>
+  </data>
+  <data name="Minimum speed (×100)">
+    <value>最低速度（×100）</value>
+  </data>
+  <data name="Maximum speed (×100)">
+    <value>最高速度（×100）</value>
+  </data>
+  <data name="In-game speed step (×100)">
+    <value>游戏内速度步长（×100）</value>
+  </data>
+  <data name="Disable arrow-key speed changes">
+    <value>禁用方向键调速</value>
+  </data>
+  <data name="2P arrangement">
+    <value>2P 排列</value>
+  </data>
+  <data name="Visibility">
+    <value>可见性</value>
+  </data>
+  <data name="2P visibility">
+    <value>2P 可见性</value>
+  </data>
+  <data name="Lane cover">
+    <value>轨道遮挡</value>
+  </data>
+  <data name="2P lane cover">
+    <value>2P 轨道遮挡</value>
+  </data>
+  <data name="Lane cover (%)">
+    <value>轨道遮挡（%）</value>
+  </data>
+  <data name="2P lane cover (%)">
+    <value>2P 轨道遮挡（%）</value>
+  </data>
+  <data name="Lane cover step (%)">
+    <value>遮挡步长（%）</value>
+  </data>
+  <data name="Lift">
+    <value>抬升判定线</value>
+  </data>
+  <data name="2P lift">
+    <value>2P 抬升判定线</value>
+  </data>
+  <data name="Lift (%)">
+    <value>判定线抬升（%）</value>
+  </data>
+  <data name="2P lift (%)">
+    <value>2P 判定线抬升（%）</value>
+  </data>
+  <data name="DP flip">
+    <value>DP 左右交换</value>
+  </data>
+  <data name="Include scratch in random">
+    <value>随机排列包含转盘</value>
+  </data>
+  <data name="2P include scratch in random">
+    <value>2P 随机排列包含转盘</value>
+  </data>
+  <data name="New random on restart">
+    <value>重试时重新随机</value>
+  </data>
+  <data name="BGA">
+    <value>BGA</value>
+  </data>
+  <data name="BGA size">
+    <value>BGA 尺寸</value>
+  </data>
+  <data name="Miss BGA duration (ms)">
+    <value>失误 BGA 持续时间（ms）</value>
+  </data>
+  <data name="Auto judgement adjustment">
+    <value>自动判定偏移调整</value>
+  </data>
+  <data name="Score ghost">
+    <value>分数差显示</value>
+  </data>
+  <data name="Score graph">
+    <value>分数图表</value>
+  </data>
+  <data name="Score target">
+    <value>目标分数</value>
+  </data>
+  <data name="Target (%)">
+    <value>目标分数（%）</value>
+  </data>
+  <data name="Replay saving">
+    <value>回放保存</value>
+  </data>
+  <data name="Disable left-click exit">
+    <value>禁用左键退出</value>
+  </data>
+  <data name="Extra mode">
+    <value>EXTRA 模式</value>
+  </data>
+  <data name="Extra level">
+    <value>EXTRA 等级</value>
+  </data>
+  <data name="Acceleration">
+    <value>加减速</value>
+  </data>
+  <data name="Soft landing">
+    <value>SOFT LANDING</value>
+  </data>
+  <data name="Gambol">
+    <value>GAMBOL</value>
+  </data>
+  <data name="Add notes (%)">
+    <value>添加音符（%）</value>
+  </data>
+  <data name="Add long notes (%)">
+    <value>添加长音符（%）</value>
+  </data>
+  <data name="Add mines (%)">
+    <value>添加地雷（%）</value>
+  </data>
+  <data name="Earthquake (%)">
+    <value>EARTHQUAKE（%）</value>
+  </data>
+  <data name="Tornado (%)">
+    <value>TORNADO（%）</value>
+  </data>
+  <data name="Superloop (%)">
+    <value>SUPERLOOP（%）</value>
+  </data>
+  <data name="Char (%)">
+    <value>CHAR（%）</value>
+  </data>
+  <data name="Heartbeat (%)">
+    <value>HEARTBEAT（%）</value>
+  </data>
+  <data name="Loudness (%)">
+    <value>LOUDNESS（%）</value>
+  </data>
+  <data name="Nabeatsu (%)">
+    <value>NABEATSU（%）</value>
+  </data>
+  <data name="Sine curve (%)">
+    <value>SIN CURVE（%）</value>
+  </data>
+  <data name="Wave (%)">
+    <value>WAVE（%）</value>
+  </data>
+  <data name="Spiral (%)">
+    <value>SPIRAL（%）</value>
+  </data>
+  <data name="Side jump (%)">
+    <value>SIDEJUMP（%）</value>
+  </data>
+  <data name="Lunaris">
+    <value>LUNARIS</value>
+  </data>
+  <data name="Speed">
+    <value>速度</value>
+  </data>
+  <data name="Lanes">
+    <value>轨道</value>
+  </data>
+  <data name="More">
+    <value>其他</value>
+  </data>
+  <data name="Modifiers">
+    <value>扩展</value>
+  </data>
+  <data name="Play options">
+    <value>演奏选项</value>
+  </data>
+  <data name="Some modifiers are not recorded in LR2 replays.">
+    <value>部分扩展不会写入 LR2 回放。</value>
+  </data>
+  <data name="Fixed lane in random">
+    <value>随机排列固定轨道</value>
+  </data>
+  <data name="2P fixed lane in random">
+    <value>2P 随机排列固定轨道</value>
+  </data>
+  <data name="GHOST BATTLE (CLASSIC)">
+    <value>GHOST BATTLE（经典模式）</value>
+  </data>
+  <data name="Ghost Battle requires rival selection in the classic menu.">
+    <value>Ghost Battle 需要在经典菜单中选择对手。</value>
+  </data>
+</root>

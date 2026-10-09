@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 struct game;
 struct CONFIG_JUKEBOX;
@@ -18,6 +19,7 @@ struct Request {
     int offset = 0;
     int arrangement = 0;
     int frameLimit = 0;
+    std::unordered_map<std::string, int> playOptions;
     std::string renderProfile = "baseline";
     std::string encoding = "auto";
     std::vector<std::string> roots;
@@ -29,5 +31,5 @@ Request ReadRequest(int argc, char** argv);
 void ApplyLibraryRoots(CONFIG_JUKEBOX& jukebox);
 int RunHeadless(const Request& request, game& state);
 void ApplyPlay(const Request& request, game& state);
-void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow = 0);
+void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow = 0, const game* effectiveState = nullptr);
 }

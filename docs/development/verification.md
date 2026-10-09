@@ -16,7 +16,7 @@
 | `scripts/check.ps1` | 文档检查入口；测试和编译由显式参数启用 |
 | `scripts/tests/test_client_package.py` | 打包行为与玩家数据保留 |
 | `scripts/tests/test_engine_bridge.py` | 在指定独立运行环境中检查引擎协议 |
-| `LazerRave.exe --check report.txt` | BMS 适配、规则集、裁剪模块、解析器及输入策略 |
+| `LazerRave.exe --check report.txt` | BMS 层级与难度分组、演奏参数保存与类型校验、六种排列与 63 个引擎字段映射、规则集与裁剪模块 |
 | `scripts/performance/` | 经明确启动的窗口与帧时间诊断 |
 
 桥接集成测试仅在提供 `LAZERRAVE_TEST_ENGINE` 和 `LAZERRAVE_TEST_FMOD` 时执行引擎请求。性能诊断使用标记的独立运行目录，不以正式成绩数据作为测试输入。构建脚本不调用这些工具。

@@ -20,6 +20,7 @@ namespace LazerRave.Lazer;
 internal partial class BmsBeatmapStore : BeatmapStore
 {
     private readonly object gate = new();
+    private bool initialized;
     private readonly BindableList<BeatmapSetInfo> visible = new();
     private readonly Dictionary<Guid, Chart> charts = new();
     private readonly Dictionary<Guid, WorkingBeatmap> working = new();
@@ -61,13 +62,38 @@ internal partial class BmsBeatmapStore : BeatmapStore
             }
             sets[song.Directory] = set;
         }
-        if (Directory is null || !library.Folders.Any(f => f.Path.Equals(Directory, StringComparison.OrdinalIgnoreCase)))
+        bool directoryRemoved = Directory is not null && !library.Folders.Any(f => f.Path.Equals(Directory, StringComparison.OrdinalIgnoreCase));
+        if (directoryRemoved)
+            Directory = null;
+        if ((!initialized || directoryRemoved) && Directory is null && roots.Length == 1)
             Directory = roots.Select(root => Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)))
                 .FirstOrDefault(root => library.Folders.Any(f => f.Path.Equals(root, StringComparison.OrdinalIgnoreCase)));
+        initialized = true;
         Filter(Directory, Keys);
     }
 
-    public IEnumerable<Folder> ChildFolders => Library.Folders.Where(folder => string.Equals(folder.Parent, Directory, StringComparison.OrdinalIgnoreCase));
+    private Entry[] EntriesHere => Library.Browse(Directory, "", Keys == 0 ? null : Keys, 0);
+    public IEnumerable<Folder> ChildFolders
+    {
+        get
+        {
+            lock (gate) return EntriesHere.Where(entry => entry.IsFolder)
+                .Select(entry => Library.Folders.Single(folder => folder.Path.Equals(entry.Id, StringComparison.OrdinalIgnoreCase))).ToArray();
+        }
+    }
+    /// <summary>
+    /// The folder segments from the library root down to <see cref="Directory"/>, root first.
+    /// Empty at the library overview.
+    /// </summary>
+    public Folder[] Ancestry { get { lock (gate) return Library.Breadcrumbs(Directory); } }
+    /// <summary>
+    /// Songs in this directory and its immediate song folders. Deeper collections remain folders.
+    /// </summary>
+    public IEnumerable<Song> SongsHere
+    {
+        get { lock (gate) return EntriesHere.Where(entry => entry.Song is not null).Select(entry => entry.Song!).ToArray(); }
+    }
+    public bool HasParent => Directory is not null;
     public bool IsVisible(BeatmapInfo info)
     {
         lock (gate) return charts.TryGetValue(info.ID, out var chart) && (Keys == 0 || Keys == chart.Keys)
@@ -77,10 +103,8 @@ internal partial class BmsBeatmapStore : BeatmapStore
     public void Filter(string? directory, int keys) { lock (gate) FilterCore(directory, keys); }
     private void FilterCore(string? directory, int keys)
     {
-        Directory = directory is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)); Keys = keys;
-        var selected = sets.Where(pair => Directory is null || string.Equals(pair.Key, Directory, StringComparison.OrdinalIgnoreCase)
-            || SongLibrary.ContainsPath(Directory, pair.Key))
-            .Select(pair => pair.Value).Where(set => set.Beatmaps.Any(info => keys == 0 || charts[info.ID].Keys == keys)).ToArray();
+        Directory = string.IsNullOrEmpty(directory) ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)); Keys = keys;
+        var selected = SongsHere.Select(song => sets[song.Directory]).ToArray();
         visible.Clear(); visible.AddRange(selected);
     }
 

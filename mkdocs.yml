@@ -36,6 +36,7 @@ nav:
       - BMS 扩展: compatibility/bms.md
       - LR2 皮肤: compatibility/lr2-skins.md
   - 开发路线图: roadmap.md
+  - 演奏模式与设置: development/gameplay-modes.md
   - 运维规划: operations/server-capacity.md
   - 文档维护: development/documentation.md
   - 文档索引: contents.md

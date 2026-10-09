@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -533,6 +533,11 @@ namespace osu.Game.Screens.Select
 
             if (items == null || items.Count == 0) return;
 
+            // A carousel may carry items which are not beatmaps (LazerRave lists library folders
+            // alongside songs). With no beatmaps there is nothing to auto-select, and requesting a
+            // recommended selection from an empty set would throw.
+            if (!items.Any(i => i.Model is GroupedBeatmap)) return;
+
             BeatmapSetInfo? beatmapSetInfo = null;
 
             foreach (var item in items)
@@ -785,7 +790,7 @@ namespace osu.Game.Screens.Select
 
         private ScheduledDelegate? loadingDebounce;
 
-        public void Filter(FilterCriteria criteria, bool showLoadingImmediately = false)
+        public virtual void Filter(FilterCriteria criteria, bool showLoadingImmediately = false)
         {
             bool resetDisplay = grouping.BeatmapSetsGroupedTogether != BeatmapCarouselFilterGrouping.ShouldGroupBeatmapsTogether(criteria);
 

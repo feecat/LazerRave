@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -55,6 +55,12 @@ namespace osu.Game.Screens.Select
         public int? BeatmapSetId;
 
         public bool? HasOnlineID;
+
+        /// <summary>
+        /// When set, overrides the sort/group-based decision on whether difficulties are collapsed into
+        /// a single beatmap-set row.
+        /// </summary>
+        public bool? ForceBeatmapSetsGroupedTogether;
 
         private string searchText = string.Empty;
 

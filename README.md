@@ -87,7 +87,7 @@ The client stores its settings and database in `userdata/` beside the executable
 
 Open `LazerRave.slnx` for C# development. See [Build and run](docs/getting-started/build-and-run.md), [Engine bridge](docs/development/engine-bridge.md), and the [documentation index](docs/index.md) for further details. The detailed documentation is currently in Chinese and uses the MkDocs Read the Docs theme.
 
-Full builds publish directly into `out/app/`; there is no separate publish staging copy. Close the application before rebuilding that directory. When clearing project build caches, remove only `out/build/` and retain dependency caches and player data.
+Full builds publish directly into `out/app/`; there is no separate publish staging copy. Before updating the package, the build script automatically closes LazerRave and OpenLR2 instances running from the destination directory, terminating them if they do not exit within three seconds. Save any active work before rebuilding. Compile-only builds leave running applications open. When clearing project build caches, remove only `out/build/` and retain dependency caches and player data.
 
 The build entry point requests English .NET and MSVC diagnostics and uses UTF-8 for native console communication, including under Windows PowerShell 5.1. The original process environment and console encodings are restored when the script exits.
 

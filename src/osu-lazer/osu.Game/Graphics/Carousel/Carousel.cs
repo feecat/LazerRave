@@ -223,6 +223,12 @@ namespace osu.Game.Graphics.Carousel
         }
 
         /// <summary>
+        /// Carousel items which should always be shown, regardless of filtering.
+        /// Prepended after filtering so they do not need to satisfy the filters' model requirements.
+        /// </summary>
+        protected virtual IEnumerable<CarouselItem> GetPinnedItems() => Enumerable.Empty<CarouselItem>();
+
+        /// <summary>
         /// Called when <see cref="Items"/> changes in any way.
         /// </summary>
         /// <returns>Whether a re-filter is required.</returns>
@@ -384,6 +390,8 @@ namespace osu.Game.Graphics.Carousel
                         log($"Performing {filter.GetType().ReadableName()}");
                         items = await filter.Run(items, cts.Token).ConfigureAwait(false);
                     }
+
+                    items.InsertRange(0, GetPinnedItems());
 
                     log("Updating Y positions");
                     updateYPositions(items, visibleHalfHeight);

@@ -11,10 +11,31 @@
 #include <unordered_map>
 #include <charconv>
 #include <limits>
+#include <algorithm>
 
 namespace launcher {
 namespace {
 constexpr auto rootsFile = "LR2files/Config/lazerrave-roots.xml";
+struct PlayOptionDefinition {
+    const char* name;
+    int minimum;
+    int maximum;
+    void (*apply)(game&, int);
+    int (*read)(const game&);
+};
+const PlayOptionDefinition playOptions[] = {
+#define LR2_PLAY_OPTION(name, minimum, maximum, field) \
+    {name, minimum, maximum, [](game& state, int value) { state.field = value; }, \
+        [](const game& state) { return static_cast<int>(state.field); }},
+#include "LR2_launcher_options.inc"
+#undef LR2_PLAY_OPTION
+};
+const PlayOptionDefinition& FindPlayOption(const std::string& name) {
+    const auto found = std::find_if(std::begin(playOptions), std::end(playOptions),
+        [&](const auto& option) { return name == option.name; });
+    if (found == std::end(playOptions)) throw std::runtime_error("Unknown gameplay option: LAZERRAVE_PLAY_OPTIONS_V1: " + name);
+    return *found;
+}
 unsigned int EncodingCodepage(const std::string& encoding) {
     if (encoding == "auto") return 0;
     if (encoding == "utf-8") return 65001;
@@ -158,6 +179,26 @@ Request ReadRequest(int argc, char** argv) {
             else if (name == "encoding") request.encoding = text;
             else if (name == "root") request.roots.push_back(text);
             else if (name == "library-source" && text == "settings") request.settingsRoots = true;
+            else if (name == "play-options") {
+                for (auto option = element->FirstChildElement(); option; option = option->NextSiblingElement()) {
+                    const char* key = option->Attribute("name");
+                    const char* textValue = option->Attribute("value");
+                    if (std::string_view(option->Value()) != "option" || !key || !textValue)
+                        throw std::runtime_error("Invalid gameplay option: LAZERRAVE_PLAY_OPTIONS_V1");
+                    const auto& definition = FindPlayOption(key);
+                    const std::string valueText(textValue);
+                    int value = 0;
+                    const auto parsed = std::from_chars(valueText.data(), valueText.data() + valueText.size(), value);
+                    if (parsed.ec != std::errc{} || parsed.ptr != valueText.data() + valueText.size() ||
+                        value < definition.minimum || value > definition.maximum ||
+                        !request.playOptions.emplace(key, value).second)
+                        throw std::runtime_error("Invalid or duplicate gameplay option: " + std::string(key));
+                }
+                const auto minimum = request.playOptions.find("hs_min");
+                const auto maximum = request.playOptions.find("hs_max");
+                if (minimum != request.playOptions.end() && maximum != request.playOptions.end() && minimum->second > maximum->second)
+                    throw std::runtime_error("Minimum speed must not exceed maximum speed");
+            }
             else if (name == "embed-window" || name == "host-process") {
                 std::uint64_t value = 0;
                 const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -189,7 +230,7 @@ Request ReadRequest(int argc, char** argv) {
             embedding::ValidateTarget(request);
         }
         if (request.speed < 50 || request.speed > 1000 || request.offset < -1000 || request.offset > 1000 ||
-            request.arrangement < 0 || request.arrangement > 2 || request.roots.size() > 100 ||
+            request.arrangement < OPTION_RANDOM_OFF || request.arrangement > OPTION_RANDOM_END || request.roots.size() > 100 ||
             request.frameLimit < -1 || request.frameLimit > 1000 || (request.frameLimit > 0 && request.frameLimit < 30))
             throw std::runtime_error("Launch option out of range");
         if (request.mode == "play" || request.mode == "validate") {
@@ -216,13 +257,23 @@ void ApplyLibraryRoots(CONFIG_JUKEBOX& box) {
     box = *selected;
 }
 
-void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow) {
+void Reply(const Request& request, bool success, const std::string& message, std::uint64_t engineWindow, const game* effectiveState) {
     TiXmlDocument doc;
     auto root = new TiXmlElement("lazerrave");
     root->SetAttribute("version", "1");
     root->SetAttribute("status", success ? "ok" : "error");
     doc.LinkEndChild(root);
     Child(*root, "message", message);
+    if (effectiveState) {
+        auto options = new TiXmlElement("play-options");
+        for (const auto& definition : playOptions) {
+            auto option = new TiXmlElement("option");
+            option->SetAttribute("name", definition.name);
+            option->SetAttribute("value", definition.read(*effectiveState));
+            options->LinkEndChild(option);
+        }
+        root->LinkEndChild(options);
+    }
     if (engineWindow) {
         Child(*root, "engine-window", std::to_string(engineWindow));
         Child(*root, "viewport", std::to_string(request.embedWindow));
@@ -245,7 +296,11 @@ void ApplyPlay(const Request& request, game& state) {
     state.config.play.random[PLAYER_1] = request.arrangement;
     state.config.play.random[PLAYER_2] = request.arrangement;
     state.config.play.battle = OPTION_BATTLE_OFF;
-    if (request.embedWindow && request.renderProfile == "no-bga") state.config.play.bga = 0;
+    for (const auto& [name, value] : request.playOptions) FindPlayOption(name).apply(state, value);
+    if (state.config.play.hsmin > state.config.play.hsmax)
+        throw std::runtime_error("Minimum speed must not exceed maximum speed");
+    if (state.cmd_auto) state.cmd_nosave = 1;
+    if (request.renderProfile == "no-bga") state.config.play.bga = 0;
 }
 
 int RunHeadless(const Request& request, game& state) {
@@ -260,7 +315,7 @@ int RunHeadless(const Request& request, game& state) {
                 "; speed=" + std::to_string(state.config.play.hiSpeed[PLAYER_1]) +
                 "; offset=" + std::to_string(state.config.play.judgetiming) +
                 "; arrangement=" + std::to_string(state.config.play.random[PLAYER_1]) +
-                "; title=" + meta.title.body + "; artist=" + meta.artist.body);
+                "; title=" + meta.title.body + "; artist=" + meta.artist.body, 0, &state);
             return 0;
         }
         if (sync || request.settingsRoots) {

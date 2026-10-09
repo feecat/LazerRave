@@ -9,6 +9,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
     string Arrangement = "off", string Encoding = "auto", int Width = 1024, int Height = 768,
     string Player = "Player", string? Avatar = null, int FrameLimit = 0, string RenderProfile = "baseline", string Presentation = "embedded")
 {
+    public IReadOnlyDictionary<string, int> PlayOptions { get; init; } = new Dictionary<string, int>();
     public static FrontendSettings Read(string path)
     {
         if (!File.Exists(path)) return new([]);
@@ -16,17 +17,23 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
         object? Get(string key) => table.TryGetValue(key, out var value) ? value : null;
         double Number(string key, double fallback) => Get(key) is { } n ? Convert.ToDouble(n, CultureInfo.InvariantCulture) : fallback;
         string Text(string key, string fallback) => Get(key) as string ?? fallback;
+        var play = Get("play");
+        if (play is not null && play is not TomlTable)
+            throw new InvalidDataException("Play settings must be a TOML table.");
         var roots = (Get("directories") as TomlArray ?? []).OfType<string>().Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var settings = new FrontendSettings(roots, Number("speed", 2), (int)Number("offset", 0),
             Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1024),
-            (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 0), Text("game_render_profile", "baseline"), Text("game_presentation", "embedded"));
+            (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 0), Text("game_render_profile", "baseline"), Text("game_presentation", "embedded"))
+        {
+            PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
+        };
         if (settings.Speed is < .5 or > 10 || !double.IsFinite(settings.Speed) || Math.Abs(settings.Offset) > 1000
             || settings.Width is < 320 or > 7680 || settings.Height is < 240 or > 4320
             || settings.FrameLimit is < -1 or > 1000 || settings.FrameLimit is > 0 and < 30
             || !RenderProfiles.Labels.ContainsKey(settings.RenderProfile)
             || !new[] { "embedded", "standalone" }.Contains(settings.Presentation)
-            || !new[] { "off", "mirror", "random" }.Contains(settings.Arrangement)
+            || !PlayOptionCatalog.Arrangements.Contains(settings.Arrangement)
             || !new[] { "auto", "utf-8", "cp932", "gb18030" }.Contains(settings.Encoding))
             throw new InvalidDataException("Invalid LazerRave play settings.");
         return settings;

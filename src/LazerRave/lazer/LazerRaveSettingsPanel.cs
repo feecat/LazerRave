@@ -46,7 +46,7 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
         {
             new SettingsSlider<double> { LabelText = D("Scroll speed"), Current = settings.Speed, DisplayAsPercentage = false, KeyboardStep = .05f },
             new SettingsSlider<int> { LabelText = D("Judgement offset (ms)"), Current = settings.Offset, DisplayAsPercentage = false, KeyboardStep = 1 },
-            new SettingsDropdown<string> { LabelText = D("Arrangement"), Items = new[] { "off", "mirror", "random" }, Current = settings.Arrangement },
+            new LazerRavePlayPopover.ArrangementSetting { LabelText = D("Arrangement"), Items = PlayOptionCatalog.Arrangements, Current = settings.Arrangement },
             new SettingsDropdown<string> { LabelText = D("Chart encoding"), Items = new[] { "auto", "utf-8", "cp932", "gb18030" }, Current = settings.Encoding },
         })));
         AddSection(new Section("Game viewport", FontAwesome.Solid.Desktop, new Subsection("Game viewport", new Drawable[]

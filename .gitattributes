@@ -9,6 +9,7 @@
 #   - The native engine, scripts and documentation use LF.
 
 * text=auto
+*.inc text eol=lf
 
 # --- Windows scripts, build and project files --------------------------------
 *.cmd text eol=crlf

@@ -1,2 +1,333 @@
-<?xml version='1.0' encoding='utf-8'?>
-<root><resheader name="resmimetype"><value>text/microsoft-resx</value></resheader><resheader name="version"><value>2.0</value></resheader><data name="Apply &amp; rescan" xml:space="preserve"><value>適用して再スキャン</value></data><data name="Interface" xml:space="preserve"><value>インターフェース</value></data><data name="Language" xml:space="preserve"><value>言語</value></data><data name="Gameplay" xml:space="preserve"><value>ゲームプレイ</value></data><data name="Scroll speed" xml:space="preserve"><value>スクロール速度</value></data><data name="Judgement offset (ms)" xml:space="preserve"><value>判定オフセット（ミリ秒）</value></data><data name="Arrangement" xml:space="preserve"><value>配置</value></data><data name="Chart encoding" xml:space="preserve"><value>譜面の文字コード</value></data><data name="Display" xml:space="preserve"><value>表示</value></data><data name="Game viewport" xml:space="preserve"><value>ゲーム表示領域</value></data><data name="Preset" xml:space="preserve"><value>プリセット</value></data><data name="Custom size (width x height)" xml:space="preserve"><value>カスタムサイズ（幅 x 高さ）</value></data><data name="Library" xml:space="preserve"><value>ライブラリ</value></data><data name="Directories" xml:space="preserve"><value>フォルダー</value></data><data name="BMS folders (separate with ;)" xml:space="preserve"><value>BMS フォルダー（; 区切り）</value></data><data name="Player" xml:space="preserve"><value>プレイヤー</value></data><data name="Profile" xml:space="preserve"><value>プロフィール</value></data><data name="Display name" xml:space="preserve"><value>表示名</value></data><data name="Avatar file" xml:space="preserve"><value>アバター画像</value></data><data name="Play" xml:space="preserve"><value>プレイ</value></data><data name="Settings" xml:space="preserve"><value>設定</value></data><data name="Random" xml:space="preserve"><value>ランダム</value></data><data name="Rescan" xml:space="preserve"><value>再スキャン</value></data><data name="Return to library" xml:space="preserve"><value>ライブラリに戻る</value></data><data name="Loading…" xml:space="preserve"><value>読み込み中…</value></data><data name="Returning…" xml:space="preserve"><value>戻っています…</value></data><data name="Scanning…" xml:space="preserve"><value>スキャン中…</value></data><data name="Game frame limit" xml:space="preserve"><value>演奏フレームレート上限</value></data><data name="Rendering comparison preset" xml:space="preserve"><value>描画比較プリセット</value></data><data name="Saving…" xml:space="preserve"><value>保存中…</value></data><data name="Saved" xml:space="preserve"><value>保存済み</value></data><data name="Game presentation" xml:space="preserve"><value>演奏表示方式</value></data><data name="Embedded" xml:space="preserve"><value>埋め込み</value></data><data name="Separate window" xml:space="preserve"><value>別ウィンドウ</value></data><data name="Playing in a separate window…" xml:space="preserve"><value>別ウィンドウでプレイ中…</value></data><data name="Embedded rendering preset" xml:space="preserve"><value>埋め込み描画プリセット</value></data><data name="Embedded frame limit" xml:space="preserve"><value>埋め込みフレーム制限</value></data></root>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="Apply &amp; rescan" xml:space="preserve">
+    <value>適用して再スキャン</value>
+  </data>
+  <data name="Interface" xml:space="preserve">
+    <value>インターフェース</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>言語</value>
+  </data>
+  <data name="Gameplay" xml:space="preserve">
+    <value>ゲームプレイ</value>
+  </data>
+  <data name="Scroll speed" xml:space="preserve">
+    <value>スクロール速度</value>
+  </data>
+  <data name="Judgement offset (ms)" xml:space="preserve">
+    <value>判定オフセット（ミリ秒）</value>
+  </data>
+  <data name="Arrangement" xml:space="preserve">
+    <value>配置</value>
+  </data>
+  <data name="Chart encoding" xml:space="preserve">
+    <value>譜面の文字コード</value>
+  </data>
+  <data name="Display" xml:space="preserve">
+    <value>表示</value>
+  </data>
+  <data name="Game viewport" xml:space="preserve">
+    <value>ゲーム表示領域</value>
+  </data>
+  <data name="Preset" xml:space="preserve">
+    <value>プリセット</value>
+  </data>
+  <data name="Custom size (width x height)" xml:space="preserve">
+    <value>カスタムサイズ（幅 x 高さ）</value>
+  </data>
+  <data name="Library" xml:space="preserve">
+    <value>ライブラリ</value>
+  </data>
+  <data name="Directories" xml:space="preserve">
+    <value>フォルダー</value>
+  </data>
+  <data name="BMS folders (separate with ;)" xml:space="preserve">
+    <value>BMS フォルダー（; 区切り）</value>
+  </data>
+  <data name="Player" xml:space="preserve">
+    <value>プレイヤー</value>
+  </data>
+  <data name="Profile" xml:space="preserve">
+    <value>プロフィール</value>
+  </data>
+  <data name="Display name" xml:space="preserve">
+    <value>表示名</value>
+  </data>
+  <data name="Avatar file" xml:space="preserve">
+    <value>アバター画像</value>
+  </data>
+  <data name="Play" xml:space="preserve">
+    <value>プレイ</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>設定</value>
+  </data>
+  <data name="Random" xml:space="preserve">
+    <value>ランダム</value>
+  </data>
+  <data name="Rescan" xml:space="preserve">
+    <value>再スキャン</value>
+  </data>
+  <data name="Return to library" xml:space="preserve">
+    <value>ライブラリに戻る</value>
+  </data>
+  <data name="Loading…" xml:space="preserve">
+    <value>読み込み中…</value>
+  </data>
+  <data name="Returning…" xml:space="preserve">
+    <value>戻っています…</value>
+  </data>
+  <data name="Scanning…" xml:space="preserve">
+    <value>スキャン中…</value>
+  </data>
+  <data name="Game frame limit" xml:space="preserve">
+    <value>演奏フレームレート上限</value>
+  </data>
+  <data name="Rendering comparison preset" xml:space="preserve">
+    <value>描画比較プリセット</value>
+  </data>
+  <data name="Saving…" xml:space="preserve">
+    <value>保存中…</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>保存済み</value>
+  </data>
+  <data name="Game presentation" xml:space="preserve">
+    <value>演奏表示方式</value>
+  </data>
+  <data name="Embedded" xml:space="preserve">
+    <value>埋め込み</value>
+  </data>
+  <data name="Separate window" xml:space="preserve">
+    <value>別ウィンドウ</value>
+  </data>
+  <data name="Playing in a separate window…" xml:space="preserve">
+    <value>別ウィンドウでプレイ中…</value>
+  </data>
+  <data name="Embedded rendering preset" xml:space="preserve">
+    <value>埋め込み描画プリセット</value>
+  </data>
+  <data name="Embedded frame limit" xml:space="preserve">
+    <value>埋め込みフレーム制限</value>
+  </data>
+  <data name="Gauge">
+    <value>ゲージ</value>
+  </data>
+  <data name="2P gauge">
+    <value>2P ゲージ</value>
+  </data>
+  <data name="Play mode">
+    <value>プレイモード</value>
+  </data>
+  <data name="Autoplay">
+    <value>オートプレイ</value>
+  </data>
+  <data name="Auto key sound">
+    <value>自動キー音</value>
+  </data>
+  <data name="Auto scratch">
+    <value>オートスクラッチ</value>
+  </data>
+  <data name="2P auto scratch">
+    <value>2P オートスクラッチ</value>
+  </data>
+  <data name="Gauge auto shift">
+    <value>ゲージ自動切替</value>
+  </data>
+  <data name="2P scroll speed (×100)">
+    <value>2P スクロール速度（×100）</value>
+  </data>
+  <data name="Speed reference">
+    <value>速度基準</value>
+  </data>
+  <data name="Base speed (%)">
+    <value>基本速度（%）</value>
+  </data>
+  <data name="Minimum speed (×100)">
+    <value>最低速度（×100）</value>
+  </data>
+  <data name="Maximum speed (×100)">
+    <value>最高速度（×100）</value>
+  </data>
+  <data name="In-game speed step (×100)">
+    <value>プレイ中の速度変更幅（×100）</value>
+  </data>
+  <data name="Disable arrow-key speed changes">
+    <value>方向キーの速度変更を無効化</value>
+  </data>
+  <data name="2P arrangement">
+    <value>2P 配置</value>
+  </data>
+  <data name="Visibility">
+    <value>表示効果</value>
+  </data>
+  <data name="2P visibility">
+    <value>2P 表示効果</value>
+  </data>
+  <data name="Lane cover">
+    <value>レーンカバー</value>
+  </data>
+  <data name="2P lane cover">
+    <value>2P レーンカバー</value>
+  </data>
+  <data name="Lane cover (%)">
+    <value>レーンカバー（%）</value>
+  </data>
+  <data name="2P lane cover (%)">
+    <value>2P レーンカバー（%）</value>
+  </data>
+  <data name="Lane cover step (%)">
+    <value>カバー変更幅（%）</value>
+  </data>
+  <data name="Lift">
+    <value>LIFT</value>
+  </data>
+  <data name="2P lift">
+    <value>2P LIFT</value>
+  </data>
+  <data name="Lift (%)">
+    <value>LIFT（%）</value>
+  </data>
+  <data name="2P lift (%)">
+    <value>2P LIFT（%）</value>
+  </data>
+  <data name="DP flip">
+    <value>DP FLIP</value>
+  </data>
+  <data name="Include scratch in random">
+    <value>ランダムにスクラッチを含む</value>
+  </data>
+  <data name="2P include scratch in random">
+    <value>2P ランダムにスクラッチを含む</value>
+  </data>
+  <data name="New random on restart">
+    <value>再試行で配置を再抽選</value>
+  </data>
+  <data name="BGA">
+    <value>BGA</value>
+  </data>
+  <data name="BGA size">
+    <value>BGA サイズ</value>
+  </data>
+  <data name="Miss BGA duration (ms)">
+    <value>ミス BGA 表示時間（ms）</value>
+  </data>
+  <data name="Auto judgement adjustment">
+    <value>判定タイミング自動調整</value>
+  </data>
+  <data name="Score ghost">
+    <value>スコアゴースト</value>
+  </data>
+  <data name="Score graph">
+    <value>スコアグラフ</value>
+  </data>
+  <data name="Score target">
+    <value>目標スコア</value>
+  </data>
+  <data name="Target (%)">
+    <value>目標スコア（%）</value>
+  </data>
+  <data name="Replay saving">
+    <value>リプレイ保存</value>
+  </data>
+  <data name="Disable left-click exit">
+    <value>左クリック終了を無効化</value>
+  </data>
+  <data name="Extra mode">
+    <value>EXTRA モード</value>
+  </data>
+  <data name="Extra level">
+    <value>EXTRA レベル</value>
+  </data>
+  <data name="Acceleration">
+    <value>加減速</value>
+  </data>
+  <data name="Soft landing">
+    <value>SOFT LANDING</value>
+  </data>
+  <data name="Gambol">
+    <value>GAMBOL</value>
+  </data>
+  <data name="Add notes (%)">
+    <value>ノーツ追加（%）</value>
+  </data>
+  <data name="Add long notes (%)">
+    <value>ロングノーツ追加（%）</value>
+  </data>
+  <data name="Add mines (%)">
+    <value>地雷追加（%）</value>
+  </data>
+  <data name="Earthquake (%)">
+    <value>EARTHQUAKE（%）</value>
+  </data>
+  <data name="Tornado (%)">
+    <value>TORNADO（%）</value>
+  </data>
+  <data name="Superloop (%)">
+    <value>SUPERLOOP（%）</value>
+  </data>
+  <data name="Char (%)">
+    <value>CHAR（%）</value>
+  </data>
+  <data name="Heartbeat (%)">
+    <value>HEARTBEAT（%）</value>
+  </data>
+  <data name="Loudness (%)">
+    <value>LOUDNESS（%）</value>
+  </data>
+  <data name="Nabeatsu (%)">
+    <value>NABEATSU（%）</value>
+  </data>
+  <data name="Sine curve (%)">
+    <value>SIN CURVE（%）</value>
+  </data>
+  <data name="Wave (%)">
+    <value>WAVE（%）</value>
+  </data>
+  <data name="Spiral (%)">
+    <value>SPIRAL（%）</value>
+  </data>
+  <data name="Side jump (%)">
+    <value>SIDEJUMP（%）</value>
+  </data>
+  <data name="Lunaris">
+    <value>LUNARIS</value>
+  </data>
+  <data name="Speed">
+    <value>速度</value>
+  </data>
+  <data name="Lanes">
+    <value>レーン</value>
+  </data>
+  <data name="More">
+    <value>その他</value>
+  </data>
+  <data name="Modifiers">
+    <value>拡張</value>
+  </data>
+  <data name="Play options">
+    <value>プレイ設定</value>
+  </data>
+  <data name="Some modifiers are not recorded in LR2 replays.">
+    <value>一部の拡張設定は LR2 リプレイに記録されません。</value>
+  </data>
+  <data name="Fixed lane in random">
+    <value>ランダムの固定レーン</value>
+  </data>
+  <data name="2P fixed lane in random">
+    <value>2P ランダムの固定レーン</value>
+  </data>
+  <data name="GHOST BATTLE (CLASSIC)">
+    <value>GHOST BATTLE（クラシック）</value>
+  </data>
+  <data name="Ghost Battle requires rival selection in the classic menu.">
+    <value>Ghost Battle はクラシックメニューで対戦相手を選択してください。</value>
+  </data>
+</root>

@@ -21,14 +21,19 @@
 | chart | 存在的绝对 `.bms`、`.bme`、`.bml` 或 `.pms` 路径，确定具体难度 |
 | speed | 50–1000，客户端倍率乘以 100；2.75 对应 275 |
 | offset | −1000 至 1000 ms，直接映射 LR2 judgetiming |
-| arrangement | 0 关闭、1 镜像、2 随机，映射现有随机排列枚举 |
+| arrangement | 0 关闭、1 镜像、2 随机、3 S-RANDOM、4 SCATTER、5 CONVERGE，映射现有随机排列枚举 |
+| play-options | 63 个具名演奏选项；每个 option 带 name 与整数 value，范围按引擎原有单位校验 |
 | encoding | auto、utf-8、cp932 或 gb18030，指定谱面文本解码方式 |
 | render-profile | baseline、uncapped、vsync、directshow、discard、no-bga、rgb-video，仅嵌入模式使用 |
 | frame-limit | 0 跟随显示器、−1 不限帧或 30–1000；uncapped 与 vsync 预设使用各自策略 |
 
-直达演奏固定关闭 battle、autojudge 和 BPM 固定速度，basespeed 为 100；播放器两侧使用所传速度与排列。该倍率控制音符滚动，不改变音频速度。会话退出时不写回经典配置；独立窗口路径的窗口尺寸由随包附带的窗口设置脚本处理。
+演奏选项覆盖判定槽、1P/2P 轨道排列、BATTLE 系列、速度固定、基础速度、HIDDEN/SUDDEN、遮挡、LIFT、辅助、BGA、目标分数、回放保存及 MANIAC 扩展。`play-options` 覆盖原生配置中的对应字段；未携带该节点的旧请求保留既有直达行为。速度倍率控制音符滚动，不改变音频速度。Autoplay 使用原有自动演奏入口并禁用成绩写入。no-bga 渲染预设优先于 BGA 选项。
 
-直达演奏不附加 `-ns`，已入库谱面的成绩与回放沿用引擎规则；经典入口保持先前的 `-ns` 行为。账号、皮肤、输入与音频设备仍读取运行目录配置，启动器中的音频、键位及皮肤偏好尚未传入游戏。
+前端字段定义位于 `engine-bridge/PlayOptions.cs`，引擎范围及字段映射位于 `LR2_launcher_options.inc`。新增该能力使用 `LAZERRAVE_PLAY_OPTIONS_V1` 标识，旧引擎会被客户端拒绝。`validate` 响应包含应用后的演奏选项，供无窗口检查读取。
+
+会话退出时不写回经典配置；独立窗口路径的窗口尺寸由随包附带的窗口设置脚本处理。
+
+直达演奏不附加 `-ns`，已入库谱面的成绩与回放沿用引擎规则。直接运行 OpenLR2 的经典入口沿用其自身配置与保存规则。账号、皮肤、输入与音频设备仍读取运行目录配置，启动器中的音频、键位及皮肤偏好尚未传入游戏。
 
 ## Windows 原生嵌入
 
