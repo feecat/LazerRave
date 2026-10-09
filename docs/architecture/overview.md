@@ -1,6 +1,6 @@
 # 技术栈与模块边界
 
-本文区分当前实现与后续功能规划。前端为 C#，演奏为 C++ OpenLR2，两者通过 UTF-8 XML 请求及原生子窗口连接，曲库共享 OpenLR2 数据库。这一进程架构作为后续开发基础，以同窗口嵌入为主要集成方式，并保留独立窗口与经典入口。服务端与多人协议尚未实现。
+本文区分当前实现与后续功能规划。前端为 C#，演奏为 C++ OpenLR2，两者通过 UTF-8 XML 请求及原生子窗口连接，曲库共享 OpenLR2 数据库。这一进程架构作为后续开发基础，以同窗口嵌入为主要集成方式，并保留独立窗口与经典入口。云端已建立独立的网站、API 与房间服务，桌面联网与游戏实时协议尚未接入。
 
 当前 Windows 前端基于 C# / .NET 10 与经过裁剪的 osu!lazer 客户端 `OsuGame`，使用独立 BMS 数据适配和 OpenLR2 原生视口。旧前端原型已归档，具体范围见 [osu!lazer 桌面前端](../development/client.md)。
 
@@ -15,17 +15,17 @@
 | 本地数据 | SQLite 与现有客户端存储 | 当前共享 OpenLR2 song.db，不修改成绩库结构；新内容索引按功能独立引入 |
 | 多语言 | 上游本地化及客户端文本表 | UTF-8，新增主要控件覆盖中英日 |
 | 游戏桥接 | 当前 UTF-8 XML 请求；后续 Windows 命名管道 | 现阶段直达演奏与曲库同步；实时控制和状态副本后续接入 |
-| 服务端候选 | Rust、Tokio、Axum、tower-http | HTTPS API、WSS、认证、限流及观测；独立服务选型，不涉及客户端或游戏引擎重写 |
-| 关系数据 | PostgreSQL、SQLx migration | 用户、内容元数据、对局和成绩 |
-| 房间执行 | 单所有者任务、有界消息队列 | 顺序处理房间状态，避免并发状态漂移 |
-| 文件存储 | S3 兼容对象存储 | 曲包与回放二进制、临时授权传输 |
+| 云端网站与服务 | React、TypeScript、ASP.NET Core 10、SignalR | 同源网站、HTTPS API、房间、聊天、认证与限流；桌面实时集成待接入 |
+| 关系数据 | PostgreSQL、Npgsql、版本化 SQL migration | 用户、内容元数据、对局和成绩 |
+| 房间执行 | 单进程序列化状态、受限连接与缓冲 | 顺序校验房间版本和对局状态，多实例路由待接入 |
+| 文件存储 | 首版本地内容卷；后续 S3 兼容存储 | 曲包与回放二进制、临时授权传输 |
 | 内容归档 | ZIP，普通 Deflate level 9，SHA-256 | 后台打包、完整性验证及缓存 |
 | 回放 | 版本化显式字段与输入事件 | 固定单位、字节序和规则身份 |
-| 密码与会话 | Argon2id、随机可撤销会话 | 参数按容量验证，刷新凭据存摘要 |
+| 密码与会话 | Identity PBKDF2、随机可撤销会话 | 当前 210,000 次迭代，网页 HttpOnly Cookie 与桌面 Bearer，凭据存摘要 |
 | 部署 | Linux LTS、Caddy、Docker Compose | 初期单区域模块化单体 |
-| 观测 | tracing、Prometheus 指标 | 请求、房间队列、任务和资源预算 |
+| 观测 | 当前 ILogger；后续 OpenTelemetry / Prometheus | 请求、房间、任务和资源预算 |
 
-当前 .NET SDK 固定为 10.0.401，设置由 Tomlyn 读写 TOML，谱面及皮肤编码由 C++ 统一处理。网络服务与游戏命名管道仍为目标设计；服务端工具链在独立服务建立时固定，不作为桌面客户端的构建依赖。依赖升级须独立验证。当前 C++ vcpkg 基线保持 `cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3`。
+当前 .NET SDK 固定为 10.0.401，设置由 Tomlyn 读写 TOML，谱面及皮肤编码由 C++ 统一处理。网络服务首版见 [云端网站与服务](../development/cloud.md)，游戏命名管道仍为目标设计；服务端工具链在独立服务建立时固定，不作为桌面客户端的构建依赖。依赖升级须独立验证。当前 C++ vcpkg 基线保持 `cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3`。
 
 ## 进程职责
 
@@ -74,7 +74,7 @@
 
 ## 身份与离线能力
 
-所有账号以自有 `user_id` 标识。密码使用 Argon2id 摘要，服务端可撤销会话；客户端凭据使用 Windows Credential Manager。认证参数、会话期限和限流预算在 M2 固定。
+所有账号以自有 `user_id` 标识。密码使用 Identity PBKDF2 摘要，服务端可撤销会话；客户端凭据使用 Windows Credential Manager。认证参数、会话期限和限流预算在 M2 固定。
 
 离线资料与本地游玩保持独立于在线认证。Steam 作为可选外部身份，网页 OpenID 和原生应用票据分别实现及验证。
 
@@ -90,6 +90,6 @@
 
 ## 技术参考
 
-- [Tokio](https://tokio.rs/) 与 [Axum](https://docs.rs/axum/latest/axum/)
-- [SQLx](https://docs.rs/sqlx/latest/sqlx/)
+- [ASP.NET Core SignalR](https://learn.microsoft.com/aspnet/core/signalr/introduction)
+- [Npgsql](https://www.npgsql.org/doc/basic-usage.html)
 - [Steam 身份验证](https://partner.steamgames.com/doc/features/auth?l=english)

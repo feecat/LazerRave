@@ -14,7 +14,13 @@ The project is under active development and currently targets **Windows 10/11 x6
 - **Reused lazer interface:** retain its menu, song carousel, animations, and settings components. New primary interface text is available in English, Simplified Chinese, and Japanese; complete localization and display-scaling validation remain in progress.
 - **Unified Windows build:** compile the client and engine and assemble their dependencies into one runtime directory through a single build entry point.
 
-Current BMS gameplay runs through OpenLR2, rather than the retained Mania ruleset. The client does not import `.osu` charts or osu! replay files. Editor and online-service components are retained as development foundations; BMS editing, accounts, multiplayer, and cloud services are not yet available.
+Current BMS gameplay runs through OpenLR2, rather than the retained Mania ruleset. The client does not import `.osu` charts or osu! replay files. Editor and online-service components are retained as development foundations; BMS editing and desktop online integration are not yet available. A separate cloud website and service now provide accounts, submitted-score rankings, administrator-managed ZIP packs, rooms and chat; replay verification and synchronized desktop gameplay remain future work.
+
+## Cloud website and service
+
+The cloud module uses React and TypeScript with an ASP.NET Core 10 API, SignalR rooms/chat, and PostgreSQL. Build it independently with `build.cmd -Cloud`; the deployment bundle is written to `out/cloud/`. It includes Docker Compose and Caddy configuration for **LazerRave.com**, with limits suited to an initial 1 vCPU / 1 GiB Ubuntu host.
+
+See [Cloud implementation](docs/development/cloud.md) and [Deployment](docs/operations/cloud-deployment.md) for setup and current boundaries. New scores are client submissions, not replay-verified rankings. The server has not yet been deployed, and the desktop game is not connected to these services.
 
 ## Roadmap
 

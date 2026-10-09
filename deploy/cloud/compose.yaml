@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      POSTGRES_DB: lazerrave
+      POSTGRES_USER: lazerrave
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=32MB", "-c", "max_connections=30", "-c", "wal_keep_size=0", "-c", "max_wal_size=256MB"]
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lazerrave -d lazerrave"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [cloud]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+  storage-init:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown 1654:1654 /data && chmod 700 /data"]
+    volumes: ["content:/data"]
+    networks: [cloud]
+  api:
+    build: .
+    restart: unless-stopped
+    mem_limit: 320m
+    cpus: 0.75
+    environment:
+      ConnectionStrings__Postgres: Host=db;Database=lazerrave;Username=lazerrave;Password=${POSTGRES_PASSWORD};Maximum Pool Size=10;Timeout=10;Command Timeout=15
+      Cloud__PublicOrigin: https://${DOMAIN:-lazerrave.com}
+      Cloud__StoragePath: /data
+      Cloud__SecureCookies: "true"
+      Cloud__MaxRooms: "4"
+      Cloud__MaxUploadBytes: "134217728"
+      Cloud__MaxExpandedBytes: "536870912"
+      Cloud__MaxStorageBytes: "8589934592"
+      ReverseProxyAddress: "172.30.86.2"
+      Logging__LogLevel__Microsoft.AspNetCore: Warning
+      ASPNETCORE_TEMP: /data/tmp
+    tmpfs: ["/tmp:size=16777216,mode=1777"]
+    volumes: ["content:/data"]
+    depends_on:
+      db: { condition: service_healthy }
+      storage-init: { condition: service_completed_successfully }
+    networks: [cloud]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    environment:
+      DOMAIN: ${DOMAIN:-lazerrave.com}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks:
+      cloud: { ipv4_address: 172.30.86.2 }
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+volumes:
+  postgres:
+  content:
+  caddy_data:
+  caddy_config:
+networks:
+  cloud:
+    ipam:
+      config: [{ subnet: "172.30.86.0/24" }]

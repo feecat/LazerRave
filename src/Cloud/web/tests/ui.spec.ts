@@ -1,0 +1,52 @@
+import { test, expect } from '@playwright/test';
+import { fileURLToPath, URL } from 'node:url';
+
+test('Public website, history fallback, sign-in and mobile navigation', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Find your rhythm. Raise the bar.' })).toBeVisible();
+  await page.screenshot({ path: fileURLToPath(new URL('../../../../out/reports/cloud-test/home.png', import.meta.url)), fullPage: true });
+  await page.getByRole('navigation').getByRole('link', { name: 'Rankings' }).click();
+  await expect(page.getByRole('heading', { name: 'One chart. A higher standard.' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'One chart. A higher standard.' })).toBeVisible();
+  await page.goto('/login');
+  await page.getByLabel('Username or email').fill('missing_player');
+  await page.getByLabel('Password').fill('invalid-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Invalid username or password');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Song packs' })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Song packs' }).click();
+  await expect(page.getByRole('heading', { name: 'Find your next favorite' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Browser registration, profile save, cookie authentication and room controls', async ({ page }) => {
+  const username = 'web_' + Date.now();
+  await page.goto('/register');
+  await page.getByLabel('Username', { exact: true }).fill(username);
+  await page.getByLabel('Email', { exact: true }).fill(username + '@example.com');
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: username })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await page.getByLabel('Display name').fill('Browser Player');
+  await page.getByLabel('Signature', { exact: true }).fill('Ready for the next chart');
+  await page.getByLabel('About you').fill('<script>plain profile text</script>');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Browser Player' })).toBeVisible();
+  await expect(page.getByText('<script>plain profile text</script>')).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Multiplayer' }).click();
+  await expect(page.getByText('Connected', { exact: true }).first()).toBeVisible();
+  await page.getByLabel('Room name').fill('Browser room');
+  await page.getByRole('button', { name: 'Create room' }).click();
+  await expect(page.getByRole('heading', { name: 'Browser room' })).toBeVisible();
+  await page.getByRole('button', { name: 'Leave room' }).click();
+  await expect(page.getByRole('heading', { name: 'Open rooms' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Sign in' })).toBeVisible();
+});

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">LazerRave — LR</title>
+  <desc id="description">An angular silver LR monogram across a midnight blue disc with an electric blue rim and three rhythm accents.</desc>
+  <defs>
+    <radialGradient id="disc" cx="32%" cy="20%" r="85%">
+      <stop offset="0" stop-color="#234864"/>
+      <stop offset=".52" stop-color="#102739"/>
+      <stop offset="1" stop-color="#070e1a"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="75" y1="48" x2="414" y2="458" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d3f7ff"/>
+      <stop offset=".28" stop-color="#52d6ff"/>
+      <stop offset=".64" stop-color="#187cb7"/>
+      <stop offset="1" stop-color="#17344f"/>
+    </linearGradient>
+    <linearGradient id="letters" x1="0" y1="0" x2="0" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset=".48" stop-color="#e9f6fc"/>
+      <stop offset=".5" stop-color="#bfd9e8"/>
+      <stop offset="1" stop-color="#f4fbff"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="112" y1="346" x2="400" y2="346" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#30d8ff"/>
+      <stop offset="1" stop-color="#338dff"/>
+    </linearGradient>
+    <path id="wordmark" fill-rule="evenodd" d="M22 0H60V108H106V146H22Z M120 0H199C231 0 248 18 248 48C248 72 236 88 217 94L253 146H209L178 101H158V146H120Z M158 34V68H196C205 68 210 62 210 51C210 40 205 34 196 34Z"/>
+  </defs>
+  <circle cx="256" cy="256" r="240" fill="#060c16"/>
+  <circle cx="256" cy="256" r="230" fill="url(#disc)" stroke="url(#rim)" stroke-width="10"/>
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#7dcff3" stroke-opacity=".13" stroke-width="2"/>
+  <path d="M88 136A206 206 0 0 1 386 96" fill="none" stroke="#bceeff" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+  <path d="M56 274L368 98H426L58 309Z" fill="#4dcfff" fill-opacity=".045"/>
+  <path d="M86 371L440 172V208L111 393Z" fill="#4dcfff" fill-opacity=".035"/>
+  <g transform="translate(112 169) scale(1.2) skewX(-12)">
+    <use href="#wordmark" fill="#020812" stroke="#020812" stroke-width="12" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(112 160) scale(1.2) skewX(-12)">
+    <use href="#wordmark" fill="url(#letters)" stroke="#dff6ff" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+  <path d="M112 346H400L390 354H102Z" fill="url(#accent)"/>
+  <g fill="#8aafc4">
+    <path d="M219 382H235L229 407H213Z"/>
+    <path d="M247 382H263L257 407H241Z"/>
+  </g>
+  <path d="M275 382H291L285 407H269Z" fill="#4cd3ff"/>
+</svg>

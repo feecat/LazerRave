@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+
+const base = process.env.LAZERRAVE_CLOUD_TEST_URL;
+if (!base || !['127.0.0.1', 'localhost'].includes(new URL(base).hostname)) throw new Error('Set LAZERRAVE_CLOUD_TEST_URL to an isolated loopback server. This test creates accounts, scores and a pack.');
+const fixture = process.env.LAZERRAVE_CLOUD_TEST_ZIP;
+const dotnet = process.env.LAZERRAVE_CLOUD_TEST_DOTNET;
+const server = process.env.LAZERRAVE_CLOUD_TEST_SERVER;
+if (!fixture || !dotnet || !server || !process.env.ConnectionStrings__Postgres?.includes('lazerrave_test')) throw new Error('Set test ZIP, dotnet, server DLL and the isolated lazerrave_test database connection.');
+const prefix = 't' + Date.now(); const password = 'test-password-just-for-checks';
+let checks = 0;
+async function request(path, { token, method = 'GET', body, expected = 200, headers = {} } = {}) {
+  const form = body instanceof FormData;
+  const response = await fetch(base + '/api' + path, { method, headers: { 'X-LazerRave': '1', ...(!form && body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: body ? form ? body : JSON.stringify(body) : undefined });
+  assert.equal(response.status, expected, `${path}: ${await response.clone().text()}`); checks++;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+const connections = [];
+try {
+  await request('/health');
+  await request('/admin/packs', { expected: 401 });
+  await request('/auth/register', { method: 'POST', body: { username: 'xx', email: 'invalid', password: 'short' }, expected: 400 });
+  const players = [];
+  for (let index = 0; index < 17; index++) {
+    const username = prefix + '_' + index;
+    const user = await request('/auth/register', { method: 'POST', body: { username, email: `${username}@example.com`, password } });
+    const credentials = await request('/auth/token', { method: 'POST', body: { username, password } });
+    players.push({ ...user, token: credentials.token });
+  }
+  await request('/auth/register', { method: 'POST', body: { username: players[0].username.toUpperCase(), email: 'unique@example.com', password }, expected: 409 });
+  await request('/auth/login', { method: 'POST', body: { username: players[0].username, password: 'wrong' }, expected: 401 });
+  await request('/admin/packs', { token: players[0].token, expected: 403 });
+  execFileSync(dotnet, [server, '--grant-admin', players[0].username], { windowsHide: true, stdio: 'pipe' });
+  const token = players[0].token;
+  const me = await request('/me', { token }); assert.equal(me.role, 'admin');
+  const edited = await request('/me', { token, method: 'PUT', body: { displayName: 'Test Player', signature: 'Hello', bio: '<script>text, never HTML</script>' } });
+  assert.equal(edited.signature, 'Hello');
+  const csrf = await fetch(base + '/api/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: 'No', signature: '', bio: '' }) });
+  assert.equal(csrf.status, 403); checks++;
+  await request('/me', { token, headers: { Origin: 'https://untrusted.example' }, expected: 403 });
+  const upload = new FormData(); upload.set('title', 'Integration fixture'); upload.set('description', 'Private test content'); upload.set('file', new Blob([readFileSync(fixture)], { type: 'application/zip' }), 'fixture.zip');
+  const pack = await request('/admin/packs', { token, method: 'POST', body: upload });
+  await request('/packs/' + pack.id, { expected: 404 });
+  await request('/packs/' + pack.id + '/download', { expected: 404 });
+  await request('/admin/packs/' + pack.id + '/publication', { token, method: 'PUT', body: { published: true }, expected: 204 });
+  const catalog = await request('/packs/' + pack.id); const chart = catalog.charts[0];
+  assert.equal(chart.keys, 7);
+  const download = await fetch(base + '/api/packs/' + pack.id + '/download', { headers: { Range: 'bytes=0-9' } });
+  assert.equal(download.status, 206); assert.equal((await download.arrayBuffer()).byteLength, 10); checks++;
+  const score = { chartId: chart.id, clientRunId: crypto.randomUUID(), ruleset: 'openlr2-v1', arrangement: 'off', gauge: 'normal', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, maxCombo: 10, clear: 'normal' };
+  const saved = await request('/scores', { token, method: 'POST', body: score }); assert.equal(saved.exScore, 25); assert.equal(saved.verified, false);
+  assert.equal((await request('/scores', { token, method: 'POST', body: score })).id, saved.id);
+  await request('/scores', { token, method: 'POST', body: { ...score, great: 6 }, expected: 409 });
+  await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), autoplay: true }, expected: 400 });
+  await request('/scores', { token: players[1].token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 20, maxCombo: 20 } });
+  const ranking = await request(`/rankings/${chart.id}`);
+  const better = ranking.find(row => row.username === players[1].username);
+  const lower = ranking.find(row => row.username === players[0].username);
+  assert.equal(better.exScore, 45); assert.equal(lower.exScore, 25); assert.ok(better.rank < lower.rank);
+  assert.deepEqual(await request(`/rankings/${chart.id}?verified=true`), []);
+  const profile = await request('/users/' + players[0].username); assert.equal(profile.user.bio, edited.bio); assert.equal(profile.scores.length, 1);
+  for (const player of players) {
+    const hub = new HubConnectionBuilder().withUrl(base + '/hubs/realtime', { headers: { Authorization: 'Bearer ' + player.token } }).configureLogging(LogLevel.None).build();
+    await hub.start(); connections.push(hub);
+  }
+  let room = await connections[0].invoke('CreateRoom', 'Integration room');
+  for (let index = 1; index < 16; index++) room = await connections[index].invoke('JoinRoom', room.id);
+  assert.equal(room.members.length, 16); checks++;
+  await assert.rejects(connections[16].invoke('JoinRoom', room.id), /full/); checks++;
+  await assert.rejects(connections[1].invoke('SelectChart', chart.id, pack.id, room.version), /host/); checks++;
+  await assert.rejects(connections[0].invoke('SelectChart', chart.id, pack.id, 0), /stale/); checks++;
+  room = await connections[0].invoke('SelectChart', chart.id, pack.id, room.version);
+  await assert.rejects(connections[1].invoke('SetReady', true, 'invalid', room.version), /identity/); checks++;
+  await connections[0].invoke('SendChat', room.id, 'Hello room');
+  const chat = await request('/chat/' + room.id, { token: players[1].token }); assert.equal(chat[0].text, 'Hello room');
+  await request('/chat/' + room.id, { token: players[16].token, expected: 403 });
+  for (let index = 0; index < 16; index++) room = await connections[index].invoke('SetReady', true, chart.sha256, room.version);
+  room = await connections[0].invoke('StartRound', room.version); assert.equal(room.state, 'countdown'); checks++;
+  await assert.rejects(connections[0].invoke('ReportProgress', { matchId: room.matchId, sequence: 1, exScore: 10, combo: 2, misses: 0, progress: .1 }), /not accepting/);
+  await new Promise(resolve => setTimeout(resolve, 3300));
+  const report = { matchId: room.matchId, sequence: 1, exScore: 10, combo: 2, misses: 0, progress: .1 };
+  const progress = await connections[0].invoke('ReportProgress', report); assert.equal(progress.state, 'playing'); checks++;
+  await assert.rejects(connections[0].invoke('ReportProgress', report), /stale/); checks++;
+  for (let index = 0; index < 16; index++) room = await connections[index].invoke('FinishRound', { ...report, sequence: 2, exScore: 20 + index, combo: 3, progress: 1 });
+  assert.equal(room.state, 'results'); assert.equal(room.members[0].exScore, 35); checks++;
+  await connections[0].invoke('LeaveRoom');
+  const listed = await request('/rooms'); assert.equal(listed.find(item => item.id === room.id).hostId, players[1].id);
+  await request('/admin/users/' + players[16].id + '/disabled', { token, method: 'PUT', body: { disabled: true }, expected: 204 });
+  await request('/scores', { token: players[16].token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID() }, expected: 401 });
+  await request('/auth/logout', { token: players[15].token, method: 'POST', expected: 204 });
+  assert.equal(await request('/me', { token: players[15].token }), null);
+  await request('/admin/packs/' + pack.id + '/publication', { token, method: 'PUT', body: { published: false }, expected: 204 });
+  await request('/packs/' + pack.id + '/download', { expected: 404 });
+  console.log(`PASS: ${checks} HTTP/realtime assertions, 16-player lifecycle, ranking isolation, uploads, authorization and revoked sessions.`);
+} finally {
+  await Promise.all(connections.map(connection => connection.stop()));
+}

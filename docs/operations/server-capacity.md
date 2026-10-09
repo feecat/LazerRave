@@ -1,6 +1,6 @@
 # 服务器容量与运维规划
 
-本文为部署规划，当前尚未部署 LazerRave 服务。规格以 100 在线、每房最多 16 人、10 Hz 成绩快照和平均 100 MB 单曲压缩包为初始预算，须经负载测试确认。
+本文为扩容与性能目标规划，当前尚未部署 LazerRave 服务。已购买的 1 vCPU、1 GiB、32 GB Ubuntu 主机采用小规模起步配置，具体见 [云端部署](cloud-deployment.md)。规格以 100 在线、每房最多 16 人、10 Hz 成绩快照和平均 100 MB 单曲压缩包为初始预算，须经负载测试确认。
 
 ## 初始部署
 
@@ -14,7 +14,7 @@ Beta 初期 API、房间、PostgreSQL 与 Caddy 可部署在同一主机，内�
 
 扩展阶段可将 API 调整至 8 vCPU/16 GB，将数据库分离至 4 vCPU/8 GB、100 GB SSD，并配置独立 4 vCPU/8 GB 任务节点。该规格不构成 500 在线承诺，应以实测瓶颈调整。
 
-系统基准为 Ubuntu 24.04 LTS，部署时固定受维护的系统和镜像版本。服务栈为 Caddy、Docker Compose、Rust API/房间、PostgreSQL 与任务进程。
+系统基准为 Ubuntu 24.04 LTS，部署时固定受维护的系统和镜像版本。服务栈为 Caddy、Docker Compose、ASP.NET Core API/房间、PostgreSQL 与任务进程。
 
 API 服务的语言选型独立于 C# 客户端与 C++ OpenLR2。普通包校验可由 Linux 任务进程执行；后续回放重算需要匹配版本的原生后端，应另行部署 Windows 任务节点并单独测量容量，不计入上述 Linux 主机的初始预算。
 

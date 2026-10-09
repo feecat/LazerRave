@@ -18,6 +18,8 @@ __pycache__/
 .env
 .env.*
 !.env.example
+node_modules/
+src/Cloud/server/data/
 
 # Application runtime data. These are written beside the executable and in the
 # repository root when a build output is run or migrated in place; they hold

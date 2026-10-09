@@ -3,6 +3,7 @@ param(
     [ValidateSet('Release', 'Debug', 'RelWithDebInfo')][string]$Configuration,
     [ValidateRange(1, 64)][int]$Jobs = 4,
     [switch]$CompileOnly,
+    [switch]$Cloud,
     [switch]$BuildEngine,
     [string]$RuntimeSource = '',
     [string]$Destination = '',
@@ -37,7 +38,12 @@ try {
     [Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::GetCultureInfo('en-US')
 
     $engineOptions = @('Architecture', 'PrepareRuntime', 'UpdateRuntime', 'Fresh', 'WindowWidth', 'WindowHeight', 'DirectDownload')
-    if (!$EngineOnly) {
+    if ($Cloud) {
+        if ($EngineOnly -or $BuildEngine -or $RuntimeSource -or $Destination -or
+            @($engineOptions | Where-Object { $PSBoundParameters.ContainsKey($_) }).Count -or $Configuration -eq 'RelWithDebInfo') {
+            throw '-Cloud accepts only -Configuration Release/Debug and -CompileOnly.'
+        }
+    } elseif (!$EngineOnly) {
         if (@($engineOptions | Where-Object { $PSBoundParameters.ContainsKey($_) }).Count) {
             throw 'Engine-specific options require -EngineOnly.'
         }
@@ -65,7 +71,10 @@ try {
         $env:TMP = $buildTempDirectory
         $env:TMPDIR = $buildTempDirectory
         "Build temporary directory: $buildTempDirectory" | Tee-Object -FilePath $log
-        if ($EngineOnly) {
+        if ($Cloud) {
+            $script = Join-Path $PSScriptRoot 'build-cloud.ps1'
+            $arguments = @{ Configuration = $Configuration; CompileOnly = $CompileOnly }
+        } elseif ($EngineOnly) {
             $script = Join-Path $PSScriptRoot 'build-engine.ps1'
             $arguments = @{
                 Configuration = $Configuration

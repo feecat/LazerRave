@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Cloud/">
+    <Project Path="src/Cloud/server/Cloud.csproj" />
+    <Project Path="src/Cloud/tests/Cloud.Tests.csproj" />
+  </Folder>
   <Folder Name="/Client/">
     <Project Path="src/LazerRave/lazer/LazerRave.Lazer.csproj" />
     <Project Path="src/LazerRave/resource-pack/LazerRave.ResourcePack.csproj" />

@@ -17,7 +17,7 @@ LazerRave 使用 C# 桌面客户端管理 BMS 曲库与演奏设置，由 C++ Op
 | 普通鼠标键盘、显示设置与多语言资源 | 现有组件保留，兼容矩阵持续完善 |
 | 谱面编辑 | 基础框架保留，BMS 读写未接入 |
 | 新闻、更新日志、在线搜谱 | 界面和请求基础保留，自有服务未接入 |
-| 用户、头像、签名、多人和在线排行榜 | 通用组件保留，服务尚未实现 |
+| 用户、头像、签名、多人和在线排行榜 | 独立云端网站与服务首版已实现，桌面联网、可信排名与实际同步演奏未接入 |
 | 云端回放、BMSON、段位认证、Steam | 规划中 |
 | 无既有 LR2 安装的独立发行包 | 默认资源与兼容验收尚未完成 |
 
@@ -25,6 +25,7 @@ LazerRave 使用 C# 桌面客户端管理 BMS 曲库与演奏设置，由 C++ Op
 
 - [引擎桥接](development/engine-bridge.md)、[BGA 与帧时间](development/bga-diagnostics.md)、[验证范围](development/verification.md)。
 - [前端资源包](development/resource-pack.md)：外置路径、裁剪策略及构建记录。
+- [云端网站与服务](development/cloud.md)、[LazerRave.com 部署](operations/cloud-deployment.md)。
 - [技术架构](architecture/overview.md)、[多人协议与回放](architecture/multiplayer-and-replay.md)。
 - [开发路线图](roadmap.md)、[服务器容量](operations/server-capacity.md)。
 

@@ -7,6 +7,8 @@ LazerRave 的活动代码位于本仓库。C# 客户端与 C++ 引擎分别构�
 | `src/LazerRave/lazer/` | 桌面入口、BMS 数据适配、设置与文本 | 纳入 |
 | `src/LazerRave/engine-bridge/` | XML 协议、进程、媒体与原生视口 | 纳入 |
 | `src/LazerRave/resource-pack/` | 发布时资源裁剪工具与移除清单 | 纳入 |
+| `src/Cloud/` | ASP.NET Core 服务、React 网站、数据库迁移与测试 | 纳入 |
+| `deploy/cloud/` | Linux 容器、TLS 与配置示例 | 纳入 |
 | `src/osu-lazer/` | 上游客户端、Mania、编辑基础和许可 | 纳入 |
 | `src/OpenLR2/` | 演奏引擎、CMake、第三方依赖与 ExampleIR | 纳入 |
 | `scripts/` | 构建、打包、诊断及独立检查工具 | 纳入 |
@@ -29,7 +31,9 @@ LazerRave 的活动代码位于本仓库。C# 客户端与 C++ 引擎分别构�
 
 根目录的 `LazerRave.slnx` 是 C# 开发入口。`build.cmd` 是唯一构建入口，默认构建完整客户端，添加 `-EngineOnly` 可单独构建引擎；具体实现放在 `scripts/` 中。使用方式见 [构建与运行](../getting-started/build-and-run.md)。
 
-完整客户端直接发布到 `out/app/`，开发输出留在 `out/build/`。运行目录被占用时停止更新，不再生成多个自动编号的运行包。清理项目缓存限于 `out/build/`；依赖缓存、玩家数据及诊断记录分别保留。
+云端使用同一入口 `build.cmd -Cloud`，发布至 `out/cloud/`，中间文件位于 `out/build/cloud/`。该流程不构建或更新桌面游戏。
+
+完整客户端直接发布到 `out/app/`，开发输出留在 `out/build/`。更新前自动退出目标目录中的客户端与游戏进程，不再生成多个自动编号的运行包。清理项目缓存限于 `out/build/`；依赖缓存、玩家数据及诊断记录分别保留。
 
 运行包中的应用代码与一般托管依赖合入 `LazerRave.exe`，素材程序集外置于 `Resources/`，原生 DLL 保持外置。语言资源集中于 `Localization/`。调试符号、API XML 文档与 ExampleIR 示例只保留在开发构建目录中。
 
