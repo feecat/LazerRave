@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace LazerRave.Content;
 
@@ -45,28 +44,10 @@ public static class SongTransferFiles
             files.Add(new(relative, size, await SongContent.HashFile(path, cancellation)));
             done += size; progress?.Report(new("Checking resources", done, total));
         }
-        ValidateReferences(chartPath, root, encoding);
         var selected = files.Single(f => f.Path == Path.GetFileName(chartPath));
         var manifest = new SongManifest(1, selected.Path, selected.Sha256, SongContent.Identity(files), files.ToArray());
         SongContent.Validate(manifest);
         return manifest;
-    }
-    private static void ValidateReferences(string chart, string root, string encoding)
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        var bytes = File.ReadAllBytes(chart);
-        string text;
-        try { text = encoding is "cp932" or "gb18030" ? Encoding.GetEncoding(encoding == "gb18030" ? 54936 : 932).GetString(bytes) : new UTF8Encoding(false, true).GetString(bytes); }
-        catch (DecoderFallbackException) { text = Encoding.GetEncoding(932).GetString(bytes); }
-        foreach (Match match in Regex.Matches(text, @"^\s*#(WAV|BMP)[a-z0-9]{2}\s+(.+?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
-        {
-            var relative = match.Groups[2].Value.Trim().Trim('"').Replace('\\', '/');
-            var path = SongContent.Resolve(root, relative);
-            var alternatives = match.Groups[1].Value.Equals("WAV", StringComparison.OrdinalIgnoreCase)
-                ? new[] { ".wav", ".ogg", ".mp3", ".flac" } : new[] { ".bmp", ".png", ".jpg", ".jpeg", ".gif", ".avi", ".mpg", ".mpeg", ".mp4", ".wmv", ".webm" };
-            if (!File.Exists(path) && !alternatives.Any(ext => File.Exists(Path.ChangeExtension(path, ext))))
-                throw new InvalidDataException("Missing song resource: " + relative);
-        }
     }
     public static async Task<string> Pack(string chartPath, SongManifest manifest, string cache, CancellationToken cancellation, IProgress<TransferProgress>? progress = null)
     {

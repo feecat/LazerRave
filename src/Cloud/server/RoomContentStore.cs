@@ -21,8 +21,9 @@ public sealed class RoomContentStore(Pg db, Rooms rooms, ContentStore content, C
     private void Authorize(Dictionary<string, object?> row, Guid user, bool upload)
     {
         if (upload && (Guid)row["uploaderId"]! != user) throw new ApiError(403, "This upload belongs to another player.");
-        rooms.RequireSelection(user, (Guid)row["roomId"]!, (Guid)row["selectionId"]!, (string)row["contentSha256"]!, upload);
+        var selected = rooms.RequireSelection(user, (Guid)row["roomId"]!, (Guid)row["selectionId"]!, host: upload);
         if ((DateTime)row["expiresAt"]! <= DateTime.UtcNow || (string)row["state"]! == "expired") throw new ApiError(410, "The shared song has expired. Ask the host to upload it again.");
+        if (selected.Chart!.Sha256 != View(row).Manifest.ChartSha256) throw new ApiError(409, "The selected difficulty has changed.");
     }
     private async Task Broadcast(RoomView room)
     {
@@ -35,14 +36,14 @@ public sealed class RoomContentStore(Pg db, Rooms rooms, ContentStore content, C
         SongContent.Validate(input.Manifest, options.MaxExpandedBytes);
         if (input.SizeBytes is <= 0 || input.SizeBytes > options.MaxUploadBytes || !SongContent.IsHash(input.ArchiveSha256))
             throw new ApiError(400, "Invalid ZIP size or checksum.");
-        rooms.RequireSelection(user, roomId, input.SelectionId, input.Manifest.ContentSha256, true);
+        rooms.RequireSelection(user, roomId, input.SelectionId, host: true);
         var selected = rooms.Current(user)!.Chart!;
         if (selected.Sha256 != input.Manifest.ChartSha256) throw new ApiError(409, "The selected difficulty has changed.");
         if (!await Gate.WaitAsync(0, cancellation)) throw new ApiError(429, "An upload is being validated. Try again shortly.");
         try
         {
             await CleanupCore();
-            rooms.RequireSelection(user, roomId, input.SelectionId, input.Manifest.ContentSha256, true);
+            rooms.RequireSelection(user, roomId, input.SelectionId, host: true);
             var existing = (await db.Query("SELECT * FROM room_content WHERE room_id=@room AND selection_id=@selection AND uploader_id=@user AND state IN ('uploading','ready')", ("room", roomId), ("selection", input.SelectionId), ("user", user))).FirstOrDefault();
             if (existing is not null)
             {

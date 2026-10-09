@@ -82,7 +82,7 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
-    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self' https://api.github.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
     try
     {
         var requestOrigin = context.Request.Headers.Origin.ToString();
@@ -119,8 +119,8 @@ app.MapGet("/api/health", async (Pg pg) => { await pg.Query("SELECT 1"); return 
 app.MapGet("/api/me", async (HttpContext context, Auth auth) => Results.Ok(await auth.Session(Auth.Token(context.Request))));
 app.MapPost("/api/auth/register", async (RegisterInput input, HttpContext context, Auth auth) =>
 {
-    var user = await auth.Register(input);
-    context.Response.Cookies.Append("lr_session", await auth.CreateSession(user.Id), auth.Cookie());
+    var (user, token) = await auth.Register(input);
+    context.Response.Cookies.Append("lr_session", token, auth.Cookie());
     return Results.Ok(user);
 }).RequireRateLimiting("auth");
 app.MapPost("/api/auth/login", async (LoginInput input, HttpContext context, Auth auth) =>

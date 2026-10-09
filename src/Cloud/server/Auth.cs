@@ -28,16 +28,25 @@ public sealed class Auth(Pg db, CloudOptions options)
         (string)row["displayName"]!, (string)row["signature"]!, (string)row["bio"]!, row["avatarKey"] is null ? null : $"/api/users/{row["id"]}/avatar?v={row["avatarKey"]}",
         (string)row["role"]!, (DateTime)row["createdAt"]!, (long)row["uid"]!);
 
-    public async Task<PublicUser> Register(RegisterInput input)
+    public async Task<(PublicUser User, string Token)> Register(RegisterInput input)
     {
         string username = input.Username ?? "";
         if (!Regex.IsMatch(username, "\\A[A-Za-z0-9_]{3,24}\\z") || input.Email?.Length > 254 ||
             !System.Net.Mail.MailAddress.TryCreate(input.Email, out var email) || email.Address != input.Email || input.Password?.Length is not (>= 12 and <= 128))
             throw new ApiError(400, "Use a 3–24 character username, a valid email and a 12–128 character password.");
         var id = Guid.NewGuid();
-        var rows = await db.Query("INSERT INTO users(id,username,email,password_hash,display_name) VALUES(@id,@name,@email,@hash,@name) RETURNING *",
-            ("id", id), ("name", username), ("email", input.Email.ToLowerInvariant()), ("hash", hasher.HashPassword(username, input.Password)));
-        return Public(rows.Single());
+        var passwordHash = hasher.HashPassword(username, input.Password);
+        await using var connection = await db.Open();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using var insert = new NpgsqlCommand("INSERT INTO users(id,username,email,password_hash,display_name) VALUES(@id,@name,@email,@hash,@name) RETURNING *", connection, transaction);
+        Pg.Add(insert, ("id", id), ("name", username), ("email", input.Email.ToLowerInvariant()), ("hash", passwordHash));
+        var user = Public((await Pg.Read(insert)).Single());
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        await using var session = new NpgsqlCommand("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(@hash,@id,@expiry)", connection, transaction);
+        Pg.Add(session, ("hash", Digest(token)), ("id", id), ("expiry", DateTime.UtcNow.AddDays(options.SessionDays)));
+        await session.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
+        return (user, token);
     }
 
     public async Task<PublicUser> Login(LoginInput input)

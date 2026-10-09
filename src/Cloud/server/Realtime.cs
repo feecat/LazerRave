@@ -78,6 +78,11 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
         var room = rooms.Select(UserId, new(chartId, (string)row["title"]!, (string)row["sha256"]!, (int)row["keys"]!, packId), version);
         await Broadcast(room); return room;
     }
+    public async Task<RoomView> TransferHost(Guid target, long version)
+    {
+        var room = rooms.TransferHost(UserId, target, version);
+        await Broadcast(room); return room;
+    }
     public async Task<RoomView> SetReady(bool ready, string sha256, long version)
     {
         var room = rooms.Ready(UserId, ready, sha256, version);
@@ -85,7 +90,7 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
     }
     public async Task<RoomView> SelectLocalChart(LocalChartInput input, long version)
     {
-        if (!SongContent.IsHash(input.Sha256) || !SongContent.IsHash(input.ContentSha256) ||
+        if (!SongContent.IsHash(input.Sha256) || (input.ContentSha256 is not null && !SongContent.IsHash(input.ContentSha256)) ||
             input.Title?.Length is not (>= 1 and <= 200) || input.Artist?.Length > 200 || input.Keys is not (5 or 7 or 9 or 10 or 14) || input.Level is < 0 or > 999)
             throw new ApiError(400, "Invalid local chart identity.");
         var current = rooms.Current(UserId) ?? throw new ApiError(404, "Join a room first.");
@@ -147,7 +152,7 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
     }
 }
 
-public sealed record LocalChartInput(string Sha256, string ContentSha256, string Title, string? Artist, int Keys, int Level);
+public sealed record LocalChartInput(string Sha256, string? ContentSha256, string Title, string? Artist, int Keys, int Level);
 
 public sealed class RoomTicker(Rooms rooms, IHubContext<RealtimeHub> hub, Pg db, ILogger<RoomTicker> logger) : BackgroundService
 {

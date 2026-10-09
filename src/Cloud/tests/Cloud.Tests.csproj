@@ -6,7 +6,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <Compile Include="../../LazerRave/engine-bridge/GameplaySnapshot.cs" Link="Desktop/GameplaySnapshot.cs" />
+    <Compile Include="../../LazerRave/lazer/CloudScoreSession.cs" Link="Desktop/CloudScoreSession.cs" />
     <Compile Include="../../LazerRave/lazer/CloudClient.cs" Link="Desktop/CloudClient.cs" />
+    <Compile Include="../../LazerRave/lazer/CloudSessionStore.cs" Link="Desktop/CloudSessionStore.cs" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
