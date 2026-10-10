@@ -7,6 +7,17 @@ public sealed class RankingTests
 {
     private static ScoreInput Valid => new(Guid.NewGuid(), Guid.NewGuid(), "openlr2-v1", "off", "normal", 10, 5, 3, 2, 1, 10, "normal");
     [Fact]
+    public void RankingFiltersAcceptAggregateAndSpecificOptionsButRejectUnknownValues()
+    {
+        Ranking.ValidateFilter("all", "all");
+        foreach (var arrangement in Ranking.Arrangements)
+            foreach (var gauge in Ranking.Gauges) Ranking.ValidateFilter(arrangement, gauge, 10000);
+        Assert.Throws<ApiError>(() => Ranking.ValidateFilter("invalid", "all"));
+        Assert.Throws<ApiError>(() => Ranking.ValidateFilter("all", "invalid"));
+        Assert.Throws<ApiError>(() => Ranking.ValidateFilter("all", "all", 0));
+        Assert.Throws<ApiError>(() => Ranking.ValidateFilter("all", "all", 10001));
+    }
+    [Fact]
     public void AssistedAndAutoplayScoresAreExcluded()
     {
         Ranking.Validate(Valid);

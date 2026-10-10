@@ -43,7 +43,7 @@ public sealed class SongTransferTests : IDisposable
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(shared, ".incoming")));
     }
     [Fact]
-    public async Task MissingAudioAndChangedResourcesAreRejected()
+    public async Task PackingRejectsChangedResourcesButInspectionAllowsMissingAudio()
     {
         var chart = Path.Combine(Song, "normal.bms");
         var manifest = await SongTransferFiles.Inspect(chart, default);
@@ -51,7 +51,13 @@ public sealed class SongTransferTests : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => SongTransferFiles.Pack(chart, manifest, Path.Combine(root, "uploads"), default));
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "uploads")));
         File.Delete(Path.Combine(Song, "tone.wav"));
-        await Assert.ThrowsAsync<InvalidDataException>(() => SongTransferFiles.Inspect(chart, default));
+        var withoutAudio = await SongTransferFiles.Inspect(chart, default);
+        Assert.Equal(manifest.ChartSha256, withoutAudio.ChartSha256);
+        Assert.DoesNotContain(withoutAudio.Files, file => file.Path.EndsWith(".wav"));
+        var zip = await SongTransferFiles.Pack(chart, withoutAudio, Path.Combine(root, "uploads"), default);
+        var installed = await SongTransferFiles.Install(zip, withoutAudio, Path.Combine(root, "Shared"), default);
+        Assert.True(File.Exists(installed));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(installed)!, "tone.wav")));
     }
     [Fact]
     public async Task DamagedManifestCannotInstallOrPassServerValidation()

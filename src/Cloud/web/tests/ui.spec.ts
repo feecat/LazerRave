@@ -80,10 +80,9 @@ test('Chinese account and administration retain user content, form fields and se
   await expect(page.getByRole('heading', { name: '导入难度表' })).toBeVisible();
   await page.getByRole('tab', { name: '玩家', exact: true }).click();
   await expect(page.getByRole('columnheader', { name: '权限', exact: true })).toBeVisible();
-  await page.getByRole('navigation').getByRole('link', { name: '多人游戏', exact: true }).click();
-  await expect(page.getByText('已连接', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: '多人游戏', exact: true })).toHaveCount(0);
   await page.getByLabel('语言', { exact: true }).selectOption('en');
-  await expect(page.getByText('Connected', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Community management' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.reload();
   await expect(page.getByLabel('Language', { exact: true })).toHaveValue('en');

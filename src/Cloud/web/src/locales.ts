@@ -1,4 +1,11 @@
 export const chinese: Record<string, string> = {
+  'Ranking overview': '排行统计', 'Submissions': '提交记录', 'Clear rate': '通关率',
+  'Best clear distribution': '最佳通关分布', 'Best clear': '最佳通关', 'Details': '详情',
+  'Score details': '成绩详情', 'Hide details': '收起详情', 'Clear for this play': '本次通关', 'Played at': '游玩时间',
+  'Chart identity': '谱面标识',
+  'Statistics use the current filters. Each player counts once, using their best clear.': '统计范围与当前筛选一致。每位玩家按最佳通关状态计数一次。',
+  'EX SCORE, judgements and options describe the highest-scoring play. Best clear and minimum BP are independent records within the current filters.': 'EX SCORE、判定和选项对应最高分的同一次演奏。最佳通关与最低 BP 是当前筛选范围内分别保存的记录。',
+  'FAILED': '未通关', 'ASSIST': '辅助通关', 'EASY': 'EASY', 'NORMAL': 'NORMAL', 'HARD': 'HARD', 'FULL COMBO': '全连', 'PERFECT': '全 PGREAT',
   'Language': '语言',
   'Download': '下载', 'Download LazerRave': '下载 LazerRave',
   'THE DESKTOP CLIENT': '桌面客户端', 'Your next session starts here.': '从这里开始下一次演奏。',

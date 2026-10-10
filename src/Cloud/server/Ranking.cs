@@ -50,7 +50,7 @@ public sealed class Ranking(Pg db)
 
     public Task<List<Dictionary<string, object?>>> Board(Guid chart, string arrangement, string gauge, bool verified, int page)
     {
-        if (arrangement != "all" && !Arrangements.Contains(arrangement) || gauge != "all" && !Gauges.Contains(gauge) || page is < 1 or > 10000) throw new ApiError(400, "Invalid ranking filter.");
+        ValidateFilter(arrangement, gauge, page);
         return db.Query("""
             WITH best AS (
                 SELECT DISTINCT ON (s.user_id) s.*,
@@ -61,6 +61,7 @@ public sealed class Ranking(Pg db)
                 FROM scores s JOIN users u ON u.id=s.user_id
                 WHERE s.chart_id=@chart AND s.ruleset='openlr2-v1' AND (@arrangement='all' OR s.arrangement=@arrangement) AND (@gauge='all' OR s.gauge=@gauge)
                   AND (NOT @verified OR s.verified) AND NOT u.disabled
+                  AND EXISTS(SELECT 1 FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=s.chart_id AND p.published)
                 ORDER BY s.user_id,s.ex_score DESC,s.created_at,s.id
             ), ranked AS (
                 SELECT rank() OVER(ORDER BY b.ex_score DESC) AS rank,
@@ -75,5 +76,36 @@ public sealed class Ranking(Pg db)
                 FROM best b JOIN users u ON u.id=b.user_id
             ) SELECT * FROM ranked ORDER BY rank,created_at,id LIMIT 50 OFFSET @offset
             """, ("chart", chart), ("arrangement", arrangement), ("gauge", gauge), ("verified", verified), ("offset", (page - 1) * 50));
+    }
+
+    public static void ValidateFilter(string arrangement, string gauge, int page = 1)
+    {
+        if (arrangement != "all" && !Arrangements.Contains(arrangement) || gauge != "all" && !Gauges.Contains(gauge) || page is < 1 or > 10000)
+            throw new ApiError(400, "Invalid ranking filter.");
+    }
+
+    public async Task<Dictionary<string, object?>> Summary(Guid chart, string arrangement, string gauge, bool verified)
+    {
+        ValidateFilter(arrangement, gauge);
+        var rows = await db.Query("""
+            WITH filtered AS (
+                SELECT s.* FROM scores s JOIN users u ON u.id=s.user_id
+                WHERE s.chart_id=@chart AND s.ruleset='openlr2-v1' AND NOT u.disabled
+                    AND EXISTS(SELECT 1 FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=s.chart_id AND p.published)
+                    AND (@arrangement='all' OR s.arrangement=@arrangement) AND (@gauge='all' OR s.gauge=@gauge)
+                    AND (NOT @verified OR s.verified)
+            ), lamps AS (
+                SELECT user_id,max(CASE clear WHEN 'perfect' THEN 6 WHEN 'full-combo' THEN 5 WHEN 'hard' THEN 4
+                    WHEN 'normal' THEN 3 WHEN 'easy' THEN 2 WHEN 'assist' THEN 1 ELSE 0 END) AS lamp
+                FROM filtered GROUP BY user_id
+            )
+            SELECT (SELECT count(*) FROM filtered) AS submissions,count(*) AS players,
+                count(*) FILTER(WHERE lamp>=2) AS cleared_players,
+                count(*) FILTER(WHERE lamp=0) AS failed,count(*) FILTER(WHERE lamp=1) AS assist,
+                count(*) FILTER(WHERE lamp=2) AS easy,count(*) FILTER(WHERE lamp=3) AS normal,
+                count(*) FILTER(WHERE lamp=4) AS hard,count(*) FILTER(WHERE lamp=5) AS full_combo,count(*) FILTER(WHERE lamp=6) AS perfect
+            FROM lamps
+            """, ("chart", chart), ("arrangement", arrangement), ("gauge", gauge), ("verified", verified));
+        return rows.Single();
     }
 }

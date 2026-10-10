@@ -260,7 +260,7 @@ public sealed class CloudClientTransferTests
             await host.SendChat(channel, "Ready to share the selected song.", default);
             await Wait(() => guest.Messages.Any(message => message.Channel == channel));
             await guest.LoadChat(channel, default);
-            var chat = Assert.Single(guest.Messages.Where(message => message.Channel == channel));
+            var chat = Assert.Single(guest.Messages, message => message.Channel == channel);
             Assert.Equal(host.User!.Id, chat.UserId);
             Assert.Equal("Ready to share the selected song.", chat.Text);
             await host.SelectChart(new(Path.Combine(source, "normal.bms"), "Shared fixture", "Test", 7, 1), default);

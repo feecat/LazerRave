@@ -51,7 +51,7 @@ public sealed class MultiplayerScoreTests
         var previous = room.MatchId;
         room = rooms.ContentPresence(player.Id, room.SelectionId, room.Chart!.Sha256, "available"); room = rooms.Ready(player.Id, true, room.Chart!.Sha256, room.Version);
         room = rooms.Start(player.Id, room.Version);
-        Assert.NotEqual(previous, room.MatchId); Assert.Empty(room.Results!.Where(member => member.Finished));
+        Assert.NotEqual(previous, room.MatchId); Assert.DoesNotContain(room.Results!, member => member.Finished);
         Assert.All(room.Members, member => { Assert.Equal(0, member.ExScore); Assert.Equal(0, member.MaxCombo); Assert.False(member.Aborted); });
     }
     [Fact]

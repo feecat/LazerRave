@@ -185,6 +185,19 @@ main { max-width: 1180px; min-height: calc(100vh - 198px); margin: auto; padding
 .clear-hard { background: #72402a; color: #ffd0a2; }
 .clear-full-combo, .clear-perfect { background: #625023; color: #ffe798; }
 .clear-failed { background: #602f3a; color: #ffa5b6; }
+.ir-summary, .ir-score-details { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 18px 0; }
+.ir-summary dt, .ir-score-details dt { color: var(--muted); font-size: 14px; }
+.ir-summary dd, .ir-score-details dd { margin: 5px 0 0; font-variant-numeric: tabular-nums; }
+.ir-summary dd { font-size: 24px; }
+.ir-lamps { display: flex; flex-wrap: wrap; gap: 8px; }
+.ir-lamps strong { margin-left: 8px; }
+.ir-detail-row td { background: var(--surface); white-space: normal; }
+.chart-identity { margin: 15px 0; font-size: 14px; color: var(--muted); }
+.chart-identity code { display: block; overflow-wrap: anywhere; margin-top: 8px; }
+.chart-identity summary { cursor: pointer; }
+@media (max-width: 700px) {
+  .ranking-layout, .profile-columns, .auth-layout, .admin-columns { grid-template-columns: minmax(0, 1fr); }
+}
 
 .ranking-layout > *, .admin-columns > *, .profile-columns > * { min-width: 0; }
 .download-layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; margin-bottom: 30px; }

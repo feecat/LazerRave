@@ -69,13 +69,14 @@ try {
   assert.equal(chart.keys, 7);
   const download = await fetch(base + '/api/packs/' + pack.id + '/download', { headers: { Range: 'bytes=0-9' } });
   assert.equal(download.status, 206); assert.equal((await download.arrayBuffer()).byteLength, 10); checks++;
-  const score = { chartId: chart.id, clientRunId: crypto.randomUUID(), ruleset: 'openlr2-v1', arrangement: 'off', gauge: 'normal', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, maxCombo: 10, clear: 'normal', scoreMax: 50, inputType: 'keyboard', comment: 'IR fixture' };
+  const score = { chartId: chart.id, clientRunId: crypto.randomUUID(), ruleset: 'openlr2-v1', arrangement: 'off', gauge: 'normal', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, maxCombo: 10, clear: 'normal', scoreMax: 50, normalScore: 12345, inputType: 'keyboard', comment: 'IR fixture' };
   const saved = await request('/scores', { token, method: 'POST', body: score }); assert.equal(saved.exScore, 25); assert.equal(saved.verified, false);
   assert.equal((await request('/scores', { token, method: 'POST', body: score })).id, saved.id);
   await request('/scores', { token, method: 'POST', body: { ...score, great: 6 }, expected: 409 });
   await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), autoplay: true }, expected: 400 });
   await request('/scores', { token: players[1].token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 20, maxCombo: 20 } });
-  await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 8, great: 1, bad: 0, poor: 0, clear: 'hard' } });
+  await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 8, great: 1, bad: 0, poor: 0, clear: 'hard', arrangement: 'mirror', gauge: 'hard' } });
+  await request('/scores', { token: players[2].token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 20, maxCombo: 20, gauge: 'easy', clear: 'easy' } });
   await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), scoreMax: 10 }, expected: 400 });
   const ranking = await request(`/rankings/${chart.id}`);
   const better = ranking.find(row => row.username === players[1].username);
@@ -83,9 +84,21 @@ try {
   assert.equal(better.exScore, 45); assert.equal(lower.exScore, 25); assert.ok(better.rank < lower.rank);
   assert.equal(lower.uid, me.uid); assert.equal(lower.bestClear, 'hard'); assert.equal(lower.minMisses, 0); assert.equal(lower.misses, 3);
   assert.equal(better.letterRank, 'AAA'); assert.equal(lower.letterRank, 'C'); assert.equal(lower.perfect, 10); checks++;
+  assert.equal(lower.normalScore, 12345); assert.equal(lower.clear, 'normal');
+  assert.equal(ranking.find(row => row.username === players[2].username).rank, better.rank);
+  assert.equal(lower.rank, 3);
+  const summary = await request(`/rankings/${chart.id}/summary`);
+  assert.deepEqual(summary, { submissions: 4, players: 3, clearedPlayers: 3, failed: 0, assist: 0, easy: 1, normal: 1, hard: 1, fullCombo: 0, perfect: 0 });
+  const filtered = await request(`/rankings/${chart.id}?arrangement=off&gauge=normal`);
+  assert.equal(filtered.find(row => row.uid === me.uid).bestClear, 'normal');
+  assert.equal(filtered.find(row => row.uid === me.uid).minMisses, 3);
+  const filteredSummary = await request(`/rankings/${chart.id}/summary?arrangement=off&gauge=normal`);
+  assert.equal(filteredSummary.players, 2); assert.equal(filteredSummary.submissions, 2); assert.equal(filteredSummary.hard, 0);
+  await request(`/rankings/${chart.id}/summary?gauge=invalid`, { expected: 400 });
+  assert.equal((await request(`/rankings/${chart.id}/summary?verified=true`)).players, 0); checks++;
   assert.deepEqual(await request(`/rankings/${chart.id}?verified=true`), []);
   const profile = await request('/users/' + players[0].username); assert.equal(profile.user.bio, edited.bio); assert.equal(profile.scores.length, 2);
-  const personal = await request('/players/' + me.uid + '/records'); assert.equal(personal.length, 1); assert.equal(personal[0].exScore, 25);
+  const personal = await request('/players/' + me.uid + '/records'); assert.equal(personal.length, 2); assert.equal(Math.max(...personal.map(row => row.exScore)), 25);
   const tableInput = { name: 'Integration difficulty table', symbol: '★', description: 'Test', sourceUrl: 'https://example.com/table', entries: [{ md5: chart.md5, level: '1', title: chart.title, artist: chart.artist, url: null }, { md5: 'a'.repeat(32), level: '2', title: 'Not uploaded', artist: '', url: 'https://example.com/chart' }] };
   await request('/admin/tables', { token: players[1].token, method: 'POST', body: tableInput, expected: 403 });
   const table = await request('/admin/tables', { token, method: 'POST', body: tableInput });
@@ -118,7 +131,10 @@ try {
   await connections[0].invoke('SendChat', room.id, 'Hello room');
   const chat = await request('/chat/' + room.id, { token: players[1].token }); assert.equal(chat[0].text, 'Hello room');
   await request('/chat/' + room.id, { token: players[16].token, expected: 403 });
-  for (let index = 0; index < 16; index++) room = await connections[index].invoke('SetReady', true, chart.sha256, room.version);
+  for (let index = 0; index < 16; index++) {
+    room = await connections[index].invoke('ReportContent', room.selectionId, chart.sha256, 'available');
+    room = await connections[index].invoke('SetReady', true, chart.sha256, room.version);
+  }
   room = await connections[0].invoke('StartRound', room.version); assert.equal(room.state, 'countdown'); checks++;
   await assert.rejects(connections[0].invoke('ReportProgress', { matchId: room.matchId, sequence: 1, exScore: 10, combo: 2, misses: 0, progress: .1 }), /not accepting/);
   await new Promise(resolve => setTimeout(resolve, 3300));
@@ -135,6 +151,8 @@ try {
   assert.equal(await request('/me', { token: players[15].token }), null);
   await request('/admin/packs/' + pack.id + '/publication', { token, method: 'PUT', body: { published: false }, expected: 204 });
   await request('/packs/' + pack.id + '/download', { expected: 404 });
+  assert.deepEqual(await request(`/rankings/${chart.id}`), []);
+  assert.equal((await request(`/rankings/${chart.id}/summary`)).players, 0);
   await request('/auth/password', { token: players[14].token, method: 'POST', body: passwordBody, expected: 204 });
   await assert.rejects(connections[14].invoke('Ping', Date.now()), /Session expired|underlying connection being closed/); checks++;
   assert.equal(await request('/me', { token: players[14].token }), null);
