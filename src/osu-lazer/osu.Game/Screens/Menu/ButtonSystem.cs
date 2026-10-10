@@ -93,7 +93,7 @@ namespace osu.Game.Screens.Menu
 
         public bool ReturnToTopOnIdle { get; set; } = true;
 
-        public ButtonSystem()
+        public ButtonSystem(MainMenuButton? secondaryButton = null)
         {
             RelativeSizeAxes = Axes.Both;
 
@@ -127,8 +127,11 @@ namespace osu.Game.Screens.Menu
                     VisibleStateMin = ButtonSystemState.Play,
                     VisibleStateMax = ButtonSystemState.Multi,
                 },
-                logoTrackingContainer.LogoFacade.With(d => d.Scale = new Vector2(0.74f))
             });
+
+            if (secondaryButton != null)
+                buttonArea.Add(secondaryButton);
+            buttonArea.Add(logoTrackingContainer.LogoFacade.With(d => d.Scale = new Vector2(0.74f)));
 
             buttonArea.Flow.CentreTarget = logoTrackingContainer.LogoFacade;
         }

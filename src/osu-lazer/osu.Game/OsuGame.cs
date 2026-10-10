@@ -1085,7 +1085,7 @@ namespace osu.Game
                     Children = new Drawable[]
                     {
                         overlayContent = new Container { RelativeSizeAxes = Axes.Both },
-                        leftFloatingOverlayContent = new Container { RelativeSizeAxes = Axes.Both },
+                        leftFloatingOverlayContent = new PopoverContainer { RelativeSizeAxes = Axes.Both },
                         rightFloatingOverlayContent = new Container { RelativeSizeAxes = Axes.Both },
                     }
                 },

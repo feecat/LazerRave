@@ -395,4 +395,52 @@
   <data name="Offset" xml:space="preserve"><value>偏移</value></data>
   <data name="Best clear" xml:space="preserve"><value>最佳通关</value></data>
   <data name="Minimum BP" xml:space="preserve"><value>最低 BP</value></data>
+  <data name="Open LR2 configuration folder" xml:space="preserve"><value>打开 LR2 配置目录</value></data>
+  <data name="Leave the room or finish the current operation before opening classic LR2." xml:space="preserve"><value>请先离开房间或完成当前操作，再打开经典 LR2。</value></data>
+  <data name="Close classic LR2 before entering multiplayer." xml:space="preserve"><value>请先关闭经典 LR2，再进入多人游戏。</value></data>
+  <data name="Application files" xml:space="preserve"><value>程序文件</value></data>
+  <data name="Open application folder" xml:space="preserve"><value>打开应用目录</value></data>
+  <data name="Open player data folder" xml:space="preserve"><value>打开玩家数据目录</value></data>
+  <data name="Frontend audio" xml:space="preserve"><value>前端音频</value></data>
+  <data name="Native LR2" xml:space="preserve"><value>原生 LR2</value></data>
+  <data name="Native display" xml:space="preserve"><value>原生显示</value></data>
+  <data name="Display mode" xml:space="preserve"><value>显示模式</value></data>
+  <data name="Borderless" xml:space="preserve"><value>无边框全屏</value></data>
+  <data name="Vertical sync" xml:space="preserve"><value>垂直同步</value></data>
+  <data name="LR2 audio" xml:space="preserve"><value>LR2 音频</value></data>
+  <data name="Audio backend" xml:space="preserve"><value>音频后端</value></data>
+  <data name="WASAPI (LR2 compatibility)" xml:space="preserve"><value>WASAPI（LR2 兼容设置）</value></data>
+  <data name="Playback device" xml:space="preserve"><value>播放设备</value></data>
+  <data name="Default device" xml:space="preserve"><value>默认设备</value></data>
+  <data name="Audio buffer size (samples)" xml:space="preserve"><value>音频缓冲区大小（采样数）</value></data>
+  <data name="Audio buffer count" xml:space="preserve"><value>音频缓冲区数量</value></data>
+  <data name="LR2 master volume" xml:space="preserve"><value>LR2 总音量</value></data>
+  <data name="LR2 BGM volume" xml:space="preserve"><value>LR2 背景音量</value></data>
+  <data name="LR2 key volume" xml:space="preserve"><value>LR2 键音音量</value></data>
+  <data name="Native input and library" xml:space="preserve"><value>原生输入与曲库</value></data>
+  <data name="Input release delay (ms)" xml:space="preserve"><value>输入释放延迟（毫秒）</value></data>
+  <data name="Disable Windows keys" xml:space="preserve"><value>禁用 Windows 键</value></data>
+  <data name="Library auto reload" xml:space="preserve"><value>曲库自动刷新</value></data>
+  <data name="When entering a folder" xml:space="preserve"><value>进入文件夹时</value></data>
+  <data name="All folders on startup" xml:space="preserve"><value>启动时检查全部文件夹</value></data>
+  <data name="Choose file" xml:space="preserve"><value>选择文件</value></data>
+  <data name="Fullscreen" xml:space="preserve"><value>全屏</value></data>
+  <data name="Windowed" xml:space="preserve"><value>窗口</value></data>
+  <data name="Native song previews" xml:space="preserve"><value>原生选曲预览</value></data>
+  <data name="Write LR2 log" xml:space="preserve"><value>写入 LR2 日志</value></data>
+  <data name="LR2 skins" xml:space="preserve"><value>LR2 皮肤</value></data>
+  <data name="7-key skin" xml:space="preserve"><value>7 键皮肤</value></data>
+  <data name="5-key skin" xml:space="preserve"><value>5 键皮肤</value></data>
+  <data name="14-key skin" xml:space="preserve"><value>14 键皮肤</value></data>
+  <data name="10-key skin" xml:space="preserve"><value>10 键皮肤</value></data>
+  <data name="9-key skin" xml:space="preserve"><value>9 键皮肤</value></data>
+  <data name="Native song selection skin" xml:space="preserve"><value>原生选曲皮肤</value></data>
+  <data name="Song loading skin" xml:space="preserve"><value>曲目加载皮肤</value></data>
+  <data name="Result skin" xml:space="preserve"><value>成绩皮肤</value></data>
+  <data name="LR2 sound set" xml:space="preserve"><value>LR2 音效包</value></data>
+  <data name="LR2 font" xml:space="preserve"><value>LR2 字体</value></data>
+  <data name="Use system font instead of skin font" xml:space="preserve"><value>使用系统字体替代皮肤字体</value></data>
+  <data name="Reload native configuration" xml:space="preserve"><value>重新读取原生配置</value></data>
+  <data name="Finish the current operation before reloading LR2 settings." xml:space="preserve"><value>请先完成当前操作，再重新读取 LR2 设置。</value></data>
+  <data name="LR2 settings will be saved after the game exits." xml:space="preserve"><value>LR2 设置将在游戏退出后保存。</value></data>
 </root>

@@ -7,6 +7,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
     <Compile Include="../../LazerRave/engine-bridge/GameplaySnapshot.cs" Link="Desktop/GameplaySnapshot.cs" />
+    <Compile Include="../../LazerRave/engine-bridge/ClassicLaunch.cs" Link="Desktop/ClassicLaunch.cs" />
+    <Compile Include="../../LazerRave/engine-bridge/NativeConfiguration.cs" Link="Desktop/NativeConfiguration.cs" />
     <Compile Include="../../LazerRave/lazer/CloudScoreSession.cs" Link="Desktop/CloudScoreSession.cs" />
     <Compile Include="../../LazerRave/lazer/CloudClient.cs" Link="Desktop/CloudClient.cs" />
     <Compile Include="../../LazerRave/lazer/CloudSessionStore.cs" Link="Desktop/CloudSessionStore.cs" />

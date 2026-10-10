@@ -11,14 +11,16 @@ using osu.Game.Localisation;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
 using osu.Game.Overlays.Settings.Sections;
+using osu.Game.Overlays.Settings.Sections.Audio;
+using osu.Game.Overlays.Settings.Sections.General;
 
 namespace LazerRave.Lazer;
 
 internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action apply) : SettingsOverlay()
 {
-    protected override SettingsSection CreateGeneralSection() => new GeneralSection { ShowQuickActions = false };
+    protected override SettingsSection CreateGeneralSection() => new ClientGeneralSection();
     protected override bool IncludeRulesetSettings => false;
-    protected override bool IncludeSection(SettingsSection section) => section is not (OnlineSection or MaintenanceSection or GameplaySection);
+    protected override bool IncludeSection(SettingsSection section) => section is not (OnlineSection or MaintenanceSection or GameplaySection or AudioSection);
     private readonly OsuSpriteText saveStatus = new() { Font = osu.Game.Graphics.OsuFont.GetFont(size: 15), Margin = new MarginPadding { Horizontal = 20, Bottom = 10 } };
     public void SetSaveStatus(LocalisableString text, bool error)
     {
@@ -46,6 +48,7 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
     [BackgroundDependencyLoader]
     private void load(LazerRaveGame game)
     {
+        AddSection(new FrontendAudioSection());
         AddSection(new Section("OpenLR2", FontAwesome.Solid.Keyboard, new Subsection("OpenLR2", new Drawable[]
         {
             new SettingsSlider<double> { LabelText = D("Scroll speed"), Current = settings.Speed, DisplayAsPercentage = false, KeyboardStep = .05f },
@@ -62,6 +65,35 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
             new SettingsTextBox { LabelText = D("Custom size (width x height)"), Current = settings.Window },
         })));
         AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings)));
+        AddSection(new NativeSettingsSection(game.NativeSettings, game.ReloadNativeSettings, game.OpenClassicConfiguration));
+    }
+
+    private partial class ClientGeneralSection : SettingsSection
+    {
+        public override LocalisableString Header => CommonStrings.General;
+        public override Drawable CreateIcon() => new SpriteIcon { Icon = FontAwesome.Solid.Cog };
+        [BackgroundDependencyLoader]
+        private void load(LazerRaveGame game)
+        {
+            Add(new LanguageSettings());
+            Add(new Subsection("Application files", new Drawable[]
+            {
+                new SettingsButton { Text = D("Open application folder"), Action = game.OpenApplicationFolder },
+                new SettingsButton { Text = D("Open player data folder"), Action = game.OpenPlayerDataFolder },
+            }));
+        }
+    }
+
+    private partial class FrontendAudioSection : SettingsSection
+    {
+        public override LocalisableString Header => D("Frontend audio");
+        public override Drawable CreateIcon() => new SpriteIcon { Icon = FontAwesome.Solid.VolumeUp };
+        [BackgroundDependencyLoader]
+        private void load()
+        {
+            Add(new AudioDevicesSettings());
+            Add(new VolumeSettings());
+        }
     }
 
     private partial class PresentationDropdown : SettingsDropdown<string>

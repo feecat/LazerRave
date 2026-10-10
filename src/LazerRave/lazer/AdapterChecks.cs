@@ -7,6 +7,32 @@ namespace LazerRave.Lazer;
 
 internal static class AdapterChecks
 {
+    private static void CheckNativeSettings(string directory)
+    {
+        string runtime = Path.Combine(directory, "native-settings");
+        var config = new NativeConfiguration(runtime);
+        config.Save(new Dictionary<string, string> { ["sound/output"] = "2", ["sound/driver"] = "3", ["sound/volumemaster"] = "60" },
+            new Dictionary<string, string>());
+        var settings = new NativeSettings(runtime, false);
+        bool outsideReload = false;
+        settings.Numbers["sound/output"].BindValueChanged(_ => outsideReload |= !settings.IsReloading);
+        config.Save(new Dictionary<string, string> { ["sound/output"] = "1", ["sound/driver"] = "5" }, new Dictionary<string, string>());
+        settings.Reload();
+        if (outsideReload || settings.HasChanges || settings.Numbers["sound/driver"].Value != 5)
+            throw new InvalidDataException("Reloading native configuration must preserve its device without queuing a save.");
+        var document = NativeConfiguration.Read(config.ConfigPath);
+        document.Root!.Element("sound")!.Element("volumemaster")!.Remove();
+        document.Save(config.ConfigPath);
+        settings.Reload();
+        if (settings.Numbers["sound/volumemaster"].Value != 100 || settings.HasChanges || settings.Error is not null)
+            throw new InvalidDataException("Missing native settings must use installation defaults, not stale values.");
+        settings.Numbers["sound/volumemaster"].Value = 80;
+        settings.Save();
+        var restored = new NativeSettings(runtime, false);
+        if (restored.Numbers["sound/volumemaster"].Value != 80 || restored.Numbers["sound/driver"].Value != 5)
+            throw new InvalidDataException("Native audio settings did not survive a restart.");
+    }
+
     public static void Run(FrontendSettings settings, SongLibrary library, string directory)
     {
         static void Require(bool value, string message) { if (!value) throw new InvalidDataException(message); }
@@ -38,6 +64,7 @@ internal static class AdapterChecks
         CheckCloudRoomMapping();
         CheckPlaySettings(directory);
         CheckLibraryDefaults(directory);
+        CheckNativeSettings(directory);
 
         var path = Path.Combine(directory, "settings.toml");
         File.WriteAllText(path, "signature = \"preserved\"\n[play]\nfuture_option = 7\n");

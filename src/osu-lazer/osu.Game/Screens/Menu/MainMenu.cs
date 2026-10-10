@@ -57,6 +57,7 @@ namespace osu.Game.Screens.Menu
         protected virtual bool AutomaticallyShowLogin => true;
         protected virtual bool FlattenPlayMenu => false;
         protected virtual Drawable CreatePlayIcon() => null;
+        protected virtual MainMenuButton CreateSecondaryMenuButton() => null;
 
         public override bool? AllowGlobalTrackControl => true;
 
@@ -143,7 +144,7 @@ namespace osu.Game.Screens.Menu
                     ParallaxAmount = 0.01f,
                     Children = new Drawable[]
                     {
-                        Buttons = new ButtonSystem
+                        Buttons = new ButtonSystem(CreateSecondaryMenuButton())
                         {
                             FlattenPlayMenu = FlattenPlayMenu,
                             CreatePlayIcon = CreatePlayIcon,

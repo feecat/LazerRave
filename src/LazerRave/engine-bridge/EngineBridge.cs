@@ -9,6 +9,26 @@ internal sealed class EngineBridge(string runtime)
 {
     public string Runtime { get; } = Path.GetFullPath(runtime);
     public string Executable => Path.Combine(Runtime, "OpenLR2_x64.exe");
+    public async Task RunClassic(CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        using var process = Process.Start(ClassicLaunch.Create(Runtime)) ?? throw new IOException("Cannot start OpenLR2.");
+        using var ownership = new OwnedEngineJob(process);
+        try { await process.WaitForExitAsync(cancellation); }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.CloseMainWindow();
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                try { await process.WaitForExitAsync(deadline.Token); }
+                catch (OperationCanceledException) { if (!process.HasExited) process.Kill(true); }
+            }
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
+        if (process.ExitCode != 0) throw new IOException($"OpenLR2 exited with code {process.ExitCode}.");
+    }
     public static XDocument Request(string mode, FrontendSettings settings, Chart? chart = null, EmbedTarget? embedding = null)
     {
         var root = new XElement("lazerrave", new XAttribute("version", "1"), new XAttribute("mode", mode), new XElement("encoding", settings.Encoding));

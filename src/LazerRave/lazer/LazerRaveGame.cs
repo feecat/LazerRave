@@ -42,6 +42,7 @@ internal partial class LazerRaveGame : OsuGame
     private readonly EngineBridge bridge;
     private readonly BmsBeatmapStore catalog;
     private readonly DesktopSettings preferences;
+    public NativeSettings NativeSettings { get; }
     private readonly CloudClient cloud;
     public PlayRecordStore Records { get; } = new(Path.Combine(ApplicationPaths.UserData, "play-records"));
     public CloudClient Cloud => cloud;
@@ -61,6 +62,8 @@ internal partial class LazerRaveGame : OsuGame
     private int cloudChanged = 1;
     private Container chrome = null!;
     private bool refreshing;
+    private bool classicRunning;
+    private bool libraryRefreshPending;
     private readonly BindableDouble menuTrackVolume = new(1);
     private int previewGeneration;
     private ScheduledDelegate? pendingSettingsSave;
@@ -104,6 +107,7 @@ internal partial class LazerRaveGame : OsuGame
     public void ToggleCloud() => cloudPanel.ToggleVisibility();
     public void OpenMultiplayer()
     {
+        if (classicRunning) { SetLibraryMessage(D("Close classic LR2 before entering multiplayer.")); return; }
         if (!cloud.Connected) { cloudPanel.OpenLobby(); return; }
         CloseAllOverlays();
         if (multiplayer is { ValidForResume: true }) { multiplayer.MakeCurrent(); return; }
@@ -151,6 +155,7 @@ internal partial class LazerRaveGame : OsuGame
         this.bridge = bridge; startupMessage = message;
         this.benchmark = benchmark;
         preferences = new(initial, FrontendSettings.SharedPath, benchmark is not null);
+        NativeSettings = new(bridge.Runtime, benchmark is not null);
         catalog = new(); catalog.Replace(library, ApplicationPaths.LibraryRoots(initial.Roots));
         cloud = new CloudClient(() => catalog.Library.Songs.Select(s => s.Directory).ToArray(), () => preferences.Value.Encoding, ImportSharedChart,
             sessions: new CloudSessionStore(Path.Combine(ApplicationPaths.UserData, "cloud-session.bin")));
@@ -272,6 +277,9 @@ internal partial class LazerRaveGame : OsuGame
         ReportLibraryError(startupMessage);
         preferences.Speed.BindValueChanged(_ => QueueSettingsSave());
         preferences.Offset.BindValueChanged(_ => QueueSettingsSave());
+        NativeSettings.ScreenMode.BindValueChanged(_ => QueueNativeSettingsSave());
+        foreach (var value in NativeSettings.Numbers.Values) value.BindValueChanged(_ => QueueNativeSettingsSave());
+        foreach (var value in NativeSettings.Text.Values) value.BindValueChanged(_ => QueueNativeSettingsSave());
         foreach (var option in preferences.PlayOptions.Values) option.BindValueChanged(_ => QueueSettingsSave());
         preferences.Roots.CollectionChanged += (_, _) => QueueSettingsSave();
         frameworkFrameSync = Dependencies.Get<FrameworkConfigManager>().GetBindable<FrameSync>(FrameworkSetting.FrameSync);
@@ -332,6 +340,53 @@ internal partial class LazerRaveGame : OsuGame
         Navigate(parent); return true;
     }
     public void ToggleSettings() => settingsPanel.ToggleVisibility();
+    public async void OpenClassicGame()
+    {
+        if (classicRunning || refreshing || ScreenStack.CurrentScreen is GamePlayScreen || cloud.Room is not null)
+        {
+            SetLibraryMessage(D("Leave the room or finish the current operation before opening classic LR2."));
+            return;
+        }
+        if (!SaveSettings() || refreshing) return;
+        try { NativeSettings.Save(preferences.Value); }
+        catch (Exception error) { SetLibraryMessage(error.Message); settingsPanel.Show(); return; }
+        classicRunning = true;
+        ++previewGeneration; preview.Stop(); menuTrackVolume.Value = 0;
+        settingsPanel.Hide();
+        try { await bridge.RunClassic(lifetime.Token); }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (Exception error) { Schedule(() => SetLibraryMessage(error.Message)); }
+        finally
+        {
+            Schedule(() =>
+            {
+                classicRunning = false; menuTrackVolume.Value = 1;
+                if (SaveSettings() && !refreshing) ReloadNativeSettings();
+                StartPreview(Beatmap.Value);
+            });
+        }
+    }
+    public void OpenClassicConfiguration()
+    {
+        OpenDirectory(Path.Combine(bridge.Runtime, "LR2files", "Config"));
+    }
+    public void ReloadNativeSettings()
+    {
+        if (classicRunning || refreshing || ScreenStack.CurrentScreen is GamePlayScreen)
+        {
+            SetLibraryMessage(D("Finish the current operation before reloading LR2 settings."));
+            return;
+        }
+        NativeSettings.Reload();
+        settingsPanel.SetSaveStatus(NativeSettings.Error ?? D("Saved"), NativeSettings.Error is not null);
+    }
+    public void OpenApplicationFolder() => OpenDirectory(bridge.Runtime);
+    public void OpenPlayerDataFolder() => OpenDirectory(ApplicationPaths.UserData);
+    private void OpenDirectory(string path)
+    {
+        try { Host.OpenFileExternally(path + Path.DirectorySeparatorChar); }
+        catch (Exception error) { SetLibraryMessage(error.Message); }
+    }
     public void SelectRandom()
     {
         var available = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Where(info => catalog.Keys == 0 || catalog.ChartFor(info)?.Keys == catalog.Keys).ToArray();
@@ -348,13 +403,13 @@ internal partial class LazerRaveGame : OsuGame
     }
     private void StartChart(BeatmapInfo info, string? replay, PlayRecord? record = null)
     {
-        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
+        if (classicRunning || refreshing || ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
         if (preferences.PlayOptions["battle"].Value == 4)
         {
             SetLibraryMessage(D("Ghost Battle requires rival selection in the classic menu."));
             return;
         }
-        if (!SaveSettings()) { settingsPanel.Show(); return; }
+        if (!SaveSettings() || refreshing) { settingsPanel.Show(); return; }
         ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide();
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
@@ -365,7 +420,7 @@ internal partial class LazerRaveGame : OsuGame
     private void UpdateMultiplayerStart()
     {
         var room = cloud.Room;
-        if (!cloud.Connected || room is not { MatchId: { } match, StartAt: { } start } || launchedCloudMatch == match
+        if (classicRunning || refreshing || !cloud.Connected || room is not { MatchId: { } match, StartAt: { } start } || launchedCloudMatch == match
             || room.State is not ("countdown" or "playing") || cloud.ServerNow < start || viewport is null) return;
         if (ScreenStack.CurrentScreen is GamePlayScreen) return;
         var member = room.Members.FirstOrDefault(member => member.Id == cloud.User?.Id);
@@ -381,6 +436,7 @@ internal partial class LazerRaveGame : OsuGame
         }
         launchedCloudMatch = match;
         if (!SaveSettings()) { settingsPanel.Show(); cloud.SetGameStatus("Game settings could not be saved."); return; }
+        if (refreshing) { launchedCloudMatch = null; cloud.SetGameStatus("Waiting for library synchronization."); return; }
         ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide(); CloseAllOverlays(); menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, error =>
         {
@@ -400,12 +456,14 @@ internal partial class LazerRaveGame : OsuGame
         }
         menuTrackVolume.Value = 1;
         chrome.Show(); if (error is not null) SetLibraryMessage(error);
+        if (NativeSettings.HasChanges || libraryRefreshPending) QueueSettingsSave();
         StartPreview(Beatmap.Value);
     }
     private void ApplySettings()
     {
         if (!SaveSettings()) return;
-        settingsPanel.Hide(); Rescan();
+        settingsPanel.Hide();
+        if (!refreshing) Rescan();
     }
     private void QueueSettingsSave()
     {
@@ -413,10 +471,14 @@ internal partial class LazerRaveGame : OsuGame
         settingsPanel.SetSaveStatus(D("Saving…"), false);
         pendingSettingsSave = Scheduler.AddDelayed(() => SaveSettings(), 400);
     }
+    private void QueueNativeSettingsSave()
+    {
+        if (!NativeSettings.IsReloading) QueueSettingsSave();
+    }
     private bool SaveSettings()
     {
         pendingSettingsSave?.Cancel();
-        if (!preferences.HasChanges)
+        if (!preferences.HasChanges && !NativeSettings.HasChanges && !libraryRefreshPending)
         {
             settingsPanel.SetSaveStatus(D("Saved"), false);
             return true;
@@ -424,12 +486,14 @@ internal partial class LazerRaveGame : OsuGame
         try
         {
             var previous = preferences.Value;
-            preferences.Save();
-            settingsPanel.SetSaveStatus(D("Saved"), false);
+            if (preferences.HasChanges) preferences.Save();
             bool rootsChanged = !previous.Roots.SequenceEqual(preferences.Value.Roots, StringComparer.OrdinalIgnoreCase);
             if (rootsChanged || previous.Avatar != preferences.Value.Avatar) ResetMedia();
             if (rootsChanged || previous.Avatar != preferences.Value.Avatar || previous.Player != preferences.Value.Player) BuildChrome();
-            if (rootsChanged || previous.Encoding != preferences.Value.Encoding) Rescan();
+            if (rootsChanged || previous.Encoding != preferences.Value.Encoding) libraryRefreshPending = true;
+            bool nativePending = NativeSettings.HasChanges && (classicRunning || refreshing || ScreenStack.CurrentScreen is GamePlayScreen);
+            if (NativeSettings.HasChanges && !nativePending) NativeSettings.Save();
+            settingsPanel.SetSaveStatus(D(nativePending ? "LR2 settings will be saved after the game exits." : "Saved"), false);
             return true;
         }
         catch (Exception error)
@@ -437,11 +501,24 @@ internal partial class LazerRaveGame : OsuGame
             settingsPanel.SetSaveStatus(error.Message, true);
             return false;
         }
+        finally
+        {
+            if (libraryRefreshPending && !classicRunning && !refreshing && ScreenStack.CurrentScreen is not GamePlayScreen)
+            {
+                libraryRefreshPending = false;
+                Rescan();
+            }
+        }
     }
-    public void Rescan() => _ = RefreshAsync(true);
+    public void Rescan()
+    {
+        if (classicRunning || refreshing || ScreenStack.CurrentScreen is GamePlayScreen) { libraryRefreshPending = true; return; }
+        libraryRefreshPending = false;
+        _ = RefreshAsync(true);
+    }
     private async Task RefreshAsync(bool sync)
     {
-        if (refreshing) return;
+        if (refreshing || classicRunning) return;
         refreshing = true; ++previewGeneration; preview.Stop();
         if (sync) SetLibraryMessage(D("Scanning…"));
         try
@@ -456,12 +533,20 @@ internal partial class LazerRaveGame : OsuGame
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { Schedule(() => SetLibraryMessage(error.Message)); }
-        finally { Schedule(() => refreshing = false); }
+        finally
+        {
+            Schedule(() =>
+            {
+                refreshing = false;
+                if (NativeSettings.HasChanges || libraryRefreshPending) QueueSettingsSave();
+            });
+        }
     }
     private void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change) => StartPreview(change.NewValue);
     private async void StartPreview(WorkingBeatmap working)
     {
         int generation = ++previewGeneration; preview.Stop();
+        if (classicRunning) return;
         if (catalog.ChartFor(working.BeatmapInfo) is not { } chart) return;
         if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
         try
@@ -521,7 +606,11 @@ internal partial class LazerRaveGame : OsuGame
         {
             pendingSettingsSave?.Cancel();
             frameworkFrameSync?.UnbindAll();
-            try { if (preferences.HasChanges) preferences.Save(); }
+            try
+            {
+                if (preferences.HasChanges) preferences.Save();
+                if (NativeSettings.HasChanges && !classicRunning && ScreenStack.CurrentScreen is not GamePlayScreen && !refreshing) NativeSettings.Save();
+            }
             catch (Exception error)
             {
                 var file = Path.Combine(ApplicationPaths.Logs, "settings-save-error.txt");
