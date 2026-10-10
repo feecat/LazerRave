@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "structure.h"
 
@@ -8,5 +8,7 @@ int SetBackground(int hImage);
 
 int Resize(game* g, double skinX, double skinY, bool bit16);
 void GetConfigResolution(int counter, int* outX, int* outY);
+void CaptureStartupMonitor();
+void CenterGameWindow(bool startup = false);
 extern int skinSizeX, skinSizeY;
 extern int screenSizeX, screenSizeY;

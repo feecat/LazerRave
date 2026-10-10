@@ -5,6 +5,19 @@ using osu.Framework.IO.Stores;
 
 namespace LazerRave.Bridge;
 
+internal sealed class PreparedPreview(PreviewNote[] notes) : IDisposable
+{
+    public PreviewNote[] Notes { get; } = notes;
+    public Track? Track;
+    public Dictionary<string, Sample> Samples { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public void Dispose()
+    {
+        Track?.Dispose(); Track = null;
+        foreach (var sample in Samples.Values) sample.Dispose();
+        Samples.Clear();
+    }
+}
+
 internal sealed class PreviewPlayer(AudioManager audio, ResourceStore<byte[]> resources) : IDisposable
 {
     private readonly ISampleStore sampleStore = audio.GetSampleStore(resources);
@@ -16,22 +29,43 @@ internal sealed class PreviewPlayer(AudioManager audio, ResourceStore<byte[]> re
     private double start;
     private int next;
     public bool Playing { get; private set; }
-    public void Start(PreviewPlan plan, double clock)
+    public PreparedPreview Prepare(PreviewPlan plan, CancellationToken cancellation)
     {
-        Stop(); start = clock; notes = plan.Notes;
-        if (plan.Track is not null) { track = trackStore.Get(plan.Track); if (track is not null) { track.Looping = true; track.Start(); } }
-        else
+        var prepared = new PreparedPreview(plan.Notes);
+        try
         {
-            foreach (var path in notes.Select(note => note.Path).Distinct())
+            cancellation.ThrowIfCancellationRequested();
+            if (plan.Track is not null) prepared.Track = trackStore.Get(plan.Track);
+            else
             {
-                if (!samples.ContainsKey(path)) { var sample = sampleStore.Get(path); if (sample is not null) samples[path] = sample; }
+                foreach (var path in plan.Notes.Select(note => note.Path).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (sampleStore.Get(path) is { } sample) prepared.Samples[path] = sample;
+                }
             }
+            cancellation.ThrowIfCancellationRequested();
+            return prepared;
         }
-        Playing = track is not null || notes.Length > 0;
+        catch { prepared.Dispose(); throw; }
+    }
+    public void Start(PreparedPreview prepared, double clock)
+    {
+        Stop(); start = clock; notes = prepared.Notes;
+        track = prepared.Track; prepared.Track = null;
+        foreach (var sample in prepared.Samples) samples.Add(sample.Key, sample.Value);
+        prepared.Samples.Clear();
+        if (track is not null) { track.Looping = false; track.Start(); }
+        Playing = track is not null || samples.Count > 0;
     }
     public void Update(double clock)
     {
-        if (!Playing || track is not null) return;
+        if (!Playing) return;
+        if (track is not null)
+        {
+            if (track.HasCompleted) Stop();
+            return;
+        }
         double elapsed = (clock - start) / 1000;
         while (next < notes.Length && notes[next].Time <= elapsed)
         {
@@ -42,7 +76,7 @@ internal sealed class PreviewPlayer(AudioManager audio, ResourceStore<byte[]> re
             next++;
         }
         voices.RemoveAll(voice => clock - voice.Started > 250 && !voice.Channel.Playing);
-        if (elapsed > 26) { foreach (var voice in voices) voice.Channel.Stop(); voices.Clear(); next = 0; start = clock; }
+        if (next == notes.Length && voices.Count == 0 && elapsed > notes[^1].Time + 0.5) Stop();
     }
     public void Stop()
     {

@@ -1,4 +1,4 @@
-﻿#include "structure.h"
+#include "structure.h"
 #include "Engine.h"
 #include "LR2.h"
 #include "Scenes.h"
@@ -213,6 +213,7 @@ static void ApplyScreenMode(int screenmode) {
 			if (displayIndex >= 0 && restoredDisplayIndex >= 0 && displayIndex != restoredDisplayIndex) {
 				MoveWindowToDisplay(displayIndex, restoredDisplayIndex);
 			}
+			CenterGameWindow();
 			break;
 		}
 		case 2:
@@ -248,6 +249,7 @@ static double GetFrameLimiterRefreshRate() {
 }
 
 int main(int argc, char** argv) {
+	CaptureStartupMonitor();
 #ifdef _WIN32
 #ifndef NDEBUG
 	while (!IsDebuggerPresent()) std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -573,6 +575,7 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 	if constexpr (is_linux()) { SetMainWindowText(openlr2::versionName); }
+	CenterGameWindow(true);
 	ChangeFont("", 0);
 	SetLogFontSize(14); //DXLIBVER: change this for further dxlib version
 	SetSysCommandOffFlag(gs.config.system.disablesystemkey, 0);

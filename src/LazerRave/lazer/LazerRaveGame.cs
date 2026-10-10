@@ -64,8 +64,14 @@ internal partial class LazerRaveGame : OsuGame
     private bool refreshing;
     private bool classicRunning;
     private bool libraryRefreshPending;
+    private DesktopWindowPlacement? windowPlacement;
     private readonly BindableDouble menuTrackVolume = new(1);
     private int previewGeneration;
+    private bool previewLoading;
+    private bool previewsExhausted;
+    private CancellationTokenSource? previewPreparation;
+    private Chart? previewChart;
+    private readonly HashSet<string> unavailablePreviews = new(StringComparer.OrdinalIgnoreCase);
     private ScheduledDelegate? pendingSettingsSave;
     private Bindable<FrameSync>? frameworkFrameSync;
     private bool applyingFrameLimit;
@@ -143,7 +149,7 @@ internal partial class LazerRaveGame : OsuGame
     private async Task ImportSharedChart(string path)
     {
         var library = await bridge.Import(preferences.Value, path, lifetime.Token);
-        Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
+        Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); unavailablePreviews.Clear(); previewsExhausted = false; ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
     }
     public override bool UseDevelopmentServer => false;
     protected override bool ShowDeveloperBuildBanner => false;
@@ -200,6 +206,7 @@ internal partial class LazerRaveGame : OsuGame
         if (host.Window is { } window)
         {
             window.Title = "LazerRave";
+            if (benchmark is null) windowPlacement = new(window, Path.Combine(ApplicationPaths.UserData, "window-placement.toml"));
             using var icon = typeof(LazerRaveGame).Assembly.GetManifestResourceStream("LazerRave.Branding.logo.png")
                 ?? throw new InvalidDataException("The frontend logo resource is missing.");
             window.SetIconFromStream(icon);
@@ -351,7 +358,7 @@ internal partial class LazerRaveGame : OsuGame
         try { NativeSettings.Save(preferences.Value); }
         catch (Exception error) { SetLibraryMessage(error.Message); settingsPanel.Show(); return; }
         classicRunning = true;
-        ++previewGeneration; preview.Stop(); menuTrackVolume.Value = 0;
+        StopPreview(); menuTrackVolume.Value = 0;
         settingsPanel.Hide();
         try { await bridge.RunClassic(lifetime.Token); }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
@@ -410,7 +417,7 @@ internal partial class LazerRaveGame : OsuGame
             return;
         }
         if (!SaveSettings() || refreshing) { settingsPanel.Show(); return; }
-        ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide();
+        StopPreview(); settingsPanel.Hide(); chrome.Hide();
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned)
@@ -437,7 +444,7 @@ internal partial class LazerRaveGame : OsuGame
         launchedCloudMatch = match;
         if (!SaveSettings()) { settingsPanel.Show(); cloud.SetGameStatus("Game settings could not be saved."); return; }
         if (refreshing) { launchedCloudMatch = null; cloud.SetGameStatus("Waiting for library synchronization."); return; }
-        ++previewGeneration; preview.Stop(); settingsPanel.Hide(); chrome.Hide(); CloseAllOverlays(); menuTrackVolume.Value = 0;
+        StopPreview(); settingsPanel.Hide(); chrome.Hide(); CloseAllOverlays(); menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, error =>
         {
             menuTrackVolume.Value = 1;
@@ -519,7 +526,7 @@ internal partial class LazerRaveGame : OsuGame
     private async Task RefreshAsync(bool sync)
     {
         if (refreshing || classicRunning) return;
-        refreshing = true; ++previewGeneration; preview.Stop();
+        refreshing = true; StopPreview();
         if (sync) SetLibraryMessage(D("Scanning…"));
         try
         {
@@ -527,6 +534,8 @@ internal partial class LazerRaveGame : OsuGame
             Schedule(() =>
             {
                 catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); UpdateFolderBar(); songSelect?.RefreshKeyFilter();
+                unavailablePreviews.Clear();
+                previewsExhausted = false;
                 var selected = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).FirstOrDefault(info => info.ID == Beatmap.Value.BeatmapInfo.ID);
                 if (selected is not null) Beatmap.Value = BeatmapManager.GetWorkingBeatmap(selected);
             });
@@ -543,24 +552,73 @@ internal partial class LazerRaveGame : OsuGame
         }
     }
     private void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change) => StartPreview(change.NewValue);
-    private async void StartPreview(WorkingBeatmap working)
+    private bool CanPreview => benchmark is null && !classicRunning && !refreshing && menuTrackVolume.Value > 0
+        && ScreenStack.CurrentScreen is LazerRaveMainMenu { IsLoaded: true } or LazerRaveSongSelect { IsLoaded: true };
+    private void StartPreview(WorkingBeatmap working)
     {
-        int generation = ++previewGeneration; preview.Stop();
-        if (classicRunning) return;
-        if (catalog.ChartFor(working.BeatmapInfo) is not { } chart) return;
-        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
+        if (CanPreview && catalog.ChartFor(working.BeatmapInfo) is { } chart) StartPreview(chart);
+    }
+    private void StartRandomPreview()
+    {
+        var available = catalog.Library.Songs.Where(song => song.Charts.Any(chart => !unavailablePreviews.Contains(chart.Path))).ToArray();
+        if (available.Length == 0) { previewsExhausted = true; return; }
+        var different = available.Where(song => !song.Directory.Equals(Path.GetDirectoryName(previewChart?.Path), StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (different.Length > 0) available = different;
+        var charts = available[Random.Shared.Next(available.Length)].Charts.Where(chart => !unavailablePreviews.Contains(chart.Path)).ToArray();
+        StartPreview(charts[Random.Shared.Next(charts.Length)]);
+    }
+    private async void StartPreview(Chart chart)
+    {
+        StopPreview();
+        int generation = previewGeneration;
+        previewPreparation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        var cancellation = previewPreparation.Token;
+        previewLoading = true; previewsExhausted = false; previewChart = chart;
         try
         {
-            var plan = await Task.Run(() => PreviewPlan.Read(chart, preferences.Value.Encoding), lifetime.Token);
-            Schedule(() => { if (generation == previewGeneration && ScreenStack.CurrentScreen is LazerRaveSongSelect) preview.Start(plan, Time.Current); });
+            string encoding = preferences.Value.Encoding;
+            var prepared = await Task.Run(() => preview.Prepare(PreviewPlan.Read(chart, encoding), cancellation), cancellation);
+            if (lifetime.IsCancellationRequested) { prepared.Dispose(); return; }
+            Schedule(() =>
+            {
+                using (prepared)
+                {
+                    if (generation != previewGeneration) return;
+                    previewLoading = false;
+                    if (!CanPreview) return;
+                    try
+                    {
+                        preview.Start(prepared, Time.Current);
+                        if (!preview.Playing) unavailablePreviews.Add(chart.Path);
+                    }
+                    catch (Exception error) { SkipPreview(chart, error); }
+                }
+            });
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { Schedule(() => SetLibraryMessage(error.Message)); }
+        catch (Exception error)
+        {
+            Schedule(() => { if (generation == previewGeneration) { previewLoading = false; SkipPreview(chart, error); } });
+        }
+    }
+    private void StopPreview()
+    {
+        ++previewGeneration; previewLoading = false;
+        previewPreparation?.Cancel(); previewPreparation?.Dispose(); previewPreparation = null;
+        preview?.Stop();
+    }
+    private void SkipPreview(Chart chart, Exception error)
+    {
+        preview.Stop(); unavailablePreviews.Add(chart.Path);
+        osu.Framework.Logging.Logger.Log($"Could not preview {chart.Path}: {error.Message}", level: osu.Framework.Logging.LogLevel.Important);
     }
     protected override void ScreenChanged(IOsuScreen? current, IOsuScreen? next)
     {
         base.ScreenChanged(current, next);
-        preview?.Stop(); ++previewGeneration;
+        if (next is not (LazerRaveMainMenu or LazerRaveSongSelect))
+        {
+            StopPreview();
+        }
         if (next is LazerRaveSongSelect select)
         {
             songSelect = select;
@@ -572,6 +630,11 @@ internal partial class LazerRaveGame : OsuGame
     protected override void Update()
     {
         base.Update(); preview?.Update(Time.Current);
+        if (preview is not null && CanPreview && catalog.Library.Songs.Length > 0)
+        {
+            Dependencies.Get<MusicController>().Stop();
+            if (!preview.Playing && !previewLoading && !previewsExhausted) StartRandomPreview();
+        }
         if (int.TryParse(preferences.FrontendFrameLimit.Value, out var cap) && Host.MaximumDrawHz != cap) Host.MaximumDrawHz = cap;
         if (Interlocked.Exchange(ref cloudChanged, 0) != 0) RefreshCloudIdentity();
         UpdateMultiplayerStart();
@@ -617,7 +680,7 @@ internal partial class LazerRaveGame : OsuGame
                 try { Directory.CreateDirectory(Path.GetDirectoryName(file)!); File.WriteAllText(file, error.ToString()); }
                 catch (Exception logError) when (logError is IOException or UnauthorizedAccessException) { Console.Error.WriteLine(error); }
             }
-            lifetime.Cancel(); viewport?.Dispose(); preview?.Dispose();
+            lifetime.Cancel(); StopPreview(); viewport?.Dispose(); preview?.Dispose(); windowPlacement?.Dispose();
             cloud.Changed -= CloudChanged;
             _ = cloud.DisposeAsync();
         }

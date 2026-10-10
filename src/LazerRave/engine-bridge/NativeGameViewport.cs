@@ -26,6 +26,8 @@ internal sealed class NativeGameViewport : IDisposable
     private volatile Layout layout = new(new(0, 0, 640, 480), 640, 480);
     private PixelRect lastBounds;
     private int disposed;
+    private bool? restoreHiddenCursor;
+    private readonly IntPtr arrowCursor = NativeWindowApi.LoadCursorW(IntPtr.Zero, new(32512));
     private sealed record Layout(PixelRect Area, int Width, int Height);
     public NativeGameViewport(IWindow? window, IntPtr parentOverride = default)
     {
@@ -58,6 +60,11 @@ internal sealed class NativeGameViewport : IDisposable
                 }
                 finally { if (previousDpi != IntPtr.Zero) NativeWindowApi.SetThreadDpiAwarenessContext(previousDpi); }
                 lastBounds = default; UpdateBounds();
+                if (window is not null)
+                {
+                    restoreHiddenCursor = (window.CursorState & CursorState.Hidden) != 0;
+                    window.CursorState &= ~CursorState.Hidden;
+                }
                 if (NativeWindowApi.IsWindowVisible(child) && NativeWindowApi.GetForegroundWindow() == parent)
                     NativeWindowApi.SetFocus(child);
                 completion.SetResult(new(unchecked((ulong)child.ToInt64()), (uint)Environment.ProcessId));
@@ -103,7 +110,7 @@ internal sealed class NativeGameViewport : IDisposable
     private IntPtr WindowMessage(IntPtr hwnd, uint message, IntPtr wparam, IntPtr lparam)
     {
         if (message == 0x0014) return new(1); // DxLib owns the viewport contents.
-        if (message == 0x0020) { NativeWindowApi.SetCursor(IntPtr.Zero); return new(1); }
+        if (message == 0x0020) { NativeWindowApi.SetCursor(arrowCursor); return new(1); }
         if (message == 0x0201) NativeWindowApi.SetFocus(hwnd);
         if (engine != IntPtr.Zero && message is 0x020A or 0x0100 or 0x0101 or 0x0102)
             NativeWindowApi.PostMessageW(engine, message, wparam, lparam);
@@ -117,6 +124,12 @@ internal sealed class NativeGameViewport : IDisposable
             NativeWindowApi.DestroyWindow(child);
         }
         child = engine = originalProcedure = IntPtr.Zero;
+        if (window is not null && restoreHiddenCursor is { } hidden)
+        {
+            if (hidden) window.CursorState |= CursorState.Hidden;
+            else window.CursorState &= ~CursorState.Hidden;
+            restoreHiddenCursor = null;
+        }
         if (NativeWindowApi.GetForegroundWindow() == parent) NativeWindowApi.SetFocus(parent);
     }
     private void OnWindowExited()
@@ -147,6 +160,7 @@ internal static class NativeWindowApi
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr window, IntPtr insert, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] internal static extern IntPtr SetFocus(IntPtr window);
     [DllImport("user32.dll")] internal static extern IntPtr SetCursor(IntPtr cursor);
+    [DllImport("user32.dll")] internal static extern IntPtr LoadCursorW(IntPtr instance, IntPtr name);
     [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll")] internal static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
