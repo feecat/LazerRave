@@ -53,6 +53,7 @@ internal partial class LazerRaveScoreDetailsScreen(ScoreInfo initialScore, BmsSc
                 } },
             ] },
         };
+        AddInternal(new LazerRaveResultBackdrop());
         Present(initialScore, initialDetails);
     }
     private void Present(ScoreInfo score, BmsScoreDetails details)

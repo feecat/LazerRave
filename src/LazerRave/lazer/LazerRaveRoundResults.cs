@@ -18,6 +18,7 @@ internal partial class LazerRaveRoundResults(CloudClient client, Guid match, str
     protected override void LoadComplete()
     {
         base.LoadComplete();
+        AddInternal(new LazerRaveResultBackdrop());
         AddInternal(new GridContainer
         {
             RelativeSizeAxes = Axes.Both, Padding = new MarginPadding { Horizontal = 80, Top = 90, Bottom = 70 },

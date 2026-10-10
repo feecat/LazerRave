@@ -349,6 +349,7 @@ namespace osu.Game.Screens.Select
             var beatmapSetInfo = beatmap.Value.BeatmapSetInfo;
 
             creator.Data = (metadata.Author.Username, () => linkHandler?.HandleLink(new LinkDetails(LinkAction.OpenUserProfile, metadata.Author)));
+            creator.Alpha = string.IsNullOrWhiteSpace(metadata.Author.Username) ? 0 : 1;
 
             if (!string.IsNullOrEmpty(metadata.Source))
                 source.Data = (metadata.Source, () => songSelect?.AddToSearch(metadata.Source));

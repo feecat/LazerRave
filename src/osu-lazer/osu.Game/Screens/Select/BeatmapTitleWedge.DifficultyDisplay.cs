@@ -249,6 +249,10 @@ namespace osu.Game.Screens.Select
                     difficultyText.Text = beatmap.Value.BeatmapInfo.DifficultyName;
                     mapperLink.Action = () => linkHandler?.HandleLink(new LinkDetails(LinkAction.OpenUserProfile, beatmap.Value.Metadata.Author));
                     mapperText.Text = beatmap.Value.Metadata.Author.Username;
+                    bool hasMapper = !string.IsNullOrWhiteSpace(beatmap.Value.Metadata.Author.Username);
+                    mappedByText.Text = hasMapper ? " mapped by " : string.Empty;
+                    mappedByText.Alpha = hasMapper ? 1 : 0;
+                    mapperLink.Alpha = hasMapper ? 1 : 0;
                 }
 
                 starRatingDisplay.Current = (Bindable<StarDifficulty>)difficultyCache.GetBindableDifficulty(beatmap.Value.BeatmapInfo, cancellationSource.Token, SongSelect.DIFFICULTY_CALCULATION_DEBOUNCE);

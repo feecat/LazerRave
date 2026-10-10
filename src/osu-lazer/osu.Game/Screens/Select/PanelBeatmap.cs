@@ -208,7 +208,9 @@ namespace osu.Game.Screens.Select
 
             localRank.Beatmap = beatmap;
             difficultyText.Text = beatmap.DifficultyName;
-            authorText.Text = BeatmapsetsStrings.ShowDetailsMappedBy(beatmap.Metadata.Author.Username);
+            bool hasMapper = !string.IsNullOrWhiteSpace(beatmap.Metadata.Author.Username);
+            authorText.Text = hasMapper ? BeatmapsetsStrings.ShowDetailsMappedBy(beatmap.Metadata.Author.Username) : string.Empty;
+            authorText.Alpha = hasMapper ? 1 : 0;
 
             computeStarRating();
             updateKeyCount();
