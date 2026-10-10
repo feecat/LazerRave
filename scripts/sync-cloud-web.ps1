@@ -1,20 +1,27 @@
-# Frontend only: .\scripts\sync-cloud-web.ps1
+# Frontend only: .\scripts\sync-cloud-web.ps1 -Server deploy@HOST -RemoteRoot /srv/lazerrave
 # Bundles with Vite directly; no type checking, tests, health checks or Git commands.
 [CmdletBinding()]
 param(
-    [ValidatePattern('^[A-Za-z0-9_.@-]+$')][string]$Server = 'root@64.176.63.104',
-    [string]$IdentityFile = (Join-Path $env:USERPROFILE '.ssh/lazerrave_deploy_ed25519'),
-    [ValidatePattern('^/[A-Za-z0-9_/-]+$')][string]$RemoteRoot = '/opt/lazerrave'
+    [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$')][string]$Server,
+    [string]$IdentityFile = '',
+    [Parameter(Mandatory)][ValidatePattern('^/[A-Za-z0-9_/-]+$')][string]$RemoteRoot
 )
 
 $ErrorActionPreference = 'Stop'
+if ($RemoteRoot.Trim('/') -eq '') { throw 'RemoteRoot must be a deployment directory, not the filesystem root.' }
+$RemoteRoot = $RemoteRoot.TrimEnd('/')
+if ($IdentityFile) {
+    if (!(Test-Path -LiteralPath $IdentityFile -PathType Leaf)) { throw 'The specified SSH identity file does not exist.' }
+    $IdentityFile = (Resolve-Path -LiteralPath $IdentityFile).Path
+}
 $workspace = Split-Path $PSScriptRoot -Parent
 $webDirectory = Join-Path $workspace 'src/Cloud/web'
 $dist = Join-Path $workspace 'out/build/cloud/web/dist'
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
 $archive = Join-Path $workspace "out/build/cloud/web/frontend-$stamp.tar.gz"
 $remoteUpload = "$RemoteRoot/.web-sync-$stamp"
-$sshOptions = @('-i', $IdentityFile, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15')
+$sshOptions = @('-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15')
+if ($IdentityFile) { $sshOptions = @('-i', $IdentityFile) + $sshOptions }
 
 Push-Location $webDirectory
 try {

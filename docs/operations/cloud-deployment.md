@@ -1,8 +1,8 @@
 # LazerRave.com 部署
 
-初始服务已于 2026-10-09 部署至 [lazerrave.com](https://lazerrave.com)。主机地址为 `64.176.63.104`，系统为 Ubuntu 26.04.1 LTS x86-64，规格为 1 vCPU、约 950 MiB 可用物理内存、32 GB NVMe，已配置约 3 GiB 交换空间。部署目录为 `/opt/lazerrave/`，Compose 项目名为 `lazerrave`。部署包面向 x86-64 Linux；32 位 x86 不适用。
+本指南适用于 Ubuntu x86-64 单机部署，生产网站为 [lazerrave.com](https://lazerrave.com)，Compose 项目名为 `lazerrave`。服务器地址、SSH 用户、密钥及实际部署目录由管理员在本机配置，不纳入公开仓库。下文的 `HOST`、`deploy` 和 `/srv/lazerrave` 均为示例，使用时替换为自己的部署参数。
 
-HTTPS 由 Caddy 使用 Let's Encrypt ACME 签发和自动续期，不配置证书通知邮箱。证书与 ACME 账户保存在持久化 `caddy_data` 卷，需保持 80/443 端口和正确的 DNS 解析。首次部署验证了 HTTPS 首页、注册路由、健康检查、公开曲包和房间读取、未登录管理员请求拒绝以及 www 重定向；当前数据库迁移已包含版本 1–6。版本 5 添加可空的普通 SCORE 与统一索引；版本 6 将 IR 与曲包发布分离，并增加排行范围、私密成员和成绩撤销状态。未进行公网 16 人负载或实际曲包传输验收。
+HTTPS 由 Caddy 使用 Let's Encrypt ACME 签发和自动续期，不配置证书通知邮箱。证书与 ACME 账户保存在持久化 `caddy_data` 卷，需保持 80/443 端口和正确的 DNS 解析。当前数据库结构包含迁移 1–9，覆盖账户、曲包、独立 IR、真实演奏时间、曲目分组与上下文难度解析；更新顺序见下文。公网完整多机负载与持续运行验收仍待完善。
 
 ## 初始预算
 
@@ -22,13 +22,13 @@ HTTPS 由 Caddy 使用 Let's Encrypt ACME 签发和自动续期，不配置证�
 
 ## 部署步骤
 
-1. 开发设备执行 `build.cmd -Cloud`，将整个 `out/cloud/` 上传到服务器，例如 `/opt/lazerrave/`。
+1. 开发设备执行 `build.cmd -Cloud`，将整个 `out/cloud/` 上传到自行选择的部署目录，例如 `/srv/lazerrave/`。
 2. 按 [Docker Ubuntu 安装文档](https://docs.docker.com/engine/install/ubuntu/) 安装 Docker Engine 与 Compose 插件。已有 Ubuntu 版本须处于受支持范围。
 3. 为 `lazerrave.com` 和 `www.lazerrave.com` 设置指向主机的 DNS A 记录；只有服务器实际支持 IPv6 时才配置 AAAA。允许外网访问 TCP 80、443，SSH 按运维来源限制；数据库和 API 不开放公网端口。
 4. 在服务器复制配置并填写数据库随机密码：
 
 ```bash
-cd /opt/lazerrave
+cd /srv/lazerrave
 cp .env.example .env
 chmod 600 .env
 nano .env
@@ -60,15 +60,19 @@ docker compose exec api dotnet Cloud.dll --grant-admin YOUR_USERNAME
 
 先备份，再上传新的 `server/`、Dockerfile 与所需配置；保留 `.env` 和数据卷，执行 `docker compose up -d --build api`。服务启动时自动执行版本化 SQL 迁移，迁移失败时不开放 HTTP 服务。当前活动房间驻留内存，更新会中断房间；安排维护时段并通知玩家。
 
-网站静态文件由 API 容器提供，更新时保留整套发布包。生产镜像目前固定主要版本，部署时在服务器的 `deployment-record.txt` 记录所用镜像摘要和数据库迁移版本。Docker 安装、服务启动和证书签发已在购买的服务器验证；空闲时 API、PostgreSQL 与 Caddy 容器合计约占 74 MiB 内存，上传和多人场景峰值仍须测量。未来实际自动续期尚未到触发时间，当前已配置自动管理与持久化证书存储。
+网站静态文件由 API 容器提供，更新时保留整套发布包。生产镜像目前固定主要版本，部署时在服务器的 `deployment-record.txt` 记录所用镜像摘要和数据库迁移版本。Docker 安装、服务启动和证书签发已在购买的服务器验证；空闲时 API、PostgreSQL 与 Caddy 容器合计约占 74 MiB 内存，上传和多人场景峰值仍须测量。自动续期已配置，后续通过证书有效期和代理日志持续检查。
 
-### 独立 IR 更新
+迁移 6 为成绩引入必填的 `board_id`，后续迁移扩展自动登记、游玩时间及曲目分组。升级保留已有用户、谱面身份、成绩和公开范围；管理员隐藏状态不随内容重新登记恢复。数据库升级后不能仅替换旧 API 回退，应核对迁移兼容性，必要时成对恢复数据库、服务文件及内容备份。
 
-2026-10-10 已部署迁移 6 和对应 React 网站。迁移保留旧谱面 UUID 和成绩，已发布曲包的范围保持公开；其余旧内容保持隐藏。管理员主动隐藏的范围使用独立状态，不因再次发布曲包而恢复。
+### 仅更新网站
 
-本次更新前备份位于 `/opt/lazerrave/backups/ir-20261010-011334-3437c747/`，包括数据库自定义格式导出、旧服务文件、当前网站静态资源与旧镜像标识。备份目录仅允许 root 访问；部署记录追加到 `deployment-record.txt`。公网检查确认健康接口、公开目录、前端资源与本地构建一致、网页直达路由和未登录管理员接口拒绝。真实谱面提交及私密访问的写入检查仅在隔离数据库执行。
+在开发设备显式指定 SSH 用户、服务器和部署目录：
 
-迁移 6 为成绩新增必填 `board_id`。旧客户端可以继续访问当前 API 的兼容提交入口，但已升级的数据库不能仅通过替换旧 API 程序来回退，因为旧程序不会写入该字段。回退须配套处理数据库版本和更新后产生的数据，不能直接覆盖正式库；本次未执行数据库恢复。
+```powershell
+.\scripts\sync-cloud-web.ps1 -Server 'deploy@HOST' -RemoteRoot '/srv/lazerrave'
+```
+
+默认使用本机 SSH 配置或代理；需要指定密钥时附加 `-IdentityFile 'C:\path\to\deploy-key'`。脚本在上传前检查指定密钥文件是否存在，不保存密钥内容或服务器密码。SSH 用户需要能够操作部署目录及 Docker，脚本不创建账号或更改服务器权限。备份位于指定部署目录的 `backups/web/` 下，具体运行记录仅在本机或服务器保留。
 
 ## 代理配置
 
@@ -88,14 +92,10 @@ docker compose exec -T db pg_dump -U lazerrave -d lazerrave -Fc > backups/lazerr
 
 ## 开放测试前的工作
 
-- 接入邮件验证、密码找回和管理员多因素认证。
-- 验收桌面账号和共享内容传输，接入游戏加载确认与实时统计。
+- 完善账户恢复与管理员多因素认证；普通登录不要求邮件验证。
+- 验收桌面账号、共享传输和实时成绩，完善游戏加载确认与多机同步。
 - 在受控游戏后端完成回放校验，建立可信排名入口。
 - 验证一个 16 人房间、曲包上传下载、数据库恢复与容器重启；测量内存、延迟、磁盘和出口预算。
 - 在生产环境验收房主临时上传、成员授权、2 小时清理与公开曲包权限流程。
 
 完整接口与实现边界见 [云端网站与服务](../development/cloud.md)。更大容量规划见 [服务器容量](server-capacity.md)。
-
-### 自动 IR 提交更新
-
-2026-10-10 已部署迁移 7。公开目录默认自动展示普通登记，私人及审核隐藏范围保留；服务器接收并区分真实演奏时间与上传时间。更新前确认没有活动房间并完成数据库、服务文件和镜像备份，备份目录为 `/opt/lazerrave/backups/ir-auto-20261010-014440-f7eed24a/`。公网只读检查通过公开目录、六种目录排序、难度过滤、三种排行排序、时间字段、无效排序拒绝及静态文件哈希一致性。迁移不可逆向套用旧程序；回退需配套处理数据库及更新后的成绩。
