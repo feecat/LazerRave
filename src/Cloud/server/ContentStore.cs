@@ -51,12 +51,19 @@ public sealed class ContentStore(Pg db, CloudOptions options)
                 await using var command = new NpgsqlCommand("""
                     WITH c AS (
                         INSERT INTO charts(id,sha256,md5,title,artist,difficulty,keys,level) VALUES(@id,@sha,@md5,@title,@artist,@difficulty,@keys,@level)
-                        ON CONFLICT(sha256) DO UPDATE SET sha256=EXCLUDED.sha256 RETURNING id
-                    ) INSERT INTO pack_charts(pack_id,chart_id,path) SELECT @pack,id,@path FROM c
+                        ON CONFLICT(sha256) DO UPDATE SET md5=CASE WHEN btrim(charts.md5)='' THEN EXCLUDED.md5 ELSE charts.md5 END RETURNING id
+                    ) INSERT INTO pack_charts(pack_id,chart_id,path) SELECT @pack,id,@path FROM c RETURNING chart_id
                     """, connection, tx);
                 Pg.Add(command, ("id", Guid.NewGuid()), ("sha", chart.Sha256), ("md5", chart.Md5), ("title", chart.Title), ("artist", chart.Artist),
                     ("difficulty", chart.Difficulty), ("keys", chart.Keys), ("level", chart.Level), ("pack", id), ("path", chart.Path));
-                await command.ExecuteNonQueryAsync(cancellation);
+                var identity = (Guid)(await Pg.Read(command)).Single()["chartId"]!;
+                await using var board = new NpgsqlCommand("""
+                    INSERT INTO ir_boards(id,chart_id,scope_key,owner_id,visibility,title,artist,difficulty,keys,level)
+                    VALUES(@id,@id,'community',@owner,'hidden',@title,@artist,@difficulty,@keys,@level)
+                    ON CONFLICT(chart_id,scope_key) DO UPDATE SET title=EXCLUDED.title,artist=EXCLUDED.artist,difficulty=EXCLUDED.difficulty,keys=EXCLUDED.keys,level=EXCLUDED.level
+                    """, connection, tx);
+                Pg.Add(board, ("id", identity), ("owner", uploader), ("title", chart.Title), ("artist", chart.Artist), ("difficulty", chart.Difficulty), ("keys", chart.Keys), ("level", chart.Level));
+                await board.ExecuteNonQueryAsync(cancellation);
             }
             await using (var audit = new NpgsqlCommand("INSERT INTO audit_log(user_id,action,target) VALUES(@user,'pack.upload',@target)", connection, tx))
             {

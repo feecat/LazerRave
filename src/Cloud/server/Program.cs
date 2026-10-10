@@ -23,7 +23,7 @@ builder.Services.AddSingleton(cloud);
 var connectionString = builder.Configuration.GetConnectionString("Postgres") ?? throw new InvalidOperationException("Set ConnectionStrings__Postgres.");
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Pg>(); builder.Services.AddSingleton<Auth>(); builder.Services.AddSingleton<ContentStore>();
-builder.Services.AddSingleton<Ranking>(); builder.Services.AddSingleton<Rooms>(); builder.Services.AddSingleton<HubGuard>();
+builder.Services.AddSingleton<ChartRegistry>(); builder.Services.AddSingleton<IrRecords>(); builder.Services.AddSingleton<Ranking>(); builder.Services.AddSingleton<Rooms>(); builder.Services.AddSingleton<HubGuard>();
 builder.Services.AddSingleton<RoomContentStore>();
 builder.Services.AddSingleton<DifficultyTables>();
 builder.Services.AddAuthentication("session").AddScheme<AuthenticationSchemeOptions, SessionHandler>("session", _ => { });
@@ -57,6 +57,8 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 300, Window = TimeSpan.FromMinutes(1), QueueLimit = 0,
         }));
+    options.AddPolicy("ir-write", context => RateLimitPartition.GetFixedWindowLimiter(context.User.Identity?.IsAuthenticated == true ? Auth.Id(context.User).ToString() : context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new()
+    { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new()
     {
         PermitLimit = builder.Environment.IsDevelopment() ? 100 : 10, Window = TimeSpan.FromMinutes(5), QueueLimit = 0,
@@ -81,6 +83,7 @@ app.UseForwardedHeaders();
 app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
+    if (context.Request.Path.StartsWithSegments("/api")) context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
     context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self' https://api.github.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
     try
@@ -113,7 +116,7 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { error = status == 500 ? "Server error. Please try again." : error is PostgresException ? "That username, email or record already exists." : error.Message });
     }
 });
-app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization();
 app.UseDefaultFiles(); app.UseStaticFiles();
 app.MapGet("/api/health", async (Pg pg) => { await pg.Query("SELECT 1"); return Results.Ok(new { status = "ok", service = "LazerRave", protocol = 1 }); });
 app.MapGet("/api/me", async (HttpContext context, Auth auth) => Results.Ok(await auth.Session(Auth.Token(context.Request))));
@@ -146,24 +149,18 @@ app.MapPost("/api/auth/password", async (PasswordInput input, HttpContext contex
     context.Response.Cookies.Delete("lr_session", auth.Cookie());
     return Results.NoContent();
 }).RequireAuthorization().RequireRateLimiting("auth");
-static async Task<IResult> PlayerProfile(Pg pg, string? username, long? uid)
+static async Task<IResult> PlayerProfile(Pg pg, HttpContext context, string? username, long? uid)
 {
     var rows = await pg.Query("SELECT * FROM users WHERE (lower(username)=lower(@name) OR uid=@uid) AND NOT disabled", ("name", username ?? ""), ("uid", uid ?? 0));
     if (rows.Count == 0) throw new ApiError(404, "Player not found.");
     var user = Auth.Public(rows[0]);
-    var scores = await pg.Query("SELECT s.id,s.ex_score,s.clear,s.verified,s.created_at,c.id AS chart_id,c.title FROM scores s JOIN charts c ON c.id=s.chart_id WHERE s.user_id=@id ORDER BY s.created_at DESC LIMIT 20", ("id", user.Id));
+    var scores = await new IrRecords(pg).Player(user.Uid, ChartRegistry.Viewer(context), 1, true);
     return Results.Ok(new { user, scores });
 }
-app.MapGet("/api/users/{username}", (string username, Pg pg) => PlayerProfile(pg, username, null));
-app.MapGet("/api/players/{uid:long}", (long uid, Pg pg) => PlayerProfile(pg, null, uid));
-app.MapGet("/api/players/{uid:long}/records", async (long uid, int? page, Pg pg) =>
-{
-    if ((page ?? 1) is < 1 or > 10000) throw new ApiError(400, "Invalid records page.");
-    return Results.Ok(await pg.Query("""
-        SELECT pb.*,c.title,c.md5,c.keys,c.level FROM personal_bests pb JOIN users u ON u.id=pb.user_id JOIN charts c ON c.id=pb.chart_id
-        WHERE u.uid=@uid AND NOT u.disabled ORDER BY pb.created_at DESC,pb.id LIMIT 50 OFFSET @offset
-        """, ("uid", uid), ("offset", ((page ?? 1)-1)*50)));
-});
+app.MapGet("/api/users/{username}", (string username, HttpContext context, Pg pg) => PlayerProfile(pg, context, username, null));
+app.MapGet("/api/players/{uid:long}", (long uid, HttpContext context, Pg pg) => PlayerProfile(pg, context, null, uid));
+app.MapGet("/api/players/{uid:long}/records", (long uid, int? page, bool? recent, HttpContext context, IrRecords records) => records.Player(uid, ChartRegistry.Viewer(context), page ?? 1, recent ?? false));
+app.MapGet("/api/players/{uid:long}/compare", (long uid, long against, int? page, IrRecords records) => records.Compare(uid, against, page ?? 1));
 app.MapPut("/api/me", async (ProfileInput input, HttpContext context, Pg pg) =>
 {
     if (input.DisplayName?.Trim().Length is not (>= 1 and <= 40) || input.Signature is null || input.Signature.Length > 200 || input.Bio is null || input.Bio.Length > 2000)
@@ -187,7 +184,7 @@ app.MapGet("/api/packs/{id:guid}", async (Guid id, Pg pg, HttpContext context) =
 {
     var rows = await pg.Query("SELECT id,title,description,sha256,size_bytes,published,created_at FROM packs WHERE id=@id AND (published OR @admin)", ("id", id), ("admin", context.User.IsInRole("admin")));
     if (rows.Count == 0) throw new ApiError(404, "Pack not found.");
-    var charts = await pg.Query("SELECT c.*,pc.path FROM charts c JOIN pack_charts pc ON pc.chart_id=c.id WHERE pc.pack_id=@id ORDER BY c.title,c.level,pc.path", ("id", id));
+    var charts = await pg.Query("SELECT c.*,b.title,b.artist,b.difficulty,b.keys,b.level,pc.path FROM charts c JOIN pack_charts pc ON pc.chart_id=c.id JOIN ir_boards b ON b.id=c.id WHERE pc.pack_id=@id ORDER BY b.title,b.level,pc.path", ("id", id));
     return Results.Ok(new { pack = rows[0], charts });
 });
 app.MapGet("/api/packs/{id:guid}/download", async (Guid id, Pg pg, ContentStore content, HttpContext context) =>
@@ -197,30 +194,23 @@ app.MapGet("/api/packs/{id:guid}/download", async (Guid id, Pg pg, ContentStore 
     context.Response.Headers.ETag = $"\"{rows[0]["sha256"]}\"";
     return Results.File(content.FilePath((string)rows[0]["fileKey"]!), "application/zip", $"LazerRave-{id}.zip", enableRangeProcessing: true);
 });
-app.MapGet("/api/charts", async (string? q, int? keys, int? page, Pg pg) =>
-{
-    int current = page ?? 1;
-    if (current is < 1 or > 10000 || q?.Length > 100 || keys is not null && !new[] { 5, 7, 9, 10, 14 }.Contains(keys.Value)) throw new ApiError(400, "Invalid chart filter.");
-    return Results.Ok(await pg.Query("""
-        SELECT c.*, (SELECT pc.pack_id FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published ORDER BY p.created_at LIMIT 1) AS pack_id
-        FROM charts c WHERE (@keys=0 OR c.keys=@keys) AND (c.title ILIKE @query OR c.artist ILIKE @query)
-          AND EXISTS(SELECT 1 FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published)
-        ORDER BY c.title,c.level,c.id LIMIT 50 OFFSET @offset
-        """, ("keys", keys ?? 0), ("query", "%" + (q ?? "") + "%"), ("offset", (current - 1) * 50)));
-});
-app.MapGet("/api/charts/{id:guid}", async (Guid id, Pg pg) =>
-{
-    var rows = await pg.Query("""
-        SELECT c.* FROM charts c WHERE c.id=@id AND
-        EXISTS(SELECT 1 FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published)
-        """, ("id", id));
-    if (rows.Count == 0) throw new ApiError(404, "Chart not found.");
-    return Results.Ok(rows[0]);
-});
-app.MapGet("/api/rankings/{chart:guid}", async (Guid chart, string? arrangement, string? gauge, bool? verified, int? page, Ranking rankings) =>
-    Results.Ok(await rankings.Board(chart, arrangement ?? "all", gauge ?? "all", verified ?? false, page ?? 1)));
-app.MapGet("/api/rankings/{chart:guid}/summary", async (Guid chart, string? arrangement, string? gauge, bool? verified, Ranking rankings) =>
-    Results.Ok(await rankings.Summary(chart, arrangement ?? "all", gauge ?? "all", verified ?? false)));
+app.MapGet("/api/charts", (string? q, int? keys, int? page, bool? mine, int? minimum, int? maximum, string? sort, string? difficulty, HttpContext context, ChartRegistry registry) => registry.List(q, keys, page ?? 1, ChartRegistry.Viewer(context), mine ?? false, minimum, maximum, sort ?? "newest", difficulty));
+app.MapGet("/api/charts/resolve", (string sha256, HttpContext context, ChartRegistry registry) => registry.Resolve(sha256, ChartRegistry.Viewer(context)));
+app.MapGet("/api/charts/{id:guid}", (Guid id, HttpContext context, ChartRegistry registry) => registry.Require(id, ChartRegistry.Viewer(context)));
+app.MapPost("/api/charts/register", (ChartRegistration input, HttpContext context, ChartRegistry registry) => registry.Register(Auth.Id(context.User), input)).RequireAuthorization().RequireRateLimiting("ir-write");
+app.MapPut("/api/charts/{id:guid}/visibility", async (Guid id, BoardVisibilityInput input, HttpContext context, ChartRegistry registry) => { await registry.Visibility(id, Auth.Id(context.User), context.User.IsInRole("admin"), input); return Results.NoContent(); }).RequireAuthorization();
+app.MapGet("/api/charts/{id:guid}/members", (Guid id, HttpContext context, ChartRegistry registry) => registry.Members(id, Auth.Id(context.User), context.User.IsInRole("admin"))).RequireAuthorization();
+app.MapPost("/api/charts/{id:guid}/members", async (Guid id, BoardMemberInput input, HttpContext context, ChartRegistry registry) => { await registry.Member(id, Auth.Id(context.User), context.User.IsInRole("admin"), input.Uid, false); return Results.NoContent(); }).RequireAuthorization();
+app.MapDelete("/api/charts/{id:guid}/members/{uid:long}", async (Guid id, long uid, HttpContext context, ChartRegistry registry) => { await registry.Member(id, Auth.Id(context.User), context.User.IsInRole("admin"), uid, true); return Results.NoContent(); }).RequireAuthorization();
+app.MapGet("/api/rankings/{chart:guid}", (Guid chart, string? arrangement, string? gauge, bool? verified, int? page, string? sort, HttpContext context, Ranking rankings) => rankings.Board(chart, arrangement ?? "all", gauge ?? "all", verified ?? false, page ?? 1, ChartRegistry.Viewer(context), sort: sort ?? "score"));
+app.MapGet("/api/rankings/{chart:guid}/summary", (Guid chart, string? arrangement, string? gauge, bool? verified, HttpContext context, Ranking rankings) => rankings.Summary(chart, arrangement ?? "all", gauge ?? "all", verified ?? false, ChartRegistry.Viewer(context)));
+app.MapGet("/api/rankings/{chart:guid}/me", async (Guid chart, string? arrangement, string? gauge, bool? verified, HttpContext context, Ranking rankings, Pg pg) => {
+    var user = (await pg.Query("SELECT uid FROM users WHERE id=@id", ("id", Auth.Id(context.User)))).Single();
+    var rows = await rankings.Board(chart, arrangement ?? "all", gauge ?? "all", verified ?? false, 1, Auth.Id(context.User), (long)user["uid"]!);
+    return Results.Ok(rows.FirstOrDefault());
+}).RequireAuthorization();
+app.MapGet("/api/rankings/{chart:guid}/history", (Guid chart, HttpContext context, IrRecords records) => records.History(chart, Auth.Id(context.User))).RequireAuthorization();
+app.MapGet("/api/scores/{id:guid}", (Guid id, HttpContext context, IrRecords records) => records.Detail(id, ChartRegistry.Viewer(context)));
 app.MapPost("/api/scores", async (ScoreInput score, HttpContext context, Ranking rankings) => Results.Ok(await rankings.Submit(Auth.Id(context.User), score))).RequireAuthorization();
 app.MapGet("/api/rooms", (Rooms rooms) => Results.Ok(rooms.List()));
 app.MapGet("/api/chat/{channel}", async (string channel, HttpContext context, Rooms rooms, Pg pg) =>
@@ -229,6 +219,7 @@ app.MapGet("/api/chat/{channel}", async (string channel, HttpContext context, Ro
     return Results.Ok(await pg.Query("SELECT m.id,m.channel,m.text,m.created_at,u.id AS user_id,u.username,u.display_name FROM chat_messages m JOIN users u ON u.id=m.user_id WHERE channel=@channel AND NOT u.disabled ORDER BY m.id DESC LIMIT 50", ("channel", channel)));
 }).RequireAuthorization();
 var admin = app.MapGroup("/api/admin").RequireAuthorization("admin");
+admin.MapGet("/charts", (string? q, int? page, ChartRegistry registry) => registry.Administration(q, page ?? 1));
 admin.MapGet("/overview", async (Pg pg) => Results.Ok((await pg.Query("SELECT (SELECT count(*) FROM users) AS users,(SELECT count(*) FROM packs) AS packs,(SELECT count(*) FROM scores) AS scores,(SELECT count(*) FROM matches) AS matches")).Single()));
 admin.MapGet("/packs", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,title,description,size_bytes,published,created_at FROM packs ORDER BY created_at DESC LIMIT 200")));
 admin.MapPost("/packs", async (HttpContext context, ContentStore content) => Results.Ok(new { id = await content.UploadPack(context.Request, Auth.Id(context.User), context.RequestAborted) }));
@@ -236,6 +227,7 @@ admin.MapPut("/packs/{id:guid}/publication", async (Guid id, PublicationInput in
 {
     var rows = await pg.Query("UPDATE packs SET published=@published WHERE id=@id RETURNING id", ("id", id), ("published", input.Published));
     if (rows.Count == 0) throw new ApiError(404, "Pack not found.");
+    if (input.Published) await pg.Query("UPDATE ir_boards b SET visibility='public',approved=true WHERE b.scope_key='community' AND (b.visibility IN ('public','unlisted') OR (b.visibility='hidden' AND NOT b.moderated_hidden)) AND EXISTS(SELECT 1 FROM pack_charts pc WHERE pc.pack_id=@id AND pc.chart_id=b.chart_id)", ("id", id));
     await pg.Query("INSERT INTO audit_log(user_id,action,target) VALUES(@user,@action,@target)", ("user", Auth.Id(context.User)), ("action", input.Published ? "pack.publish" : "pack.unpublish"), ("target", id.ToString()));
     return Results.NoContent();
 });
@@ -250,6 +242,7 @@ admin.MapPut("/users/{id:guid}/disabled", async (Guid id, DisableInput input, Ht
     return Results.NoContent();
 });
 admin.MapGet("/audit", async (Pg pg) => Results.Ok(await pg.Query("SELECT a.*,u.username FROM audit_log a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 100")));
+admin.MapPut("/scores/{id:guid}/review", async (Guid id, ScoreReviewInput input, HttpContext context, IrRecords records) => { await records.Review(id, Auth.Id(context.User), input); return Results.NoContent(); });
 app.MapDifficultyTables();
 app.MapHub<RealtimeHub>("/hubs/realtime", options => { options.ApplicationMaxBufferSize = 65536; options.TransportMaxBufferSize = 65536; });
 app.MapPost("/api/rooms/{id:guid}/content", async (Guid id, UploadSongInput input, HttpContext context, RoomContentStore content) => Results.Ok(await content.Begin(Auth.Id(context.User), id, input, context.RequestAborted))).RequireAuthorization();

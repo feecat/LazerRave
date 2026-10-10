@@ -35,7 +35,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
     private readonly string applicationRoot;
     private readonly CloudSessionStore? sessions;
     public bool HasSavedSession => sessions?.Exists == true;
-    private string SharedRoot => Path.Combine(applicationRoot, "Shared");
+    private string SharedRoot => LibraryFolders.Shared(applicationRoot);
     private Guid inspectedSelection;
     private Guid? kickedRoom;
     private string? localChart;
@@ -344,8 +344,11 @@ internal sealed partial class CloudClient : IAsyncDisposable
                 throw new InvalidDataException("Shared content does not match the selected song.");
             SongContent.Validate(song.Manifest);
             await ReportContent(room, "downloading", ct);
+            LibraryFolders.Ensure(applicationRoot);
             var root = Path.Combine(SharedRoot, ".incoming"); Directory.CreateDirectory(root);
+            LibraryFolders.NoLink(root);
             var zip = Path.Combine(root, song.ArchiveSha256 + ".zip.part");
+            if (File.Exists(zip)) LibraryFolders.NoLink(zip);
             var clock = Stopwatch.StartNew();
             await using (var output = new FileStream(zip, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
             {
@@ -381,7 +384,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
             AvailableChart = localChart = path; File.Delete(zip);
             await installed(path);
             await ReportContent(room, "available", ct);
-            Progress = null; Status = "Installed to Shared"; Notify();
+            Progress = null; Status = "Installed to BMS/Shared"; Notify();
         }, cancellation);
     }
     private async Task RunTransfer(Func<CancellationToken, Task> action, CancellationToken cancellation)

@@ -113,7 +113,7 @@ internal static class AdapterChecks
         Directory.CreateDirectory(fixtures);
         var file = Path.Combine(fixtures, "settings.toml");
         var defaults = FrontendSettings.Read(file);
-        if (!defaults.Roots.SequenceEqual(new[] { "BMS" }) || defaults.Width != 1920 || defaults.Height != 1080
+        if (!defaults.Roots.SequenceEqual(new[] { @".\BMS" }) || defaults.Width != 1920 || defaults.Height != 1080
             || defaults.FrameLimit != 240 || defaults.FrontendFrameLimit != "240" || defaults.RenderProfile != "discard" || defaults.Presentation != "embedded")
             throw new InvalidDataException("Fresh installations must use BMS, 1920x1080, 240 FPS and embedded E mode.");
         var second = Path.Combine(fixtures, "Another library");
@@ -129,7 +129,7 @@ internal static class AdapterChecks
         {
             Directory.SetCurrentDirectory(fixtures);
             var saved = FrontendSettings.Read(file);
-            if (!saved.Roots.SequenceEqual(new[] { "BMS", relative }) || settings.HasChanges)
+            if (!saved.Roots.SequenceEqual(new[] { @".\BMS", relative }) || settings.HasChanges)
                 throw new InvalidDataException("Library settings must retain relative paths and deduplicate resolved directories.");
             var request = EngineBridge.Request("catalog", saved);
             var roots = request.Root!.Elements("root").Select(root => root.Value).ToArray();
@@ -144,12 +144,16 @@ internal static class AdapterChecks
         settings.Save();
         if (FrontendSettings.Read(file).FrontendFrameLimit != "120" || FrontendSettings.Read(file).Roots.Length != 1)
             throw new InvalidDataException("Removing library entries and changing the frontend cap must survive restart.");
+        settings.Roots.RemoveAt(0);
+        settings.Save();
+        if (!FrontendSettings.Read(file).Roots.SequenceEqual(new[] { @".\BMS" }))
+            throw new InvalidDataException("The required BMS library must be restored even when removed outside the settings UI.");
         File.WriteAllText(file, "directories = []\nwindow_width = 1280\nwindow_height = 720\ngame_frame_limit = -1\ngame_render_profile = \"baseline\"\ngame_presentation = \"standalone\"\n");
         File.WriteAllText(Path.Combine(fixtures, "framework.ini"), "FrameSync = Limit4x\n");
         var legacy = FrontendSettings.Read(file);
-        if (legacy.Roots.Length != 0 || legacy.Width != 1280 || legacy.Height != 720 || legacy.FrameLimit != -1
+        if (legacy.Roots.Length != 1 || legacy.Width != 1280 || legacy.Height != 720 || legacy.FrameLimit != -1
             || legacy.RenderProfile != "baseline" || legacy.Presentation != "standalone" || legacy.FrontendFrameLimit != "4x")
-            throw new InvalidDataException("Existing rendering, window and explicitly empty library settings must be preserved.");
+            throw new InvalidDataException("Existing rendering and window settings must be preserved while restoring the required library.");
     }
 
     private static void CheckCloudPanelDrawing()

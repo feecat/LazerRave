@@ -369,4 +369,28 @@
   <data name="Offset" xml:space="preserve"><value>Offset</value></data>
   <data name="Best clear" xml:space="preserve"><value>Best clear</value></data>
   <data name="Minimum BP" xml:space="preserve"><value>Minimum BP</value></data>
+  <data name="Submit to private ranking" xml:space="preserve"><value>非公開ランキングに送信</value></data>
+  <data name="Submit score (link-accessible)" xml:space="preserve"><value>スコアを送信（リンクで閲覧可能）</value></data>
+  <data name="Score upload" xml:space="preserve"><value>スコア送信</value></data>
+  <data name="Automatic (public)" xml:space="preserve"><value>自動送信（公開）</value></data>
+  <data name="Automatic (private)" xml:space="preserve"><value>自動送信（非公開）</value></data>
+  <data name="Do not upload" xml:space="preserve"><value>送信しない</value></data>
+  <data name="Score uploaded to IR." xml:space="preserve"><value>IR にスコアを送信しました。</value></data>
+  <data name="Score uploaded to private IR." xml:space="preserve"><value>非公開 IR にスコアを送信しました。</value></data>
+  <data name="IR upload failed. The local record is saved; submit it again from the score menu." xml:space="preserve"><value>IR 送信に失敗しました。ローカル記録は保存済みです。スコアメニューから再送信できます。</value></data>
+  <data name="Submit score to public IR" xml:space="preserve"><value>公開 IR に送信</value></data>
+  <data name="Default library" xml:space="preserve"><value>既定のライブラリ</value></data>
+  <data name="Song packs install to BMS/Shared." xml:space="preserve"><value>曲パックのインストール先は BMS/Shared です。</value></data>
+  <data name="Song pack link" xml:space="preserve"><value>曲パックのリンク</value></data>
+  <data name="Download song pack" xml:space="preserve"><value>曲パックをダウンロード</value></data>
+  <data name="Song pack ZIP" xml:space="preserve"><value>曲パック ZIP</value></data>
+  <data name="Import song pack ZIP" xml:space="preserve"><value>曲パック ZIP をインポート</value></data>
+  <data name="Cancel transfer" xml:space="preserve"><value>転送をキャンセル</value></data>
+  <data name="Installed to BMS/Shared" xml:space="preserve"><value>BMS/Shared にインストールしました</value></data>
+  <data name="Downloading" xml:space="preserve"><value>ダウンロード中</value></data>
+  <data name="Installing" xml:space="preserve"><value>インストール中</value></data>
+  <data name="Verifying ZIP" xml:space="preserve"><value>ZIP を検証中</value></data>
+  <data name="Browse" xml:space="preserve"><value>参照</value></data>
+  <data name="Choose folder" xml:space="preserve"><value>フォルダーを選択</value></data>
+  <data name="Remove folder" xml:space="preserve"><value>フォルダーを削除</value></data>
 </root>

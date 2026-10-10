@@ -19,6 +19,7 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     private OsuSpriteText status = null!;
     private bool finished;
     public PlayRecordStore? Records { get; init; }
+    public Action<PlayRecord>? RecordSaved { get; init; }
     public string RecordPlayer { get; init; } = "Player";
     public string? ReplaySource { get; init; }
     public PlayRecord? ReplayRecord { get; init; }
@@ -61,9 +62,23 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
         var run = Guid.NewGuid();
         GameplaySnapshot latest = GameplaySnapshot.Empty;
         string? hash = null;
+        DateTimeOffset? playedAt = null;
+        bool recordPublished = false;
+        void Publish(PlayRecord? record)
+        {
+            if (record is null || recordPublished) return;
+            recordPublished = true;
+            RecordSaved?.Invoke(record);
+        }
         void Score(GameplaySnapshot value)
         {
+            if (value.TotalNotes > 0) playedAt ??= DateTimeOffset.UtcNow;
             latest = value; scores?.Update(value);
+            if (!recordPublished && value.Finished && !value.Aborted && ReplaySource is null && Records is not null && hash is not null)
+            {
+                try { Publish(Records.Save(run, hash, chart, RecordPlayer, settings, value, playedAt)); }
+                catch (Exception error) { failure ??= "Cannot save play record: " + error.Message; }
+            }
             if (scores is not null && value.Finished && !value.Aborted) Schedule(() => session.Cancel());
         }
         Action<GameplaySnapshot> report = Score;
@@ -99,7 +114,8 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
             {
                 try
                 {
-                    var saved = Records.Save(run, hash, chart, RecordPlayer, settings, latest);
+                    var saved = Records.Save(run, hash, chart, RecordPlayer, settings, latest, playedAt);
+                    Publish(saved);
                     if (saved?.ReplayError is { } replayError) failure ??= "Play record saved; replay unavailable: " + replayError;
                 }
                 catch (Exception error) { failure ??= "Cannot save play record: " + error.Message; }

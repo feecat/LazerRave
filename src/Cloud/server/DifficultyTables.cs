@@ -67,29 +67,40 @@ public sealed class DifficultyTables(Pg db)
         await transaction.CommitAsync();
         return tableId;
     }
-    public async Task<object> Detail(long id, bool admin)
+    public async Task<object> Detail(long id, bool admin, Guid viewer = default)
     {
         var table = await Require(id, admin);
         var levels = await db.Query("""
-            SELECT level,count(*) AS chart_count,min(position) AS position FROM difficulty_table_entries
-            WHERE table_id=@id GROUP BY level ORDER BY min(position),level
-            """, ("id", id));
+            SELECT e.level,count(*) AS chart_count,count(progress.lamp) AS played,
+                count(*) FILTER(WHERE progress.lamp>=2) AS cleared,
+                count(*) FILTER(WHERE progress.lamp>=4) AS hard,
+                count(*) FILTER(WHERE progress.lamp>=5) AS full_combo
+            FROM difficulty_table_entries e
+            LEFT JOIN LATERAL (SELECT b.id FROM charts c JOIN ir_boards b ON b.chart_id=c.id
+                WHERE c.md5=e.md5 AND b.visibility='public' ORDER BY b.created_at,b.id LIMIT 1) board ON true
+            LEFT JOIN LATERAL (SELECT max(CASE s.clear WHEN 'perfect' THEN 6 WHEN 'full-combo' THEN 5 WHEN 'hard' THEN 4
+                WHEN 'normal' THEN 3 WHEN 'easy' THEN 2 WHEN 'assist' THEN 1 ELSE 0 END) AS lamp
+                FROM scores s WHERE s.board_id=board.id AND s.user_id=@viewer AND NOT s.withdrawn AND s.ruleset='openlr2-v1') progress ON true
+            WHERE e.table_id=@id GROUP BY e.level ORDER BY min(e.position),e.level
+            """, ("id", id), ("viewer", viewer));
         return new { table, levels };
     }
-    public async Task<object> Entries(long id, string? level, int page, bool admin)
+    public async Task<object> Entries(long id, string? level, int page, bool admin, Guid viewer = default)
     {
         if (page is < 1 or > 10000 || level?.Length > 24) throw new ApiError(400, "Invalid table level or page.");
         await Require(id, admin);
         return await db.Query("""
             SELECT e.md5,e.level,COALESCE(NULLIF(c.title,''),e.title) AS title,COALESCE(NULLIF(c.artist,''),e.artist) AS artist,
-                e.url,c.id AS chart_id,c.keys,c.level AS chart_level
+                e.url,c.id AS chart_id,c.keys,c.level AS chart_level,progress.best_clear
             FROM difficulty_table_entries e
-            LEFT JOIN LATERAL (SELECT c.* FROM charts c WHERE c.md5=e.md5 AND
-                EXISTS(SELECT 1 FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published)
-                ORDER BY c.created_at,c.id LIMIT 1) c ON true
+            LEFT JOIN LATERAL (SELECT b.* FROM charts identity JOIN ir_boards b ON b.chart_id=identity.id WHERE identity.md5=e.md5 AND b.visibility='public'
+                ORDER BY b.created_at,b.id LIMIT 1) c ON true
+            LEFT JOIN LATERAL (SELECT CASE max(CASE clear WHEN 'perfect' THEN 6 WHEN 'full-combo' THEN 5 WHEN 'hard' THEN 4 WHEN 'normal' THEN 3 WHEN 'easy' THEN 2 WHEN 'assist' THEN 1 ELSE 0 END)
+                WHEN 6 THEN 'perfect' WHEN 5 THEN 'full-combo' WHEN 4 THEN 'hard' WHEN 3 THEN 'normal' WHEN 2 THEN 'easy' WHEN 1 THEN 'assist' WHEN 0 THEN 'failed' END AS best_clear
+                FROM scores s WHERE s.board_id=c.id AND s.user_id=@viewer AND NOT s.withdrawn AND s.ruleset='openlr2-v1') progress ON true
             WHERE e.table_id=@id AND (@level='' OR e.level=@level)
             ORDER BY e.position,e.md5 LIMIT 50 OFFSET @offset
-            """, ("id", id), ("level", level ?? ""), ("offset", (page - 1) * 50));
+            """, ("id", id), ("level", level ?? ""), ("offset", (page - 1) * 50), ("viewer", viewer));
     }
 }
 
@@ -98,8 +109,8 @@ public static class DifficultyTableEndpoints
     public static void MapDifficultyTables(this WebApplication app)
     {
         app.MapGet("/api/tables", (DifficultyTables tables) => tables.List(false));
-        app.MapGet("/api/tables/{id:long}", (long id, HttpContext context, DifficultyTables tables) => tables.Detail(id, context.User.IsInRole("admin")));
-        app.MapGet("/api/tables/{id:long}/entries", (long id, string? level, int? page, HttpContext context, DifficultyTables tables) => tables.Entries(id, level, page ?? 1, context.User.IsInRole("admin")));
+        app.MapGet("/api/tables/{id:long}", (long id, HttpContext context, DifficultyTables tables) => tables.Detail(id, context.User.IsInRole("admin"), ChartRegistry.Viewer(context)));
+        app.MapGet("/api/tables/{id:long}/entries", (long id, string? level, int? page, HttpContext context, DifficultyTables tables) => tables.Entries(id, level, page ?? 1, context.User.IsInRole("admin"), ChartRegistry.Viewer(context)));
         app.MapGet("/api/tables/{id:long}/header.json", async (long id, DifficultyTables tables, CloudOptions options) =>
         {
             var table = await tables.Require(id, false);

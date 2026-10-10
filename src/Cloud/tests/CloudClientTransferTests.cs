@@ -249,7 +249,7 @@ public sealed class CloudClientTransferTests
                 using (var response = await http.PostAsJsonAsync("/api/auth/register", new { username = name, email = name + "@example.com", password })) Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var guestRoot = Path.Combine(root, "guest"); string? imported = null;
             await using var host = new CloudClient(() => new[] { source }, () => "auto", _ => Task.CompletedTask, Path.Combine(root, "host"));
-            await using var guest = new CloudClient(() => Directory.Exists(Path.Combine(guestRoot, "Shared")) ? Directory.EnumerateDirectories(Path.Combine(guestRoot, "Shared")).Where(p => Path.GetFileName(p) != ".incoming").ToArray() : [],
+            await using var guest = new CloudClient(() => Directory.Exists(Path.Combine(guestRoot, "BMS", "Shared")) ? Directory.EnumerateDirectories(Path.Combine(guestRoot, "BMS", "Shared")).Where(p => Path.GetFileName(p) != ".incoming").ToArray() : [],
                 () => "auto", path => { imported = path; return Task.CompletedTask; }, guestRoot);
             await host.Login(url, "host_" + suffix, password, default); await guest.Login(url, "guest_" + suffix, password, default);
             await host.CreateRoom("Transfer test", default); await guest.JoinRoom(host.Room!.Id, default);
@@ -265,7 +265,7 @@ public sealed class CloudClientTransferTests
             Assert.Equal("Ready to share the selected song.", chat.Text);
             await host.SelectChart(new(Path.Combine(source, "normal.bms"), "Shared fixture", "Test", 7, 1), default);
             await Wait(() => host.AvailableChart is not null && guest.Room?.Members.Single(m => m.Id == guest.User!.Id).ContentState == "missing");
-            Assert.Null(guest.AvailableChart); Assert.False(Directory.Exists(Path.Combine(guestRoot, "Shared")));
+            Assert.Null(guest.AvailableChart); Assert.False(Directory.Exists(Path.Combine(guestRoot, "BMS", "Shared")));
             bool cancelledUpload = false;
             Action stopUpload = () => { if (!cancelledUpload && host.Progress?.Stage == "Uploading" && host.Progress.Completed > 0) { cancelledUpload = true; host.CancelTransfer(); } };
             host.Changed += stopUpload;
@@ -275,7 +275,7 @@ public sealed class CloudClientTransferTests
             await Wait(() => guest.Room?.Chart?.ShareId is not null);
             var room = guest.Room!; var id = room.Chart!.ShareId!.Value;
             Assert.InRange(room.Chart.ExpiresAt!.Value - DateTime.UtcNow, TimeSpan.FromMinutes(119), TimeSpan.FromMinutes(121));
-            Assert.False(Directory.Exists(Path.Combine(guestRoot, "Shared")));
+            Assert.False(Directory.Exists(Path.Combine(guestRoot, "BMS", "Shared")));
             bool downloadProgress = false, installProgress = false;
             guest.Changed += () => { downloadProgress |= guest.Progress?.Stage == "Downloading" && guest.Progress.Completed > 0; installProgress |= guest.Progress?.Stage == "Installing"; };
             bool cancelledDownload = false;
@@ -283,10 +283,10 @@ public sealed class CloudClientTransferTests
             guest.Changed += stopDownload;
             await guest.Download(default); guest.Changed -= stopDownload;
             Assert.True(cancelledDownload); Assert.Null(guest.AvailableChart);
-            Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(guestRoot, "Shared", ".incoming"), "*.part"));
+            Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(guestRoot, "BMS", "Shared", ".incoming"), "*.part"));
             await guest.Download(default);
             Assert.True(downloadProgress); Assert.True(installProgress); Assert.Equal(imported, guest.AvailableChart);
-            Assert.StartsWith(Path.Combine(guestRoot, "Shared") + Path.DirectorySeparatorChar, imported!);
+            Assert.StartsWith(Path.Combine(guestRoot, "BMS", "Shared") + Path.DirectorySeparatorChar, imported!);
             Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(imported)!, "another.bms")));
             Assert.Equal(SHA256.HashData(audio), SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(Path.GetDirectoryName(imported)!, "tone.wav"))));
             await guest.Ready(default); await Wait(() => host.Room!.Members.Single(m => m.Id == guest.User!.Id).Ready);

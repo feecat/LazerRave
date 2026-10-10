@@ -162,7 +162,10 @@ internal partial class LazerRaveLeaderboardWedge : BeatmapLeaderboardWedge
             menu.Add(new OsuMenuItem(D("Watch replay"), MenuItemType.Standard, replay));
         }
         if (record is not null && record.Player == game.Cloud.User?.Username)
-            menu.Add(new OsuMenuItem(D("Submit score"), MenuItemType.Standard, () => { if (!submitting) _ = Submit(chart, record); }));
+        {
+            menu.Add(new OsuMenuItem(D("Submit score to public IR"), MenuItemType.Standard, () => { if (!submitting) _ = Submit(chart, record); }));
+            menu.Add(new OsuMenuItem(D("Submit to private ranking"), MenuItemType.Standard, () => { if (!submitting) _ = Submit(chart, record, true); }));
+        }
         return new BeatmapLeaderboardScore(score)
         {
             Rank = rank, Highlight = highlight, DisplayScore = new Bindable<string>($"EX {score.TotalScore:N0}"),
@@ -170,13 +173,13 @@ internal partial class LazerRaveLeaderboardWedge : BeatmapLeaderboardWedge
         };
     }
 
-    private async Task Submit(Chart chart, PlayRecord record)
+    private async Task Submit(Chart chart, PlayRecord record, bool privateRanking = false)
     {
         submitting = true;
         game.SetLibraryMessage(D("Submitting…"));
         try
         {
-            await game.Cloud.SubmitRecord(chart, record, request!.Token);
+            await game.Cloud.SubmitRecord(chart, record, request!.Token, privateRanking);
             Schedule(() => game.SetLibraryMessage(D("Score submitted")));
         }
         catch (OperationCanceledException) { }

@@ -98,7 +98,7 @@ try {
   assert.equal((await request(`/rankings/${chart.id}/summary?verified=true`)).players, 0); checks++;
   assert.deepEqual(await request(`/rankings/${chart.id}?verified=true`), []);
   const profile = await request('/users/' + players[0].username); assert.equal(profile.user.bio, edited.bio); assert.equal(profile.scores.length, 2);
-  const personal = await request('/players/' + me.uid + '/records'); assert.equal(personal.length, 2); assert.equal(Math.max(...personal.map(row => row.exScore)), 25);
+  const personal = await request('/players/' + me.uid + '/records'); assert.equal(personal.length, 1); assert.equal(Math.max(...personal.map(row => row.exScore)), 25);
   const tableInput = { name: 'Integration difficulty table', symbol: '★', description: 'Test', sourceUrl: 'https://example.com/table', entries: [{ md5: chart.md5, level: '1', title: chart.title, artist: chart.artist, url: null }, { md5: 'a'.repeat(32), level: '2', title: 'Not uploaded', artist: '', url: 'https://example.com/chart' }] };
   await request('/admin/tables', { token: players[1].token, method: 'POST', body: tableInput, expected: 403 });
   const table = await request('/admin/tables', { token, method: 'POST', body: tableInput });
@@ -151,8 +151,8 @@ try {
   assert.equal(await request('/me', { token: players[15].token }), null);
   await request('/admin/packs/' + pack.id + '/publication', { token, method: 'PUT', body: { published: false }, expected: 204 });
   await request('/packs/' + pack.id + '/download', { expected: 404 });
-  assert.deepEqual(await request(`/rankings/${chart.id}`), []);
-  assert.equal((await request(`/rankings/${chart.id}/summary`)).players, 0);
+  assert.ok((await request(`/rankings/${chart.id}`)).length > 0);
+  assert.ok((await request(`/rankings/${chart.id}/summary`)).players > 0);
   await request('/auth/password', { token: players[14].token, method: 'POST', body: passwordBody, expected: 204 });
   await assert.rejects(connections[14].invoke('Ping', Date.now()), /Session expired|underlying connection being closed/); checks++;
   assert.equal(await request('/me', { token: players[14].token }), null);

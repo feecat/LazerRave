@@ -395,4 +395,28 @@
   <data name="Offset" xml:space="preserve"><value>Offset</value></data>
   <data name="Best clear" xml:space="preserve"><value>Best clear</value></data>
   <data name="Minimum BP" xml:space="preserve"><value>Minimum BP</value></data>
+  <data name="Submit to private ranking" xml:space="preserve"><value>Submit to private ranking</value></data>
+  <data name="Submit score (link-accessible)" xml:space="preserve"><value>Submit score (link-accessible)</value></data>
+  <data name="Score upload" xml:space="preserve"><value>Score upload</value></data>
+  <data name="Automatic (public)" xml:space="preserve"><value>Automatic (public)</value></data>
+  <data name="Automatic (private)" xml:space="preserve"><value>Automatic (private)</value></data>
+  <data name="Do not upload" xml:space="preserve"><value>Do not upload</value></data>
+  <data name="Score uploaded to IR." xml:space="preserve"><value>Score uploaded to IR.</value></data>
+  <data name="Score uploaded to private IR." xml:space="preserve"><value>Score uploaded to private IR.</value></data>
+  <data name="IR upload failed. The local record is saved; submit it again from the score menu." xml:space="preserve"><value>IR upload failed. The local record is saved; submit it again from the score menu.</value></data>
+  <data name="Submit score to public IR" xml:space="preserve"><value>Submit score to public IR</value></data>
+  <data name="Default library" xml:space="preserve"><value>Default library</value></data>
+  <data name="Song packs install to BMS/Shared." xml:space="preserve"><value>Song packs install to BMS/Shared.</value></data>
+  <data name="Song pack link" xml:space="preserve"><value>Song pack link</value></data>
+  <data name="Download song pack" xml:space="preserve"><value>Download song pack</value></data>
+  <data name="Song pack ZIP" xml:space="preserve"><value>Song pack ZIP</value></data>
+  <data name="Import song pack ZIP" xml:space="preserve"><value>Import song pack ZIP</value></data>
+  <data name="Cancel transfer" xml:space="preserve"><value>Cancel transfer</value></data>
+  <data name="Installed to BMS/Shared" xml:space="preserve"><value>Installed to BMS/Shared</value></data>
+  <data name="Downloading" xml:space="preserve"><value>Downloading</value></data>
+  <data name="Installing" xml:space="preserve"><value>Installing</value></data>
+  <data name="Verifying ZIP" xml:space="preserve"><value>Verifying ZIP</value></data>
+  <data name="Browse" xml:space="preserve"><value>Browse</value></data>
+  <data name="Choose folder" xml:space="preserve"><value>Choose folder</value></data>
+  <data name="Remove folder" xml:space="preserve"><value>Remove folder</value></data>
 </root>

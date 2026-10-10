@@ -27,6 +27,7 @@ src/Cloud/server/data/
 /userdata/
 /cache/
 /LR2files/
+/BMS/
 /Shared/
 *.db
 *.db-shm

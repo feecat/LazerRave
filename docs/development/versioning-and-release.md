@@ -56,7 +56,7 @@ ZIP 使用 Deflate Optimal 压缩，包含一个同名顶层目录，并生成 `
 | LazerRave、OpenLR2、FMOD 与原生 DLL | 完整 Release 输出；前端 DLL 由构建依赖清单确定 |
 | 前端资源、语言文件 | `Resources/`、`Localization/` |
 | LR2 默认皮肤和配套音效、视频、鼠标素材 | 输出目录中的 `LR2files/Theme/LR2/`、`Bgm/`、`Sound/`、`Movie/`、`Mouse/` |
-| 默认配置与曲库入口 | `res/release/`；相对目录 `BMS/`、`Shared/` |
+| 默认配置与曲库入口 | `res/release/`；相对目录 `BMS/`、`BMS/Shared/` |
 | 初始本地 Player 档案 | 重新生成的空成绩库，空密码，不含云端账号 |
 | 项目与第三方许可证 | 根目录 LICENSE、osu!lazer LICENCE、`res/licenses/` |
 

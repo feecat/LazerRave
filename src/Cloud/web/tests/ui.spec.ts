@@ -21,7 +21,7 @@ test('Language dropdown translates pages and errors, preserves form input and su
   await page.reload();
   await expect(page.getByLabel('语言', { exact: true })).toHaveValue('zh-CN');
   expect(await page.evaluate(() => localStorage.getItem('lazerrave.language'))).toBe('zh-CN');
-  for (const [path, heading] of [['/', '找到你的节奏。 挑战更高的目标。'], ['/packs', '发现下一首心仪的曲目'], ['/rankings', '同一张谱面，更高的目标。'], ['/tables', '发现新的挑战'], ['/account/password', null], ['/register', '创建账号']] as const) {
+  for (const [path, heading] of [['/', '找到你的节奏。 挑战更高的目标。'], ['/packs', '发现下一首心仪的曲目'], ['/rankings', '谱面'], ['/tables', '发现新的挑战'], ['/account/password', null], ['/register', '创建账号']] as const) {
     await page.goto(path);
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible();
     if (heading) await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -95,9 +95,9 @@ test('Public website, history fallback, sign-in and mobile navigation', async ({
   await expect(page.getByRole('heading', { name: 'Find your rhythm. Raise the bar.' })).toBeVisible();
   await page.screenshot({ path: fileURLToPath(new URL('../../../../out/reports/cloud-test/home.png', import.meta.url)), fullPage: true });
   await page.getByRole('navigation').getByRole('link', { name: 'Rankings' }).click();
-  await expect(page.getByRole('heading', { name: 'One chart. A higher standard.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Charts', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'One chart. A higher standard.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Charts', exact: true })).toBeVisible();
   await page.goto('/login');
   await page.getByLabel('Username or email').fill('missing_player');
   await page.getByLabel('Password').fill('invalid-password');

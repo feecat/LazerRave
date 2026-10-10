@@ -1,6 +1,7 @@
 using static LazerRave.Lazer.LazerRaveText;
 using osu.Framework.Extensions;
 using LazerRave.Bridge;
+using LazerRave.Content;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Bindables;
@@ -148,7 +149,9 @@ internal partial class LazerRaveGame : OsuGame
     }
     private async Task ImportSharedChart(string path)
     {
-        var library = await bridge.Import(preferences.Value, path, lifetime.Token);
+        var library = Directory.Exists(path)
+            ? await bridge.Catalog(preferences.Value, true, lifetime.Token)
+            : await bridge.Import(preferences.Value, path, lifetime.Token);
         Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); unavailablePreviews.Clear(); previewsExhausted = false; ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
     }
     public override bool UseDevelopmentServer => false;
@@ -421,7 +424,7 @@ internal partial class LazerRaveGame : OsuGame
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
         ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned)
-        { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, ReplaySource = replay, ReplayRecord = record });
+        { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, RecordSaved = AutoUploadRecord(chart, preferences.Value.IrUpload), ReplaySource = replay, ReplayRecord = record });
     }
     public void SetLibraryMessage(osu.Framework.Localisation.LocalisableString text) => Notifications.Post(new osu.Game.Overlays.Notifications.SimpleNotification { Text = text });
     private void UpdateMultiplayerStart()
@@ -450,8 +453,27 @@ internal partial class LazerRaveGame : OsuGame
             menuTrackVolume.Value = 1;
             cloud.SetGameStatus(error ?? "Returned to room.");
             ScreenStack.Push(new LazerRaveRoundResults(cloud, match, chart.Title, error) { RelativeSizeAxes = Axes.Both });
-        }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match, ExpectedChartHash = room.Chart?.Sha256, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player });
+        }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match, ExpectedChartHash = room.Chart?.Sha256, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, RecordSaved = AutoUploadRecord(chart, preferences.Value.IrUpload) });
     }
+    private Action<PlayRecord> AutoUploadRecord(Chart chart, string mode) => record =>
+    {
+        if (benchmark is not null || mode == "off" || !record.Ranked || cloud.User?.Username != record.Player) return;
+        _ = Upload();
+        async Task Upload()
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                await cloud.SubmitRecord(chart, record, timeout.Token, mode == "private");
+                if (!IsDisposed) Schedule(() => SetLibraryMessage(D(mode == "private" ? "Score uploaded to private IR." : "Score uploaded to IR.")));
+            }
+            catch (Exception)
+            {
+                if (!IsDisposed) Schedule(() => SetLibraryMessage(D("IR upload failed. The local record is saved; submit it again from the score menu.")));
+            }
+        }
+    };
+
     private void OnGameReturned(string? error)
     {
         if (benchmark is not null)
@@ -492,6 +514,7 @@ internal partial class LazerRaveGame : OsuGame
         }
         try
         {
+            LibraryFolders.Ensure(AppContext.BaseDirectory);
             var previous = preferences.Value;
             if (preferences.HasChanges) preferences.Save();
             bool rootsChanged = !previous.Roots.SequenceEqual(preferences.Value.Roots, StringComparer.OrdinalIgnoreCase);

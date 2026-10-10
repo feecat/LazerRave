@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const chart = { id: '11111111-1111-1111-1111-111111111111', title: 'Ranking fixture', artist: 'Fixture', difficulty: 'ANOTHER', keys: 7, level: 12, md5: 'a'.repeat(32), sha256: 'b'.repeat(64), packId: '22222222-2222-2222-2222-222222222222' };
-const score = { id: '33333333-3333-3333-3333-333333333333', rank: 1, uid: 42, username: 'fixture', displayName: 'Fixture Player', exScore: 25, scoreMax: 50, normalScore: 12345, misses: 3, minMisses: 0, maxCombo: 10, clear: 'normal', bestClear: 'hard', letterRank: 'C', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, arrangement: 'off', gauge: 'normal', inputType: 'keyboard', comment: '', verified: false, createdAt: '2026-10-01T12:00:00Z' };
+const score = { id: '33333333-3333-3333-3333-333333333333', rank: 1, uid: 42, username: 'fixture', displayName: 'Fixture Player', exScore: 25, scoreMax: 50, normalScore: 12345, misses: 3, minMisses: 0, maxCombo: 10, clear: 'normal', bestClear: 'hard', letterRank: 'C', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, arrangement: 'off', gauge: 'normal', inputType: 'keyboard', comment: '', verified: false, playedAt: '2026-09-15T12:00:00Z', playCount: 3, createdAt: '2026-10-01T12:00:00Z' };
 
 test('IR content distinguishes the scoring play from independent records and follows filters in both languages', async ({ page }) => {
   const errors: string[] = [];
@@ -34,6 +34,8 @@ test('IR content distinguishes the scoring play from independent records and fol
   await expect(page.getByText('MD5 ' + chart.md5, { exact: true })).toBeVisible();
   await page.getByLabel('Gauge', { exact: true }).selectOption('hard');
   await expect(overview.locator('dl > div').filter({ hasText: 'Players' }).locator('dd')).toHaveText('1');
+  await expect(details).toHaveCount(0);
+  await page.getByRole('button', { name: 'Score details', exact: true }).click();
   await page.getByLabel('Language', { exact: true }).selectOption('zh-CN');
   await expect(page.getByRole('columnheader', { name: '最佳通关' })).toBeVisible();
   await expect(page.getByRole('region', { name: '排行统计' })).toBeVisible();

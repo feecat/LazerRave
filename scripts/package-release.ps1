@@ -112,7 +112,7 @@ try {
                 [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $pair.Value,
                     "$releaseName/$($pair.Key)", [IO.Compression.CompressionLevel]::Optimal) | Out-Null
             }
-            foreach ($directory in @('BMS', 'Shared', 'LR2files/Database/Score', 'LR2files/Replay', 'LR2files/Ghost', 'LR2files/SkinCustomize')) {
+            foreach ($directory in @('BMS', 'BMS/Shared', 'LR2files/Database/Score', 'LR2files/Replay', 'LR2files/Ghost', 'LR2files/SkinCustomize')) {
                 $archive.CreateEntry("$releaseName/$directory/") | Out-Null
             }
             $profileStream = $archive.CreateEntry("$releaseName/LR2files/Database/Score/Player.db").Open()

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using LazerRave.Content;
 using Tomlyn;
 using Tomlyn.Model;
 
@@ -10,6 +11,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
     string Player = "Player", string? Avatar = null, int FrameLimit = 240, string RenderProfile = "discard", string Presentation = "embedded")
 {
     public string FrontendFrameLimit { get; init; } = "240";
+    public string IrUpload { get; init; } = "public";
     public IReadOnlyDictionary<string, int> PlayOptions { get; init; } = new Dictionary<string, int>();
     public static FrontendSettings Read(string path)
     {
@@ -23,14 +25,14 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
         var directoryValue = Get("directories");
         if (directoryValue is not null && (directoryValue is not TomlArray directories || directories.Any(item => item is not string)))
             throw new InvalidDataException("Directories must be an array of paths.");
-        var roots = (directoryValue as TomlArray)?.OfType<string>().Where(root => !string.IsNullOrWhiteSpace(root))
-            .Select(root => root.Trim()).DistinctBy(ApplicationPaths.ResolveLibraryRoot, StringComparer.OrdinalIgnoreCase).ToArray() ?? ["BMS"];
+        var roots = LibraryFolders.NormalizeRoots((directoryValue as TomlArray)?.OfType<string>() ?? [], AppContext.BaseDirectory);
         var settings = new FrontendSettings(roots, Number("speed", 2), (int)Number("offset", 0),
             Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1920),
             (int)Number("window_height", 1080), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 240), Text("game_render_profile", "discard"), Text("game_presentation", "embedded"))
         {
             FrontendFrameLimit = Text("frontend_frame_limit", ReadLegacyFrameLimit(path)),
             PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
+            IrUpload = Text("ir_upload", "public"),
         };
         if (settings.Speed is < .5 or > 10 || !double.IsFinite(settings.Speed) || Math.Abs(settings.Offset) > 1000
             || settings.Width is < 320 or > 7680 || settings.Height is < 240 or > 4320
@@ -38,6 +40,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
             || !RenderProfiles.Labels.ContainsKey(settings.RenderProfile)
             || !new[] { "embedded", "standalone" }.Contains(settings.Presentation)
             || !IsValidFrontendFrameLimit(settings.FrontendFrameLimit)
+            || !new[] { "public", "private", "off" }.Contains(settings.IrUpload)
             || !PlayOptionCatalog.Arrangements.Contains(settings.Arrangement)
             || !new[] { "auto", "utf-8", "cp932", "gb18030" }.Contains(settings.Encoding))
             throw new InvalidDataException("Invalid LazerRave play settings.");

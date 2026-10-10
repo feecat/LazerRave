@@ -72,7 +72,7 @@ public sealed class RealtimeHub(Rooms rooms, Auth auth, Pg db) : Hub
     }
     public async Task<RoomView> SelectChart(Guid chartId, Guid packId, long version)
     {
-        var rows = await db.Query("SELECT c.* FROM charts c JOIN pack_charts pc ON pc.chart_id=c.id JOIN packs p ON p.id=pc.pack_id WHERE c.id=@chart AND p.id=@pack AND p.published LIMIT 1", ("chart", chartId), ("pack", packId));
+        var rows = await db.Query("SELECT c.*,b.title,b.artist,b.difficulty,b.keys,b.level FROM charts c JOIN pack_charts pc ON pc.chart_id=c.id JOIN packs p ON p.id=pc.pack_id JOIN ir_boards b ON b.id=c.id WHERE c.id=@chart AND p.id=@pack AND p.published LIMIT 1", ("chart", chartId), ("pack", packId));
         if (rows.Count == 0) throw new ApiError(404, "Select a published chart and pack.");
         var row = rows[0];
         var room = rooms.Select(UserId, new(chartId, (string)row["title"]!, (string)row["sha256"]!, (int)row["keys"]!, packId), version);

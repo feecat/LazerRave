@@ -18,6 +18,15 @@ public sealed class RankingTests
         Assert.Throws<ApiError>(() => Ranking.ValidateFilter("all", "all", 10001));
     }
     [Fact]
+    public void PlayTimeAcceptsOfflineRecordsButRejectsImpossibleDates()
+    {
+        Ranking.Validate(Valid with { PlayedAt = DateTimeOffset.UtcNow.AddDays(-30) });
+        Ranking.Validate(Valid with { PlayedAt = null });
+        Assert.Throws<ApiError>(() => Ranking.Validate(Valid with { PlayedAt = DateTimeOffset.UtcNow.AddDays(1) }));
+        Assert.Throws<ApiError>(() => Ranking.Validate(Valid with { PlayedAt = DateTimeOffset.MinValue }));
+    }
+
+    [Fact]
     public void AssistedAndAutoplayScoresAreExcluded()
     {
         Ranking.Validate(Valid);

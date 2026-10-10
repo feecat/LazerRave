@@ -47,6 +47,7 @@ if ($source -ne $destinationPath) {
         if ($LASTEXITCODE -ge 8) { throw "Resource copy failed: $folder ($LASTEXITCODE)" }
     }
 }
+New-Item -ItemType Directory -Force -Path (Join-Path $destinationPath 'BMS/Shared') | Out-Null
 if (!$PrepareOnly) { Copy-Item -LiteralPath $DesktopExecutable -Destination (Join-Path $destinationPath 'LazerRave.exe') -Force }
 Copy-Item -LiteralPath (Join-Path $EnginePackage 'OpenLR2_x64.exe') -Destination $destinationPath -Force
 Get-ChildItem -LiteralPath $EnginePackage -Filter '*.dll' -File |

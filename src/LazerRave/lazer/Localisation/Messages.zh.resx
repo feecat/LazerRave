@@ -443,4 +443,28 @@
   <data name="Reload native configuration" xml:space="preserve"><value>重新读取原生配置</value></data>
   <data name="Finish the current operation before reloading LR2 settings." xml:space="preserve"><value>请先完成当前操作，再重新读取 LR2 设置。</value></data>
   <data name="LR2 settings will be saved after the game exits." xml:space="preserve"><value>LR2 设置将在游戏退出后保存。</value></data>
+  <data name="Submit to private ranking" xml:space="preserve"><value>提交到私密排行</value></data>
+  <data name="Submit score (link-accessible)" xml:space="preserve"><value>提交成绩（链接可访问）</value></data>
+  <data name="Score upload" xml:space="preserve"><value>成绩上传</value></data>
+  <data name="Automatic (public)" xml:space="preserve"><value>自动上传</value></data>
+  <data name="Automatic (private)" xml:space="preserve"><value>自动上传（私有）</value></data>
+  <data name="Do not upload" xml:space="preserve"><value>不上传</value></data>
+  <data name="Score uploaded to IR." xml:space="preserve"><value>成绩已上传至 IR。</value></data>
+  <data name="Score uploaded to private IR." xml:space="preserve"><value>成绩已上传至私人 IR。</value></data>
+  <data name="IR upload failed. The local record is saved; submit it again from the score menu." xml:space="preserve"><value>IR 上传失败。本地成绩已保存，可从成绩菜单重新提交。</value></data>
+  <data name="Submit score to public IR" xml:space="preserve"><value>提交至公开 IR</value></data>
+  <data name="Default library" xml:space="preserve"><value>默认曲库</value></data>
+  <data name="Song packs install to BMS/Shared." xml:space="preserve"><value>曲包安装到 BMS/Shared。</value></data>
+  <data name="Song pack link" xml:space="preserve"><value>曲包链接</value></data>
+  <data name="Download song pack" xml:space="preserve"><value>下载曲包</value></data>
+  <data name="Song pack ZIP" xml:space="preserve"><value>曲包 ZIP</value></data>
+  <data name="Import song pack ZIP" xml:space="preserve"><value>导入曲包 ZIP</value></data>
+  <data name="Cancel transfer" xml:space="preserve"><value>取消传输</value></data>
+  <data name="Installed to BMS/Shared" xml:space="preserve"><value>已安装到 BMS/Shared</value></data>
+  <data name="Downloading" xml:space="preserve"><value>下载中</value></data>
+  <data name="Installing" xml:space="preserve"><value>安装中</value></data>
+  <data name="Verifying ZIP" xml:space="preserve"><value>校验 ZIP</value></data>
+  <data name="Browse" xml:space="preserve"><value>浏览</value></data>
+  <data name="Choose folder" xml:space="preserve"><value>选择文件夹</value></data>
+  <data name="Remove folder" xml:space="preserve"><value>移除文件夹</value></data>
 </root>

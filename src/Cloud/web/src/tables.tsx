@@ -3,10 +3,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Alert, Empty, Heading, useQuery } from './components';
 import { send } from './api';
+import { useAuth } from './state';
 
 interface DifficultyTable { id: number; name: string; symbol: string; description: string; sourceUrl: string | null; published: boolean; chartCount: number; levelCount: number }
-interface Level { level: string; chartCount: number }
-interface Entry { md5: string; level: string; title: string; artist: string; url: string | null; chartId: string | null; keys: number | null }
+interface Level { level: string; chartCount: number; played: number; cleared: number; hard: number; fullCombo: number }
+interface Entry { md5: string; level: string; title: string; artist: string; url: string | null; chartId: string | null; keys: number | null; bestClear: string | null }
 
 export function Tables() {
   const { t } = useI18n();
@@ -20,6 +21,7 @@ export function Tables() {
 
 export function TableDetail() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { tableId, level } = useParams();
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [tableId, level]);
@@ -29,9 +31,11 @@ export function TableDetail() {
   const { table, levels } = detail.data;
   return <><Heading eyebrow={t("DIFFICULTY TABLE")} title={table.name}>{table.description}</Heading>
     <div className="pack-detail-meta"><Link to="/tables">{t("All tables")}</Link><a href={'/api/tables/' + tableId + '/header.json'}>{t("Table header")}</a><a href={'/api/tables/' + tableId + '/data.json'}>{t("Chart data")}</a>{table.sourceUrl && <a href={table.sourceUrl} target="_blank" rel="noopener noreferrer">{t("Original source ↗")}</a>}</div>
+    {user && <section className="panel ir-history"><h2>{t('Your table progress')}</h2><div className="table-wrap"><table><thead><tr><th>{t('Level')}</th><th>{t('Played')}</th><th>{t('Cleared')}</th><th>HARD+</th><th>FC+</th></tr></thead><tbody>{levels.map(item => <tr key={item.level}><td>{table.symbol}{item.level}</td><td>{item.played} / {item.chartCount}</td><td>{item.cleared} / {item.chartCount}</td><td>{item.hard}</td><td>{item.fullCombo}</td></tr>)}</tbody></table></div></section>}
     <div className="ranking-layout"><aside className="panel"><h2>{t("Levels")}</h2><Link className={'chart-choice' + (!level ? ' selected' : '')} to={'/tables/' + tableId}>{t("All levels")}</Link>{levels.map(item => <Link className={'chart-choice' + (level === item.level ? ' selected' : '')} key={item.level} to={'/tables/' + tableId + '/' + encodeURIComponent(item.level)}><strong>{table.symbol}{item.level}</strong><span className="badge">{item.chartCount}</span></Link>)}</aside>
-      <section className="panel"><h2>{level ? table.symbol + level : t('All charts')}</h2><Alert message={entries.error} />{entries.data?.length ? <div className="table-wrap"><table><thead><tr><th>{t("Level")}</th><th>{t("Title / artist")}</th><th>{t("Keys")}</th><th>{t("Ranking / source")}</th></tr></thead><tbody>{entries.data.map(entry => <tr key={entry.md5}>
+      <section className="panel"><h2>{level ? table.symbol + level : t('All charts')}</h2><Alert message={entries.error} />{entries.data?.length ? <div className="table-wrap"><table><thead><tr><th>{t("Level")}</th><th>{t("Title / artist")}</th><th>{t("Keys")}</th>{user && <th>{t('Best clear')}</th>}<th>{t("Ranking / source")}</th></tr></thead><tbody>{entries.data.map(entry => <tr key={entry.md5}>
         <td><span className="badge">{table.symbol}{entry.level}</span></td><td><strong>{entry.title || t('Uncatalogued chart')}</strong><small className="table-secondary">{entry.artist}</small><small className="table-secondary mono">{entry.md5}</small></td><td>{entry.keys ? entry.keys + 'K' : '—'}</td>
+        {user && <td>{entry.bestClear ? <span className={'clear-lamp clear-' + entry.bestClear}>{entry.bestClear.toUpperCase()}</span> : '—'}</td>}
         <td>{entry.chartId ? <Link to={'/rankings/' + entry.chartId}>{t("Internet Ranking")}</Link> : <span className="muted">{t("Not in song catalog")}</span>}{entry.url && <a className="table-secondary" href={entry.url} target="_blank" rel="noopener noreferrer">{t("Chart source ↗")}</a>}</td>
       </tr>)}</tbody></table></div> : <Empty>{entries.loading ? t('Loading charts…') : t('No charts for this level.')}</Empty>}
       <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t("Previous")}</button><span>{page}</span><button disabled={(entries.data?.length ?? 0) < 50} onClick={() => setPage(value => value + 1)}>{t("Next")}</button></div></section>

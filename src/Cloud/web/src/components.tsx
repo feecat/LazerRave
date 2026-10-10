@@ -20,14 +20,15 @@ export function SignInPrompt() {
   const { t } = useI18n();
   return <Empty><p>{t("Sign in to join the community.")}</p><Link className="button primary" to="/login">{t("Sign in")}</Link></Empty>;
 }
-export function useQuery<T>(path: string) {
+export function useQuery<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
-    setLoading(true); setError('');
+    setData(null); setLoading(!!path); setError('');
+    if (!path) return;
     api<T>(path).then(value => { if (active) setData(value); }).catch(e => { if (active) { setError(e.message); setData(null); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [path, revision]);

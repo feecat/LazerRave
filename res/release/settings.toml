@@ -1,4 +1,5 @@
-directories = ["BMS"]
+ir_upload = "public"
+directories = ['.\BMS']
 display_name = "Player"
 window_width = 1920
 window_height = 1080

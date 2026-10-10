@@ -49,6 +49,10 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
     private void load(LazerRaveGame game)
     {
         AddSection(new FrontendAudioSection());
+        AddSection(new Section("Internet Ranking", FontAwesome.Solid.ChartBar, new Subsection("Internet Ranking", new Drawable[]
+        {
+            new IrUploadDropdown { LabelText = D("Score upload"), Items = new[] { "public", "private", "off" }, Current = settings.IrUpload },
+        })));
         AddSection(new Section("OpenLR2", FontAwesome.Solid.Keyboard, new Subsection("OpenLR2", new Drawable[]
         {
             new SettingsSlider<double> { LabelText = D("Scroll speed"), Current = settings.Speed, DisplayAsPercentage = false, KeyboardStep = .05f },
@@ -93,6 +97,16 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
         {
             Add(new AudioDevicesSettings());
             Add(new VolumeSettings());
+        }
+    }
+
+    private partial class IrUploadDropdown : SettingsDropdown<string>
+    {
+        protected override osu.Game.Graphics.UserInterface.OsuDropdown<string> CreateDropdown() => new IrUploadControl();
+        private partial class IrUploadControl : DropdownControl
+        {
+            protected override LocalisableString GenerateItemText(string item) => D(item switch
+            { "private" => "Automatic (private)", "off" => "Do not upload", _ => "Automatic (public)" });
         }
     }
 

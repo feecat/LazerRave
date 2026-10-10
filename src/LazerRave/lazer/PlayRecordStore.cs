@@ -68,7 +68,7 @@ internal sealed class PlayRecordStore(string root)
         }
         return records.OrderByDescending(record => record.PlayedAt).ToArray();
     }
-    public PlayRecord? Save(Guid run, string hash, Chart chart, string player, FrontendSettings settings, GameplaySnapshot score)
+    public PlayRecord? Save(Guid run, string hash, Chart chart, string player, FrontendSettings settings, GameplaySnapshot score, DateTimeOffset? playedAt = null)
     {
         if (!score.Finished || score.Aborted) return null;
         if (!IsHash(hash)) throw new ArgumentException("Invalid chart hash.");
@@ -78,7 +78,7 @@ internal sealed class PlayRecordStore(string root)
         string? replayError = null;
         try { if (File.Exists(replay)) fingerprint = ReplayFile.Validate(replay); }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException) { replayError = error.Message; }
-        var record = new PlayRecord(run, hash, chart.Title, player, DateTimeOffset.UtcNow, score, settings.Arrangement, gauge, fingerprint is null ? null : replay)
+        var record = new PlayRecord(run, hash, chart.Title, player, (playedAt ?? DateTimeOffset.UtcNow).ToUniversalTime(), score, settings.Arrangement, gauge, fingerprint is null ? null : replay)
         { ReplayHash = fingerprint?.Hash, ReplaySize = fingerprint?.Size, ReplayError = replayError, Speed = settings.Speed, Offset = settings.Offset, PlayOptions = new Dictionary<string, int>(settings.PlayOptions) };
         var document = new XDocument(new XElement("play", new XAttribute("version", 1),
             new XAttribute("id", run), new XAttribute("title", chart.Title), new XAttribute("player", player),
