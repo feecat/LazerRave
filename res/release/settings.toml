@@ -1,8 +1,8 @@
 ir_upload = "public"
 directories = ['.\BMS']
 display_name = "Player"
-window_width = 1920
-window_height = 1080
+window_width = 1024
+window_height = 768
 frontend_frame_limit = "240"
 game_frame_limit = 240
 game_render_profile = "discard"

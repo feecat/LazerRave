@@ -113,9 +113,9 @@ internal static class AdapterChecks
         Directory.CreateDirectory(fixtures);
         var file = Path.Combine(fixtures, "settings.toml");
         var defaults = FrontendSettings.Read(file);
-        if (!defaults.Roots.SequenceEqual(new[] { @".\BMS" }) || defaults.Width != 1920 || defaults.Height != 1080
+        if (!defaults.Roots.SequenceEqual(new[] { @".\BMS" }) || defaults.Width != 1024 || defaults.Height != 768
             || defaults.FrameLimit != 240 || defaults.FrontendFrameLimit != "240" || defaults.RenderProfile != "discard" || defaults.Presentation != "embedded")
-            throw new InvalidDataException("Fresh installations must use BMS, 1920x1080, 240 FPS and embedded E mode.");
+            throw new InvalidDataException("Fresh installations must use BMS, a 1024x768 game viewport, 240 FPS and embedded E mode.");
         var second = Path.Combine(fixtures, "Another library");
         Directory.CreateDirectory(second);
         var relative = Path.GetRelativePath(AppContext.BaseDirectory, second);

@@ -2,7 +2,7 @@
 <config>
   <system>
     <screenmode>1</screenmode><vsync>0</vsync>
-    <windowsize_x>1920</windowsize_x><windowsize_y>1080</windowsize_y>
+    <windowsize_x>1024</windowsize_x><windowsize_y>768</windowsize_y>
   </system>
   <jukebox><path>BMS</path><path>Shared</path></jukebox>
   <player><id>Player</id><name>Player</name><pass></pass><irid></irid><irpass></irpass></player>
