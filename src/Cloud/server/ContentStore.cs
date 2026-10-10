@@ -41,6 +41,7 @@ public sealed class ContentStore(Pg db, CloudOptions options)
             var id = Guid.NewGuid();
             await using var connection = await db.Open();
             await using var tx = await connection.BeginTransactionAsync(cancellation);
+            await SongClassificationStore.Lock(connection, tx, cancellation);
             await using (var command = new NpgsqlCommand("INSERT INTO packs(id,title,description,file_key,sha256,size_bytes,uploader_id) VALUES(@id,@title,@description,@key,@sha,@size,@user)", connection, tx))
             {
                 Pg.Add(command, ("id", id), ("title", title), ("description", description), ("key", key), ("sha", sha), ("size", file.Length), ("user", uploader));
@@ -70,6 +71,7 @@ public sealed class ContentStore(Pg db, CloudOptions options)
                 Pg.Add(audit, ("user", uploader), ("target", id.ToString()));
                 await audit.ExecuteNonQueryAsync(cancellation);
             }
+            await SongClassificationStore.Refresh(connection, tx, cancellation);
             await tx.CommitAsync(cancellation);
             committed = true;
             return id;

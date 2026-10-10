@@ -12,7 +12,7 @@ public sealed record ScoreReviewInput(bool Withdrawn, string Reason);
 public sealed class ChartRegistry(Pg db)
 {
     public const string Readable = "(b.visibility IN ('public','unlisted') OR (b.visibility='restricted' AND (b.owner_id=@viewer OR EXISTS(SELECT 1 FROM ir_board_members m WHERE m.board_id=b.id AND m.user_id=@viewer))))";
-    public const string Fields = "b.id,b.chart_id,c.sha256,c.md5,b.title,b.artist,b.difficulty,b.keys,b.level,b.bpm,b.length_ms,b.visibility,b.approved,b.owner_id,b.created_at,(SELECT pc.pack_id FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published ORDER BY p.created_at,p.id LIMIT 1) AS pack_id";
+    public const string Fields = "b.id,b.chart_id,c.sha256,c.md5,b.title,b.artist,b.difficulty,b.display_difficulty,b.song_key,b.song_title,b.keys,b.level,b.bpm,b.length_ms,b.visibility,b.approved,b.owner_id,b.created_at,(SELECT pc.pack_id FROM pack_charts pc JOIN packs p ON p.id=pc.pack_id WHERE pc.chart_id=c.id AND p.published ORDER BY p.created_at,p.id LIMIT 1) AS pack_id";
     public static Guid Viewer(HttpContext context) => context.User.Identity?.IsAuthenticated == true ? Auth.Id(context.User) : Guid.Empty;
     public static ChartRegistration Validate(ChartRegistration input)
     {
@@ -35,6 +35,7 @@ public sealed class ChartRegistry(Pg db)
         input = Validate(input);
         await using var connection = await db.Open();
         await using var transaction = await connection.BeginTransactionAsync();
+        await SongClassificationStore.Lock(connection, transaction);
         await using var chartCommand = new NpgsqlCommand("""
             INSERT INTO charts(id,sha256,md5,title,artist,difficulty,keys,level) VALUES(@id,@sha,@md5,@title,@artist,@difficulty,@keys,@level)
             ON CONFLICT(sha256) DO UPDATE SET md5=CASE WHEN btrim(charts.md5)='' THEN EXCLUDED.md5 ELSE charts.md5 END RETURNING id,md5
@@ -53,7 +54,8 @@ public sealed class ChartRegistry(Pg db)
         Pg.Add(boardCommand, ("id", restricted ? Guid.NewGuid() : chartId), ("chart", chartId), ("scope", scope), ("owner", owner), ("visibility", input.Visibility),
             ("title", input.Title), ("artist", input.Artist), ("difficulty", input.Difficulty), ("keys", input.Keys), ("level", input.Level),
             ("bpm", input.Bpm ?? 0), ("length", input.LengthMs ?? 0));
-        await boardCommand.ExecuteNonQueryAsync();
+        if (await boardCommand.ExecuteNonQueryAsync() > 0)
+            await SongClassificationStore.Refresh(connection, transaction);
         await using var read = new NpgsqlCommand($"SELECT {Fields} FROM ir_boards b JOIN charts c ON c.id=b.chart_id WHERE b.chart_id=@chart AND b.scope_key=@scope AND {Readable}", connection, transaction);
         Pg.Add(read, ("chart", chartId), ("scope", scope), ("viewer", owner));
         var result = (await Pg.Read(read)).FirstOrDefault() ?? throw new ApiError(404, "Chart not found.");

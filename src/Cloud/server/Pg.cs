@@ -42,7 +42,7 @@ public sealed class Pg(NpgsqlDataSource source)
         await using var transaction = await connection.BeginTransactionAsync();
         await using (var guard = new NpgsqlCommand("SELECT pg_advisory_xact_lock(7341206); CREATE TABLE IF NOT EXISTS schema_migrations(version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());", connection, transaction))
             await guard.ExecuteNonQueryAsync();
-        foreach (var (version, name) in new[] { (1, "001_initial.sql"), (2, "002_room_content.sql"), (3, "003_ir_tables.sql"), (4, "004_transactional_user_uid.sql"), (5, "005_score_details.sql"), (6, "006_independent_ir.sql"), (7, "007_ir_upload_policy.sql") })
+        foreach (var (version, name) in new[] { (1, "001_initial.sql"), (2, "002_room_content.sql"), (3, "003_ir_tables.sql"), (4, "004_transactional_user_uid.sql"), (5, "005_score_details.sql"), (6, "006_independent_ir.sql"), (7, "007_ir_upload_policy.sql"), (8, "008_song_groups.sql"), (9, "009_contextual_song_groups.sql") })
         {
             await using var check = new NpgsqlCommand("SELECT count(*) FROM schema_migrations WHERE version=@version", connection, transaction);
             Pg.Add(check, ("version", version));

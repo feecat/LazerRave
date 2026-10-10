@@ -26,6 +26,8 @@ builder.Services.AddSingleton<Pg>(); builder.Services.AddSingleton<Auth>(); buil
 builder.Services.AddSingleton<ChartRegistry>(); builder.Services.AddSingleton<IrRecords>(); builder.Services.AddSingleton<Ranking>(); builder.Services.AddSingleton<Rooms>(); builder.Services.AddSingleton<HubGuard>();
 builder.Services.AddSingleton<RoomContentStore>();
 builder.Services.AddSingleton<DifficultyTables>();
+builder.Services.AddSingleton<SongPacks>();
+builder.Services.AddSingleton<SongGroups>();
 builder.Services.AddAuthentication("session").AddScheme<AuthenticationSchemeOptions, SessionHandler>("session", _ => { });
 builder.Services.AddAuthorization(options => options.AddPolicy("admin", policy => policy.RequireRole("admin")));
 builder.Services.AddSignalR(options =>
@@ -68,6 +70,7 @@ var app = builder.Build();
 Directory.CreateDirectory(Path.Combine(Path.GetFullPath(cloud.StoragePath), "tmp"));
 var db = app.Services.GetRequiredService<Pg>();
 await db.Migrate();
+await SongClassificationStore.Refresh(db);
 if (args is ["--grant-admin", var username])
 {
     var rows = await db.Query("UPDATE users SET role='admin' WHERE lower(username)=lower(@name) RETURNING username", ("name", username));
@@ -76,8 +79,14 @@ if (args is ["--grant-admin", var username])
     return;
 }
 if (args is ["--migrate"]) { Console.WriteLine("Database migration complete."); return; }
+if (args is ["--import-pack", var packAdmin, "--zip", var packZip, "--title", var packTitle])
+{
+    var id = await app.Services.GetRequiredService<SongPacks>().Import(packAdmin, packZip, packTitle, CancellationToken.None);
+    Console.WriteLine("Published pack: " + id);
+    return;
+}
 if (args is ["--cleanup-content"]) { await app.Services.GetRequiredService<RoomContentStore>().Cleanup(CancellationToken.None); Console.WriteLine("Expired room content removed."); return; }
-if (args.Length > 0) throw new InvalidOperationException("Use --migrate, --cleanup-content or --grant-admin username, or no arguments to serve.");
+if (args.Length > 0) throw new InvalidOperationException("Use --migrate, --cleanup-content, --grant-admin username, --import-pack username --zip path --title title, or no arguments to serve.");
 await db.Query("UPDATE matches SET state='interrupted',finished_at=now() WHERE state IN ('countdown','playing')");
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>
@@ -180,6 +189,7 @@ app.MapGet("/api/users/{id:guid}/avatar", async (Guid id, Pg pg, ContentStore co
     return Results.File(content.FilePath(key), key.EndsWith(".png") ? "image/png" : "image/jpeg");
 });
 app.MapGet("/api/packs", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,title,description,sha256,size_bytes,created_at FROM packs WHERE published ORDER BY created_at DESC LIMIT 200")));
+app.MapGet("/api/packs/catalog", (string? q, int? keys, string? sort, int? page, SongPacks packs) => packs.Catalog(q, keys ?? 0, sort ?? "title", page ?? 1));
 app.MapGet("/api/packs/{id:guid}", async (Guid id, Pg pg, HttpContext context) =>
 {
     var rows = await pg.Query("SELECT id,title,description,sha256,size_bytes,published,created_at FROM packs WHERE id=@id AND (published OR @admin)", ("id", id), ("admin", context.User.IsInRole("admin")));
@@ -189,11 +199,14 @@ app.MapGet("/api/packs/{id:guid}", async (Guid id, Pg pg, HttpContext context) =
 });
 app.MapGet("/api/packs/{id:guid}/download", async (Guid id, Pg pg, ContentStore content, HttpContext context) =>
 {
-    var rows = await pg.Query("SELECT file_key,sha256 FROM packs WHERE id=@id AND (published OR @admin)", ("id", id), ("admin", context.User.IsInRole("admin")));
+    var rows = await pg.Query("SELECT file_key,sha256,title FROM packs WHERE id=@id AND (published OR @admin)", ("id", id), ("admin", context.User.IsInRole("admin")));
     if (rows.Count == 0 || !File.Exists(content.FilePath((string)rows[0]["fileKey"]!))) throw new ApiError(404, "Pack not found.");
     context.Response.Headers.ETag = $"\"{rows[0]["sha256"]}\"";
-    return Results.File(content.FilePath((string)rows[0]["fileKey"]!), "application/zip", $"LazerRave-{id}.zip", enableRangeProcessing: true);
+    return Results.File(content.FilePath((string)rows[0]["fileKey"]!), "application/zip", SongPacks.DownloadName((string)rows[0]["title"]!, id), enableRangeProcessing: true);
 });
+app.MapGet("/api/songs", (string? q, int? keys, int? page, int? minimum, int? maximum, string? sort, string? difficulty, SongGroups songs) => songs.List(q, keys, page ?? 1, minimum, maximum, sort ?? "newest", difficulty));
+app.MapGet("/api/songs/difficulties", (SongGroups songs) => songs.Difficulties());
+app.MapGet("/api/songs/{key}", (string key, SongGroups songs) => songs.Require(key));
 app.MapGet("/api/charts", (string? q, int? keys, int? page, bool? mine, int? minimum, int? maximum, string? sort, string? difficulty, HttpContext context, ChartRegistry registry) => registry.List(q, keys, page ?? 1, ChartRegistry.Viewer(context), mine ?? false, minimum, maximum, sort ?? "newest", difficulty));
 app.MapGet("/api/charts/resolve", (string sha256, HttpContext context, ChartRegistry registry) => registry.Resolve(sha256, ChartRegistry.Viewer(context)));
 app.MapGet("/api/charts/{id:guid}", (Guid id, HttpContext context, ChartRegistry registry) => registry.Require(id, ChartRegistry.Viewer(context)));
@@ -223,12 +236,9 @@ admin.MapGet("/charts", (string? q, int? page, ChartRegistry registry) => regist
 admin.MapGet("/overview", async (Pg pg) => Results.Ok((await pg.Query("SELECT (SELECT count(*) FROM users) AS users,(SELECT count(*) FROM packs) AS packs,(SELECT count(*) FROM scores) AS scores,(SELECT count(*) FROM matches) AS matches")).Single()));
 admin.MapGet("/packs", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,title,description,size_bytes,published,created_at FROM packs ORDER BY created_at DESC LIMIT 200")));
 admin.MapPost("/packs", async (HttpContext context, ContentStore content) => Results.Ok(new { id = await content.UploadPack(context.Request, Auth.Id(context.User), context.RequestAborted) }));
-admin.MapPut("/packs/{id:guid}/publication", async (Guid id, PublicationInput input, HttpContext context, Pg pg) =>
+admin.MapPut("/packs/{id:guid}/publication", async (Guid id, PublicationInput input, HttpContext context, SongPacks packs) =>
 {
-    var rows = await pg.Query("UPDATE packs SET published=@published WHERE id=@id RETURNING id", ("id", id), ("published", input.Published));
-    if (rows.Count == 0) throw new ApiError(404, "Pack not found.");
-    if (input.Published) await pg.Query("UPDATE ir_boards b SET visibility='public',approved=true WHERE b.scope_key='community' AND (b.visibility IN ('public','unlisted') OR (b.visibility='hidden' AND NOT b.moderated_hidden)) AND EXISTS(SELECT 1 FROM pack_charts pc WHERE pc.pack_id=@id AND pc.chart_id=b.chart_id)", ("id", id));
-    await pg.Query("INSERT INTO audit_log(user_id,action,target) VALUES(@user,@action,@target)", ("user", Auth.Id(context.User)), ("action", input.Published ? "pack.publish" : "pack.unpublish"), ("target", id.ToString()));
+    await packs.Publish(id, Auth.Id(context.User), input.Published);
     return Results.NoContent();
 });
 admin.MapGet("/users", async (Pg pg) => Results.Ok(await pg.Query("SELECT id,uid,username,display_name,role,disabled,created_at FROM users ORDER BY uid DESC LIMIT 200")));
