@@ -1,4 +1,8 @@
 export const chinese: Record<string, string> = {
+  'Pagination': '分页', 'Page': '页码', 'Page number': '页码输入', 'Edit page number': '修改页码', 'Click to edit page number': '点击修改页码',
+  'Song name': '曲名', 'Artist': '作者', 'Size': '大小', 'Added on': '添加日期',
+  'Search songs': '搜索曲目', 'Newest songs': '最新曲目', 'Songs': '曲目', 'Choose a song, then select its key mode and difficulty.': '选择曲目后，可切换键数和难度查看对应排行。',
+  'Loading songs…': '正在加载曲目…', 'No matching songs.': '没有符合条件的曲目。', 'Song not found.': '曲目不存在。',
   'Sort by': '排序', 'Newest charts': '最新谱面', 'Latest plays': '最新游玩', 'Most played': '游玩次数最多',
   'Level: low to high': '难度从低到高', 'Level: high to low': '难度从高到低', 'All difficulties': '全部难度类型',
   'Latest play': '最近游玩', 'Plays': '游玩次数', 'Uploaded at': '上传时间',

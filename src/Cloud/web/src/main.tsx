@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './state';
 import { Avatar, Empty } from './components';
 import { api } from './api';
 import { Home, Authentication, ChangePassword, Profile, Packs, PackDetail, Admin } from './pages';
-import { Rankings, MyRankings, ScorePage } from './RankingPages';
+import { Rankings, SongRanking, MyRankings, ScorePage } from './RankingPages';
 import { Tables, TableDetail } from './tables';
 import { Icon, type IconName } from './Icon';
 import { Downloads } from './Downloads';
@@ -39,7 +39,7 @@ function Shell() {
       <Route path="/" element={<Home />} /><Route path="/login" element={<Authentication />} /><Route path="/register" element={<Authentication register />} />
       <Route path="/download" element={<Downloads />} /><Route path="/account/password" element={<ChangePassword />} />
       <Route path="/players/:username" element={<Profile />} /><Route path="/players/id/:uid" element={<Profile />} /><Route path="/tables" element={<Tables />} /><Route path="/tables/:tableId" element={<TableDetail />} /><Route path="/tables/:tableId/:level" element={<TableDetail />} /><Route path="/packs" element={<Packs />} /><Route path="/packs/:id" element={<PackDetail />} />
-      <Route path="/rankings/mine" element={<MyRankings />} /><Route path="/scores/:id" element={<ScorePage />} /><Route path="/rankings" element={<Rankings />} /><Route path="/rankings/:chartId" element={<Rankings />} /><Route path="/admin" element={<Admin />} />
+      <Route path="/rankings/mine" element={<MyRankings />} /><Route path="/scores/:id" element={<ScorePage />} /><Route path="/rankings" element={<Rankings />} /><Route path="/rankings/songs/:songKey" element={<SongRanking />} /><Route path="/rankings/:chartId" element={<Rankings />} /><Route path="/admin" element={<Admin />} />
       <Route path="*" element={<Empty>{t("Page not found. ")}<Link to="/">{t("Return home")}</Link></Empty>} />
     </Routes>}</main>
     <footer className="footer"><Link className="footer-brand" to="/">LazerRave</Link><span>{t("BMS. One chart, many possibilities.")}</span><Link to="/download">{t("Download")}</Link><a href={repositoryUrl} target="_blank" rel="noopener noreferrer">GitHub</a><span className="connection-label">LazerRave.com</span></footer>

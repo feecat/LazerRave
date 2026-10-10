@@ -95,9 +95,9 @@ test('Public website, history fallback, sign-in and mobile navigation', async ({
   await expect(page.getByRole('heading', { name: 'Find your rhythm. Raise the bar.' })).toBeVisible();
   await page.screenshot({ path: fileURLToPath(new URL('../../../../out/reports/cloud-test/home.png', import.meta.url)), fullPage: true });
   await page.getByRole('navigation').getByRole('link', { name: 'Rankings' }).click();
-  await expect(page.getByRole('heading', { name: 'Charts', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Songs', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Charts', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Songs', exact: true })).toBeVisible();
   await page.goto('/login');
   await page.getByLabel('Username or email').fill('missing_player');
   await page.getByLabel('Password').fill('invalid-password');

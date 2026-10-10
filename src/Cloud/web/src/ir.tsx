@@ -1,16 +1,15 @@
 import { useI18n } from './i18n';
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Avatar, useQuery } from './components';
+import { Alert, Avatar } from './components';
 import type { RankingSummary, Score } from './types';
 
 export function playTime(score: Score, locale: string): string {
   return score.playedAt ? new Date(score.playedAt).toLocaleString(locale) : "—";
 }
 
-export function IrOverview({ chartId, arrangement, gauge, verified }: { chartId: string; arrangement: string; gauge: string; verified: boolean }) {
+export function IrOverview({ summary }: { summary: { data: RankingSummary | null; error: string; loading: boolean } }) {
   const { t, locale } = useI18n();
-  const summary = useQuery<RankingSummary>(`/rankings/${chartId}/summary?` + new URLSearchParams({ arrangement, gauge, verified: String(verified) }));
   return <section className="ir-overview" aria-label={t('Ranking overview')}>
     <Alert message={summary.error} />
     {!summary.loading && summary.data && <>

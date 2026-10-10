@@ -6,14 +6,15 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, date, send, size } from './api';
 import { Alert, Avatar, Empty, Heading, SignInPrompt, useQuery } from './components';
 import { useAuth } from './state';
-import type { Chart, Pack, Score, User } from './types';
+import type { Chart, Pack, PackCatalog, PackCatalogEntry, Score, User } from './types';
 import { DifficultyTableAdmin } from './tables';
 import { RhythmVisual } from './RhythmVisual';
 import { Icon } from './Icon';
+import { Pagination } from './Pagination';
 
 export function Home() {
   const { t } = useI18n();
-  const { data: packs, error } = useQuery<Pack[]>('/packs');
+  const { data: packs, error } = useQuery<PackCatalog>('/packs/catalog?sort=newest');
   return <>
     <section className="hero">
       <div className="hero-content">
@@ -25,7 +26,7 @@ export function Home() {
       <RhythmVisual />
     </section>
     <section className="feature-grid"><Link to="/rankings" className="feature"><span className="feature-symbol">01</span><h2>{t("Every point counts")}</h2><p>{t("Chart rankings, clear records, and your next personal best.")}</p><span>{t("See the rankings ↗")}</span></Link><Link to="/packs" className="feature"><span className="feature-symbol">02</span><h2>{t("A new discovery")}</h2><p>{t("Browse the catalog and download a pack for your next session.")}</p><span>{t("Browse song packs ↗")}</span></Link><Link to="/tables" className="feature"><span className="feature-symbol">03</span><h2>{t("Find your next challenge")}</h2><p>{t("Browse charts by difficulty level.")}</p><span>{t("Explore difficulty tables ↗")}</span></Link></section>
-    <section><div className="section-title"><div><span className="eyebrow">{t("THE CATALOG")}</span><h2>{t("Recently added")}</h2></div><Link to="/packs">{t("View all packs →")}</Link></div><Alert message={error} />{packs?.length ? <div className="pack-grid">{packs.slice(0, 3).map(pack => <PackCard key={pack.id} pack={pack} />)}</div> : <Empty>{t("Song packs will appear here when published.")}</Empty>}</section>
+    <section><div className="section-title"><div><span className="eyebrow">{t("THE CATALOG")}</span><h2>{t("Recently added")}</h2></div><Link to="/packs">{t("View all packs →")}</Link></div><Alert message={error} />{packs?.items.length ? <PackList packs={packs.items.slice(0, 3)} /> : <Empty>{t("Song packs will appear here when published.")}</Empty>}</section>
   </>;
 }
 
@@ -83,15 +84,44 @@ export function Profile() {
   return <><div className="profile-banner"><span className="eyebrow">{t("PLAYER PROFILE")}</span><div className="profile-identity"><Avatar user={user} large /><div><h1>{user.displayName}</h1><span className="muted">@{user.username} · UID <Link to={'/players/id/' + user.uid}>{user.uid}</Link> {t(" · Joined ")}{date(user.createdAt, locale)}</span><p>{user.signature || '—'}</p></div>{viewer?.id === user.id && <div className="profile-edit"><button className="button secondary" onClick={() => setEditing(value => !value)}>{t("Edit profile")}</button> <Link className="button secondary" to="/account/password">{t("Change password")}</Link></div>}</div></div><Alert message={notice} />{editing && <form className="panel profile-form" onSubmit={save}><label>{t("Display name")}<input name="displayName" required maxLength={40} defaultValue={user.displayName} /></label><label>{t("Signature")}<input name="signature" maxLength={200} defaultValue={user.signature} /></label><label>{t("About you")}<textarea name="bio" maxLength={2000} defaultValue={user.bio} rows={5} /></label><label>{t("Avatar · PNG or JPEG, up to 1 MiB")}<input name="avatar" type="file" accept="image/png,image/jpeg" /></label><button disabled={busy} className="button primary">{busy ? t('Saving…') : t('Save changes')}</button></form>}<div className="profile-columns"><section className="panel"><span className="eyebrow">{t("ABOUT")}</span><p className="biography">{user.bio || t('This player has not added a biography.')}</p></section><section className="panel"><div className="section-title"><h2>{t("Recent scores")}</h2><span className="badge">{scores.length}</span></div>{scores.length ? <div className="score-list">{scores.map(score => <Link key={score.id} to={'/rankings/' + score.chartId}><span><strong>{score.title}</strong><small>{score.clear} · {playTime(score, locale)}</small></span><strong className="score-number">{score.exScore.toLocaleString(locale)}</strong><span className="badge">{score.verified ? t('Verified') : t('Submitted')}</span></Link>)}</div> : <Empty>{t("No scores yet.")}</Empty>}</section></div><PlayerRecords key={user.uid} uid={user.uid} /><RivalCompare key={"compare-" + user.uid} uid={user.uid} /></>;
 }
 
-function PackCard({ pack }: { pack: Pack }) {
+function PackList({ packs }: { packs: PackCatalogEntry[] }) {
   const { t, locale } = useI18n();
-  return <Link className="pack-card" to={'/packs/' + pack.id}><div className="pack-art"><span>LR</span><i /></div><div className="pack-card-content"><span className="badge">{t("BMS COLLECTION")}</span><h3>{pack.title}</h3><p>{pack.description || t('A collection for your next session.')}</p><div className="card-meta"><span>{size(pack.sizeBytes)}</span><span>{date(pack.createdAt, locale)}</span></div></div></Link>;
+  return <div className="table-wrap pack-list"><table className="pack-list-table" aria-label={t('SONG PACKS')}>
+    <colgroup><col className="pack-name-column" /><col className="pack-keys-column" /><col className="pack-level-column" /><col className="pack-count-column" /><col className="pack-size-column" /><col className="pack-date-column" /><col className="pack-download-column" /></colgroup>
+    <thead><tr><th scope="col">{t('Song name')}</th><th scope="col">{t('Keys')}</th><th scope="col">{t('Level')}</th><th scope="col" className="pack-numeric">{t('Charts')}</th><th scope="col" className="pack-numeric">{t('Size')}</th><th scope="col">{t('Added on')}</th><th scope="col">{t('Download')}</th></tr></thead>
+    <tbody>{packs.map(pack => <tr key={pack.id}>
+      <th scope="row" className="pack-list-name"><Link title={pack.title} to={'/packs/' + pack.id}>{pack.title}</Link></th>
+      <td><span className="pack-list-keys" title={pack.keys.map(key => key + 'K').join(' / ')}>{pack.keys.map(key => key + 'K').join(' / ') || '—'}</span></td>
+      <td className="pack-list-level">{pack.minimumLevel === pack.maximumLevel ? pack.minimumLevel : `${pack.minimumLevel}–${pack.maximumLevel}`}</td>
+      <td className="pack-numeric">{pack.chartCount.toLocaleString(locale)}</td><td className="pack-numeric">{size(pack.sizeBytes)}</td>
+      <td className="pack-list-date"><time dateTime={pack.createdAt}>{new Date(pack.createdAt).toLocaleDateString(locale)}</time></td>
+      <td><a className="pack-list-download" href={'/api/packs/' + pack.id + '/download'} title={t('Download ZIP ↓')} aria-label={t('Download ZIP ↓') + ' — ' + pack.title}><Icon name="download" size={18} /></a></td>
+    </tr>)}</tbody>
+  </table></div>;
 }
 export function Packs() {
-  const { t } = useI18n();
-  const { data, error, loading } = useQuery<Pack[]>('/packs'); const [query, setQuery] = useState('');
-  const filtered = data?.filter(pack => (pack.title + ' ' + pack.description).toLowerCase().includes(query.toLowerCase())) ?? [];
-  return <><Heading eyebrow={t("SONG PACKS")} title={t("Find your next favorite")}>{t("A curated collection of charts, ready for your library.")}</Heading><div className="filter-bar"><input aria-label={t("Search song packs")} placeholder={t("Search song packs…")} value={query} onChange={event => setQuery(event.target.value)} /><span>{filtered.length} {t(" packs")}</span></div><Alert message={error} />{loading ? <Empty>{t("Loading packs…")}</Empty> : filtered.length ? <div className="pack-grid">{filtered.map(pack => <PackCard key={pack.id} pack={pack} />)}</div> : <Empty>{t("No song packs found.")}</Empty>}</>;
+  const { t, locale } = useI18n();
+  const [params, setParams] = useSearchParams();
+  const page = Math.max(1, Math.min(10000, Math.floor(Number(params.get('page'))) || 1));
+  const query = new URLSearchParams({ q: params.get('q') ?? '', keys: params.get('keys') ?? '0', sort: params.get('sort') ?? 'title', page: String(page) }).toString();
+  const [debounced, setDebounced] = useState(query);
+  useEffect(() => { const timeout = setTimeout(() => setDebounced(query), 250); return () => clearTimeout(timeout); }, [query]);
+  const { data, error, loading } = useQuery<PackCatalog>('/packs/catalog?' + debounced);
+  function change(name: string, value: string) {
+    const next = new URLSearchParams(params);
+    if (value) next.set(name, value); else next.delete(name);
+    if (name !== 'page') next.delete('page');
+    setParams(next, { replace: name !== 'page' });
+  }
+  return <><Heading eyebrow={t('SONG PACKS')} title={t('Find your next favorite')}>{t('A curated collection of charts, ready for your library.')}</Heading>
+    <section className="panel pack-directory-panel"><div className="filter-bar pack-directory-filters">
+      <label>{t('Search song packs')}<input placeholder={t('Search song packs…')} value={params.get('q') ?? ''} maxLength={120} onChange={event => change('q', event.target.value)} /></label>
+      <label>{t('Key mode')}<select aria-label={t('Key mode')} value={params.get('keys') ?? '0'} onChange={event => change('keys', event.target.value)}><option value="0">{t('All key modes')}</option>{[5, 7, 9, 10, 14].map(key => <option key={key} value={key}>{key}Key</option>)}</select></label>
+      <label>{t('Sort by')}<select aria-label={t('Sort by')} value={params.get('sort') ?? 'title'} onChange={event => change('sort', event.target.value)}>{[['title', 'Title'], ['newest', 'Recently added'], ['difficulty', 'Level: low to high']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+    </div><Alert message={error} />{data && <div className="ir-directory-summary"><span>{data.total.toLocaleString(locale)} {t('packs')}</span></div>}
+      {loading ? <Empty>{t('Loading packs…')}</Empty> : data?.items.length ? <PackList packs={data.items} /> : <Empty>{t('No song packs found.')}</Empty>}
+      <Pagination page={page} totalPages={data ? data.total / data.pageSize : undefined} loading={loading || query !== debounced} change={value => change('page', value)} />
+    </section></>;
 }
 export function PackDetail() {
   const { t, locale } = useI18n();

@@ -5,7 +5,8 @@ import { Alert, Avatar, Empty, Heading, SignInPrompt, useQuery } from './compone
 import { useAuth } from './state';
 import { useI18n } from './i18n';
 import { IrOverview, IrScoreTable, playTime } from './ir';
-import type { Chart, Score } from './types';
+import type { Chart, RankingSummary, Score, SongDirectory, SongDetail } from './types';
+import { Pagination } from './Pagination';
 
 function useFilters() {
   const [params, setParams] = useSearchParams();
@@ -15,11 +16,7 @@ function useFilters() {
     if (name !== 'page') next.delete('page');
     setParams(next, { replace: name !== 'page' });
   }
-  return { params, set, page: Math.max(1, Math.min(10000, Number(params.get('page')) || 1)) };
-}
-function Pagination({ page, next, change }: { page: number; next: boolean; change: (value: string) => void }) {
-  const { t } = useI18n();
-  return <div className="pagination"><button disabled={page === 1} onClick={() => change(String(page - 1))}>{t('Previous')}</button><span>{page}</span><button disabled={!next} onClick={() => change(String(page + 1))}>{t('Next')}</button></div>;
+  return { params, set, page: Math.max(1, Math.min(10000, Math.floor(Number(params.get('page'))) || 1)) };
 }
 interface Comparison { chartId: string; title: string; keys: number; level: number; scoreId: string; rivalScoreId: string; exScore: number; rivalExScore: number; difference: number; minMisses: number; rivalMinMisses: number; lamp: number; rivalLamp: number }
 export function RivalCompare({ uid }: { uid: number }) {
@@ -49,23 +46,79 @@ function ChartDirectory() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const { params, set, page } = useFilters();
-  const query = new URLSearchParams({ q: params.get('q') ?? '', keys: params.get('keys') ?? '7', page: String(page), minimum: params.get('minimum') ?? '0', maximum: params.get('maximum') ?? '999', sort: params.get('sort') ?? 'newest', difficulty: params.get('difficulty') ?? '' });
+  const query = new URLSearchParams({ q: params.get('q') ?? '', keys: params.get('keys') ?? 'all', page: String(page), minimum: params.get('minimum') ?? '0', maximum: params.get('maximum') ?? '999', sort: params.get('sort') ?? 'newest', difficulty: params.get('difficulty') ?? '' });
   if (!query.get('keys') || query.get('keys') === 'all') query.delete('keys');
   const [debounced, setDebounced] = useState(query.toString());
   const search = query.toString();
   useEffect(() => { const timeout = setTimeout(() => setDebounced(search), 250); return () => clearTimeout(timeout); }, [search]);
-  const charts = useQuery<Chart[]>('/charts?' + debounced);
-  return <><Heading eyebrow="INTERNET RANKING" title={t('Charts')}>{t('Compare each player’s best EX SCORE for the same chart.')}</Heading>
+  const charts = useQuery<SongDirectory>('/songs?' + debounced);
+  const difficulties = useQuery<string[]>('/songs/difficulties');
+  return <><Heading eyebrow="INTERNET RANKING" title={t('Songs')}>{t('Choose a song, then select its key mode and difficulty.')}</Heading>
     <div className="ir-directory-actions">{user && <Link className="button secondary" to="/rankings/mine">{t('My rankings')}</Link>}<Link to="/tables">{t('Difficulty tables')}</Link></div>
-    <section className="panel"><div className="filter-bar ir-directory-filters"><label>{t('Search charts')}<input value={params.get('q') ?? ''} maxLength={100} placeholder={t('Search title or artist…')} onChange={e => set('q', e.target.value)} /></label>
-      <label>{t('Key mode')}<select aria-label={t('Key mode')} value={params.get('keys') ?? '7'} onChange={e => set('keys', e.target.value)}><option value="all">{t('All key modes')}</option>{[5, 7, 9, 10, 14].map(key => <option key={key} value={key}>{key}Key</option>)}</select></label>
-      <label>{t('Sort by')}<select aria-label={t('Sort by')} value={params.get('sort') ?? 'newest'} onChange={e => set('sort', e.target.value)}>{[['newest', 'Newest charts'], ['recent', 'Latest plays'], ['plays', 'Most played'], ['level-asc', 'Level: low to high'], ['level-desc', 'Level: high to low'], ['title', 'Title']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-      <label>{t('Difficulty')}<select aria-label={t('Difficulty')} value={params.get('difficulty') ?? ''} onChange={e => set('difficulty', e.target.value)}><option value="">{t('All difficulties')}</option>{['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE', 'UNKNOWN'].map(value => <option key={value}>{value}</option>)}</select></label>
+    <section className="panel ir-directory-panel"><div className="filter-bar ir-directory-filters"><label>{t('Search songs')}<input value={params.get('q') ?? ''} maxLength={100} placeholder={t('Search title or artist…')} onChange={e => set('q', e.target.value)} /></label>
+      <label>{t('Key mode')}<select aria-label={t('Key mode')} value={params.get('keys') ?? 'all'} onChange={e => set('keys', e.target.value)}><option value="all">{t('All key modes')}</option>{[5, 7, 9, 10, 14].map(key => <option key={key} value={key}>{key}Key</option>)}</select></label>
+      <label>{t('Sort by')}<select aria-label={t('Sort by')} value={params.get('sort') ?? 'newest'} onChange={e => set('sort', e.target.value)}>{[['newest', 'Newest songs'], ['recent', 'Latest plays'], ['plays', 'Most played'], ['level-asc', 'Level: low to high'], ['level-desc', 'Level: high to low'], ['title', 'Title']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+      <label>{t('Difficulty')}<select aria-label={t('Difficulty')} value={params.get('difficulty') ?? ''} onChange={e => set('difficulty', e.target.value)}><option value="">{t('All difficulties')}</option>{[...new Set([...(difficulties.data ?? ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE', 'UNKNOWN']), ...(params.get('difficulty') ? [params.get('difficulty')!] : [])])].map(value => <option key={value}>{value}</option>)}</select></label>
       <label>{t('Minimum level')}<input type="number" min={0} max={999} value={params.get('minimum') ?? ''} onChange={e => set('minimum', e.target.value)} /></label><label>{t('Maximum level')}<input type="number" min={0} max={999} value={params.get('maximum') ?? ''} onChange={e => set('maximum', e.target.value)} /></label></div>
-      <Alert message={charts.error} />{charts.loading ? <Empty>{t('Loading charts…')}</Empty> : charts.data?.length ? <div className="ir-chart-grid">{charts.data.map(chart => <Link className="ir-chart-card" key={chart.id} to={'/rankings/' + chart.id}><span className="key-badge">{chart.keys}K</span><div><h2>{chart.title}</h2><p>{chart.artist}</p><small>{chart.difficulty || t('Unspecified difficulty')} · Lv. {chart.level}</small><small className="table-secondary">{t('Plays')}: {(chart.playCount ?? 0).toLocaleString(locale)} · {t('Players')}: {(chart.playerCount ?? 0).toLocaleString(locale)}</small>{chart.lastPlayedAt && <small className="table-secondary">{t('Latest play')}: {new Date(chart.lastPlayedAt).toLocaleString(locale)}</small>}</div><span className="badge">{t(chart.approved ? 'Curated' : 'Registered')}</span></Link>)}</div> : <Empty>{t('No matching charts.')}</Empty>}
-      <Pagination page={page} next={(charts.data?.length ?? 0) === 50} change={value => set('page', value)} /></section></>;
+      <Alert message={charts.error} />
+      {charts.data && <div className="ir-directory-summary"><span>{charts.data.total.toLocaleString(locale)} {t('Songs')}</span><span>{t('Choose a song, then select its key mode and difficulty.')}</span></div>}
+      {charts.loading ? <Empty>{t('Loading songs…')}</Empty> : charts.data?.items.length ? <div className="table-wrap ir-song-list">
+        <table className="ir-song-table" aria-label={t('Songs')}>
+          <colgroup><col className="ir-song-title-column" /><col className="ir-song-artist-column" /><col className="ir-song-keys-column" /><col className="ir-song-level-column" /><col className="ir-song-count-column" /><col className="ir-song-count-column" /><col className="ir-song-count-column" /><col className="ir-song-date-column" /></colgroup>
+          <thead><tr><th scope="col">{t('Song name')}</th><th scope="col">{t('Artist')}</th><th scope="col">{t('Keys')}</th><th scope="col">{t('Level')}</th><th scope="col" className="ir-numeric">{t('Charts')}</th><th scope="col" className="ir-numeric">{t('Plays')}</th><th scope="col" className="ir-numeric">{t('Players')}</th><th scope="col">{t('Latest play')}</th></tr></thead>
+          <tbody>{charts.data.items.map(song => <tr key={song.songKey}>
+            <th scope="row" className="ir-song-name"><Link title={song.title} to={'/rankings/songs/' + song.songKey + (query.get('keys') ? '?keyMode=' + query.get('keys') : '')}>{song.title}</Link></th>
+            <td className="ir-song-artist"><span title={song.artist}>{song.artist || '—'}</span></td>
+            <td><div className="ir-song-keys">{song.keys.map(key => <span className="key-badge" key={key}>{key}K</span>)}</div></td>
+            <td className="ir-song-level">{song.minimumLevel === song.maximumLevel ? song.minimumLevel : `${song.minimumLevel}–${song.maximumLevel}`}</td>
+            <td className="ir-numeric">{song.chartCount.toLocaleString(locale)}</td>
+            <td className="ir-numeric">{song.playCount.toLocaleString(locale)}</td>
+            <td className="ir-numeric">{song.playerCount.toLocaleString(locale)}</td>
+            <td className="ir-song-date">{song.lastPlayedAt ? <time dateTime={song.lastPlayedAt} title={new Date(song.lastPlayedAt).toLocaleString(locale)}>{new Date(song.lastPlayedAt).toLocaleDateString(locale)}</time> : '—'}</td>
+          </tr>)}</tbody>
+        </table>
+      </div> : <Empty>{t('No matching songs.')}</Empty>}
+      <Pagination page={page} totalPages={charts.data ? charts.data.total / charts.data.pageSize : undefined} loading={charts.loading || search !== debounced} change={value => set('page', value)} /></section></>;
 }
-function ChartRanking({ id }: { id: string }) {
+function difficultyName(chart: Chart): string { return chart.displayDifficulty || chart.difficulty || 'UNKNOWN'; }
+export function SongRanking() {
+  const { songKey } = useParams(); const { t, locale } = useI18n();
+  const [params, setParams] = useSearchParams();
+  const song = useQuery<SongDetail>('/songs/' + songKey);
+  if (!song.data) return song.loading ? <Empty>{t('Loading songs…')}</Empty> : <Alert message={song.error} />;
+  const info = song.data;
+  const keys = [...new Set(info.charts.map(chart => chart.keys))];
+  const requested = Number(params.get('keyMode'));
+  const keyMode = keys.includes(requested) ? requested : keys.includes(7) ? 7 : keys[0];
+  const variants = info.charts.filter(chart => chart.keys === keyMode);
+  const selected = variants.find(chart => chart.id === params.get('chart')) ?? variants[0];
+  function choose(mode: number, id?: string) {
+    const next = new URLSearchParams(params); next.set('keyMode', String(mode)); next.delete('page');
+    if (id) next.set('chart', id); else next.delete('chart');
+    setParams(next);
+  }
+  return <><div className="ir-directory-actions"><Link to="/rankings">← {t('Songs')}</Link></div>
+    <header className="ir-chart-header"><span className="eyebrow">INTERNET RANKING</span><h1>{info.title}</h1><p>{info.artist}</p>
+      <div className="tabs ir-song-key-tabs" role="group" aria-label={t('Key mode')}>{keys.map(key => <button className={key === keyMode ? 'active' : ''} key={key} onClick={() => choose(key)}>{key}Key</button>)}</div>
+      <div className="ir-song-difficulties" role="group" aria-label={t('Difficulty')}>{variants.map(chart => <button className={chart.id === selected.id ? 'active' : ''} key={chart.id} onClick={() => choose(keyMode, chart.id)} aria-pressed={chart.id === selected.id}><strong>{t(difficultyName(chart))}</strong><span>Lv. {chart.level}</span>{variants.some(other => other.id !== chart.id && difficultyName(other) === difficultyName(chart) && other.level === chart.level) && <small>{chart.md5.slice(0, 8)}</small>}</button>)}</div>
+      {(!!selected.bpm || !!selected.lengthMs) && <div className="ir-song-timing">{!!selected.bpm && <span>{selected.bpm.toLocaleString(locale)} BPM</span>}{!!selected.lengthMs && <span>{Math.floor(selected.lengthMs / 60000)}:{String(Math.floor(selected.lengthMs / 1000) % 60).padStart(2, '0')}</span>}</div>}
+      <RankingLinks key={selected.id} chart={selected} />
+    </header><ChartRanking key={selected.id} id={selected.id} grouped /></>;
+}
+function RankingLinks({ chart, allDifficulties = false }: { chart: Chart; allDifficulties?: boolean }) {
+  const { t } = useI18n();
+  const [notice, setNotice] = useState('');
+  async function share() {
+    try { await navigator.clipboard.writeText(location.href); setNotice('Link copied'); }
+    catch { setNotice('Copy the page address to share this ranking.'); }
+  }
+  return <><div className="ir-chart-actions">
+    {allDifficulties && chart.songKey && chart.visibility === 'public' && <Link to={'/rankings/songs/' + chart.songKey + '?keyMode=' + chart.keys + '&chart=' + chart.id}>{t('All difficulties')}</Link>}
+    <button className="button small secondary" onClick={share}>{t('Copy ranking link')}</button>
+    {chart.packId && <Link to={'/packs/' + chart.packId}>{t('Song pack')}</Link>}
+  </div><Alert message={notice} /></>;
+}
+function ChartRanking({ id, grouped = false }: { id: string; grouped?: boolean }) {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const { params, set, page } = useFilters();
@@ -74,20 +127,19 @@ function ChartRanking({ id }: { id: string }) {
   const filters = new URLSearchParams({ arrangement, gauge, verified: String(verified) }).toString();
   const chart = useQuery<Chart>('/charts/' + id);
   const board = useQuery<Score[]>(chart.data ? `/rankings/${id}?${filters}&page=${page}&sort=${sort}` : null);
+  const summary = useQuery<RankingSummary>(chart.data ? `/rankings/${id}/summary?${filters}` : null);
   const own = useQuery<Score>(chart.data && user ? `/rankings/${id}/me?${filters}` : null);
   const history = useQuery<Score[]>(chart.data && user ? `/rankings/${id}/history` : null);
-  const [notice, setNotice] = useState('');
   if (!chart.data) return chart.loading ? <Empty>{t('Loading chart…')}</Empty> : <Alert message={chart.error} />;
   const info = chart.data;
-  async function share() { try { await navigator.clipboard.writeText(location.href); setNotice('Link copied'); } catch { setNotice('Copy the page address to share this ranking.'); } }
-  return <><div className="ir-directory-actions"><Link to="/rankings">← {t('Charts')}</Link>{user && <Link to="/rankings/mine">{t('My rankings')}</Link>}</div>
-    <header className="ir-chart-header"><span className="eyebrow">INTERNET RANKING · {t(info.visibility ?? 'public')}</span><h1>{info.title}</h1><p>{info.artist}</p><div className="ir-chart-meta"><span className="key-badge">{info.keys}K</span><span>{info.difficulty || t('Unspecified difficulty')}</span><span>Lv. {info.level}</span>{!!info.bpm && <span>{info.bpm.toLocaleString(locale)} BPM</span>}{!!info.lengthMs && <span>{Math.floor(info.lengthMs / 60000)}:{String(Math.floor(info.lengthMs / 1000) % 60).padStart(2, '0')}</span>}<span className="badge">{t(info.approved ? 'Curated' : 'Registered')}</span></div><div className="ir-directory-actions"><button className="button small secondary" onClick={share}>{t('Copy ranking link')}</button>{info.packId && <Link to={'/packs/' + info.packId}>{t('Song pack')}</Link>}</div></header>
-    <Alert message={notice} /><details className="chart-identity"><summary>{t('Chart identity')}</summary><code>MD5 {info.md5}</code><code>SHA-256 {info.sha256}</code></details>
+  return <>{!grouped && <div className="ir-directory-actions"><Link to="/rankings">← {t('Songs')}</Link>{user && <Link to="/rankings/mine">{t('My rankings')}</Link>}</div>}
+    {!grouped && <header className="ir-chart-header"><h1>{info.title}</h1><p>{info.artist}</p><div className="ir-chart-meta"><span className="key-badge">{info.keys}K</span><span>{t(difficultyName(info))}</span><span>Lv. {info.level}</span>{!!info.bpm && <span>{info.bpm.toLocaleString(locale)} BPM</span>}{!!info.lengthMs && <span>{Math.floor(info.lengthMs / 60000)}:{String(Math.floor(info.lengthMs / 1000) % 60).padStart(2, '0')}</span>}</div><RankingLinks chart={info} allDifficulties /></header>}
+    <details className="chart-identity"><summary>{t('Chart identity')}</summary><code>MD5 {info.md5}</code><code>SHA-256 {info.sha256}</code></details>
     <section className="panel ranking-board"><div className="filter-bar"><label>{t('Sort by')}<select aria-label={t('Sort by')} value={sort} onChange={e => set('sort', e.target.value)}>{[['score', 'EX SCORE'], ['recent', 'Latest plays'], ['plays', 'Most played']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label><label>{t('Arrangement')}<select aria-label={t('Arrangement')} value={arrangement} onChange={e => set('arrangement', e.target.value)}><option value="all">{t('All arrangements')}</option>{['off', 'mirror', 'random', 's-random', 'scatter', 'converge'].map(value => <option key={value}>{value}</option>)}</select></label><label>{t('Gauge')}<select aria-label={t('Gauge')} value={gauge} onChange={e => set('gauge', e.target.value)}><option value="all">{t('All gauges')}</option>{['normal', 'hard', 'death', 'easy', 'p-attack', 'g-attack'].map(value => <option key={value}>{value}</option>)}</select></label><label>{t('Records')}<select aria-label={t('Records')} value={String(verified)} onChange={e => set('verified', e.target.value)}><option value="false">{t('All submissions')}</option><option value="true">{t('Verified only')}</option></select></label></div>
       {own.data && <div className="ir-own-position"><strong>{t('Your position')} #{own.data.rank}</strong><span>EX {own.data.exScore.toLocaleString(locale)}</span><button disabled={sort !== 'score'} onClick={() => set('page', String(Math.floor(((own.data!.position ?? own.data!.rank) - 1) / 50) + 1))}>{t('Show position')}</button><Link to={'/scores/' + own.data.id}>{t('Score details')}</Link></div>}
-      <IrOverview chartId={id} arrangement={arrangement} gauge={gauge} verified={verified} /><Alert message={board.error || own.error} />
+      <IrOverview summary={summary} /><Alert message={board.error || own.error} />
       {board.loading ? <Empty>{t('Loading scores…')}</Empty> : board.data?.length ? <IrScoreTable scores={board.data} currentUid={user?.uid} /> : <Empty>{t('No scores for these filters yet.')}</Empty>}
-      <Pagination page={page} next={(board.data?.length ?? 0) === 50} change={value => set('page', value)} /><p className="ranking-note">{t('Submitted records are reported by clients. Verified records require server replay validation.')}</p>
+      <Pagination page={page} totalPages={summary.data ? summary.data.players / 50 : undefined} next={(board.data?.length ?? 0) === 50} loading={board.loading || summary.loading} change={value => set('page', value)} /><p className="ranking-note">{t('Submitted records are reported by clients. Verified records require server replay validation.')}</p>
     </section>
     {user && history.data?.length ? <section className="panel ir-history"><h2>{t('Your recent plays')}</h2><div className="score-list">{history.data.slice(0, 20).map(score => <Link key={score.id} to={'/scores/' + score.id}><span>{playTime(score, locale)}</span><strong>EX {score.exScore.toLocaleString(locale)}</strong><span className={'clear-lamp clear-' + score.clear}>{score.clear.toUpperCase()}</span></Link>)}</div></section> : null}
     {(info.ownerId === user?.id || user?.role === 'admin') && <BoardManagement chart={info} refresh={chart.refresh} />}</>;
