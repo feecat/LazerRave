@@ -34,6 +34,7 @@ nav:
       - 模块与技术栈: architecture/overview.md
       - 多人与云端回放: architecture/multiplayer-and-replay.md
       - 排名与难度表: architecture/internet-ranking.md
+      - 段位与课程认证: architecture/course-certification.md
   - 兼容性:
       - 质量标准: compatibility/quality.md
       - BMS 扩展: compatibility/bms.md
