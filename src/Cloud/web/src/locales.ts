@@ -95,6 +95,7 @@ export const chinese: Record<string, string> = {
   'Page not found.': '页面不存在。', 'Return home': '返回首页',
   'BMS. One chart, many possibilities.': 'BMS，同一谱面，无限可能。',
   'THE NEXT CHART IS WAITING': '下一首谱面，等你挑战',
+  'Latest scores': '最新成绩', 'View rankings →': '查看排行榜 →', 'No public scores yet.': '暂无公开成绩。', 'Chart': '谱面',
   'Find your rhythm.': '找到你的节奏。', 'Raise the bar.': '挑战更高的目标。',
   'Your home for BMS. Discover song packs and chase your next EX SCORE.': '你的 BMS 社区。发现曲包，挑战下一次 EX SCORE。',
   'Explore song packs': '探索曲包', 'Internet Ranking': '网络排名',

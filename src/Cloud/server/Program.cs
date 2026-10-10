@@ -223,6 +223,7 @@ app.MapGet("/api/rankings/{chart:guid}/me", async (Guid chart, string? arrangeme
     return Results.Ok(rows.FirstOrDefault());
 }).RequireAuthorization();
 app.MapGet("/api/rankings/{chart:guid}/history", (Guid chart, HttpContext context, IrRecords records) => records.History(chart, Auth.Id(context.User))).RequireAuthorization();
+app.MapGet("/api/scores/recent", (IrRecords records) => records.Recent());
 app.MapGet("/api/scores/{id:guid}", (Guid id, HttpContext context, IrRecords records) => records.Detail(id, ChartRegistry.Viewer(context)));
 app.MapPost("/api/scores", async (ScoreInput score, HttpContext context, Ranking rankings) => Results.Ok(await rankings.Submit(Auth.Id(context.User), score))).RequireAuthorization();
 app.MapGet("/api/rooms", (Rooms rooms) => Results.Ok(rooms.List()));

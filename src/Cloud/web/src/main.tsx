@@ -29,12 +29,14 @@ function Shell() {
     catch (error) { window.alert(t(error instanceof Error ? error.message : 'Sign out failed.')); }
   }
   return <>
+    <header className="site-header">
     <div className="top-accent" />
     <nav className="navigation" aria-label={t("Main navigation")}>
       <Link className="brand" to="/"><img src="/logo.svg" alt="" /><span>Lazer<span>Rave</span><small>{t("BMS COMMUNITY")}</small></span></Link>
       <div className="nav-links">{navigation.filter(item => item.path !== '/admin' || user?.role === 'admin').map(item => <NavLink key={item.path} to={item.path}><Icon name={item.icon} size={22} /><span>{t(item.label)}</span></NavLink>)}</div>
       <div className="account-nav"><a className="repository-link" href={repositoryUrl} target="_blank" rel="noopener noreferrer"><Icon name="code" /><span>GitHub</span></a><LanguageSelect />{user ? <><Link to={'/players/' + user.username} className="player-link"><Avatar user={user} /><span>{user.displayName}</span></Link><button className="text-button" onClick={logout}>{t("Sign out")}</button></> : <><Link to="/login" className="text-button">{t("Sign in")}</Link><Link to="/register" className="button small primary">{t("Join")}</Link></>}</div>
     </nav>
+    </header>
     <main id="main" key={user?.id ?? "anonymous"}>{!loaded ? <Empty>{t("Connecting to LazerRave…")}</Empty> : <Routes>
       <Route path="/" element={<Home />} /><Route path="/login" element={<Authentication />} /><Route path="/register" element={<Authentication register />} />
       <Route path="/download" element={<Downloads />} /><Route path="/account/password" element={<ChangePassword />} />

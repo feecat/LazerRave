@@ -24,6 +24,14 @@ label { display: flex; flex-direction: column; gap: 7px; font-size: 15px; font-w
 form label { margin-bottom: 19px; }
 code, .mono { font-family: 'Cascadia Code', Consolas, monospace; font-size: 14px; word-break: break-all; }
 .top-accent { height: 3px; background: linear-gradient(90deg, var(--cyan), var(--lavender) 65%, var(--rose)); }
+.site-header { position: sticky; top: 0; z-index: 100; background: #25374bf5; border-bottom: 1px solid #718ba838; box-shadow: 0 8px 28px #101d3026; }
+.site-header .navigation { border-bottom: 0; }
+.site-header .nav-links a { background: #2d4359a6; }
+.site-header .nav-links a:hover { background: #39556ed9; }
+.site-header .nav-links a.active { background: #365b70cf; }
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header { background: #25374bba; -webkit-backdrop-filter: blur(18px) saturate(130%); backdrop-filter: blur(18px) saturate(130%); }
+}
 .navigation { max-width: 1180px; margin: auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'brand account' 'links links'; align-items: center; gap: 14px 24px; padding: 18px 30px 14px; border-bottom: 1px solid var(--border); }
 .brand { grid-area: brand; display: flex; align-items: center; gap: 12px; color: #fff; font-size: 24px; font-weight: 800; letter-spacing: -.7px; line-height: 1.05; width: fit-content; }
 .brand img { width: 47px; height: 47px; }
@@ -256,6 +264,15 @@ main { max-width: 1180px; min-height: calc(100vh - 198px); margin: auto; padding
 @media(max-width:1100px) { .ir-directory-filters { grid-template-columns:repeat(3,minmax(0,1fr)); }.ir-directory-filters label:first-child { grid-column:span 2; } }
 .ir-score-table { min-width:760px; }
 .ir-player-cell { display:flex;align-items:center;gap:12px; }
+.recent-score-table { min-width:860px;table-layout:fixed;font-size:15px; }
+.recent-score-table th:nth-child(1) { width:20%; }.recent-score-table th:nth-child(2) { width:34%; }.recent-score-table th:nth-child(3) { width:14%; }.recent-score-table th:nth-child(4) { width:16%; }.recent-score-table th:nth-child(5) { width:16%; }
+.recent-score-table td { padding:12px 9px;vertical-align:middle; }
+.recent-score-table tbody tr:last-child td { border-bottom:0; }
+.recent-score-table tbody tr:hover { background:#ffffff04; }
+.recent-player-name,.recent-chart-name,.recent-chart-meta { display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.recent-chart-name { color:var(--text);font-weight:600; }.recent-chart-name:hover { color:var(--cyan); }
+.recent-score-table .ir-player-cell { min-width:0;gap:9px; }.recent-score-table .avatar { width:30px;height:30px; }
+.recent-score-table time { font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums; }
 .ir-current-player { background:color-mix(in srgb,var(--lavender) 15%,transparent); }
 .ir-own-position { padding:16px;border:1px solid var(--lavender);border-radius:10px;margin:20px 0; }
 .ir-history,.ir-registration { margin-top:24px; }

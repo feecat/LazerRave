@@ -2,6 +2,16 @@ namespace Cloud;
 
 public sealed class IrRecords(Pg db)
 {
+    public Task<List<Dictionary<string, object?>>> Recent() => db.Query("""
+        SELECT s.id,b.id AS chart_id,b.song_title AS title,b.artist,b.display_difficulty AS difficulty,b.keys,b.level,
+            u.uid,u.display_name,
+            CASE WHEN u.avatar_key IS NULL THEN NULL ELSE '/api/users/'||u.id::text||'/avatar?v='||u.avatar_key END AS avatar_url,
+            s.ex_score,s.score_max,s.clear,s.created_at
+        FROM scores s JOIN ir_boards b ON b.id=s.board_id JOIN users u ON u.id=s.user_id
+        WHERE b.visibility='public' AND NOT s.withdrawn AND NOT u.disabled AND s.ruleset='openlr2-v1'
+        ORDER BY s.created_at DESC,s.id DESC LIMIT 8
+        """);
+
     private const string scoreFields = "s.id,s.user_id,s.chart_id,s.board_id,s.client_run_id,s.ruleset,s.arrangement,s.gauge,s.perfect,s.great,s.good,s.bad,s.poor,s.max_combo,s.clear,s.score_max,s.normal_score,s.input_type,s.comment,s.ex_score,s.verified,s.created_at,s.played_at";
     public async Task<List<Dictionary<string, object?>>> Compare(long uid, long against, int page)
     {

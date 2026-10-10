@@ -6,15 +6,15 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, date, send, size } from './api';
 import { Alert, Avatar, Empty, Heading, SignInPrompt, useQuery } from './components';
 import { useAuth } from './state';
-import type { Chart, Pack, PackCatalog, PackCatalogEntry, Score, User } from './types';
+import type { Chart, Pack, PackCatalog, PackCatalogEntry, Score, User, RecentScore } from './types';
 import { DifficultyTableAdmin } from './tables';
 import { RhythmVisual } from './RhythmVisual';
 import { Icon } from './Icon';
 import { Pagination } from './Pagination';
 
 export function Home() {
-  const { t } = useI18n();
-  const { data: packs, error } = useQuery<PackCatalog>('/packs/catalog?sort=newest');
+  const { t, locale } = useI18n();
+  const { data: scores, error, loading } = useQuery<RecentScore[]>('/scores/recent');
   return <>
     <section className="hero">
       <div className="hero-content">
@@ -26,7 +26,17 @@ export function Home() {
       <RhythmVisual />
     </section>
     <section className="feature-grid"><Link to="/rankings" className="feature"><span className="feature-symbol">01</span><h2>{t("Every point counts")}</h2><p>{t("Chart rankings, clear records, and your next personal best.")}</p><span>{t("See the rankings ↗")}</span></Link><Link to="/packs" className="feature"><span className="feature-symbol">02</span><h2>{t("A new discovery")}</h2><p>{t("Browse the catalog and download a pack for your next session.")}</p><span>{t("Browse song packs ↗")}</span></Link><Link to="/tables" className="feature"><span className="feature-symbol">03</span><h2>{t("Find your next challenge")}</h2><p>{t("Browse charts by difficulty level.")}</p><span>{t("Explore difficulty tables ↗")}</span></Link></section>
-    <section><div className="section-title"><div><span className="eyebrow">{t("THE CATALOG")}</span><h2>{t("Recently added")}</h2></div><Link to="/packs">{t("View all packs →")}</Link></div><Alert message={error} />{packs?.items.length ? <PackList packs={packs.items.slice(0, 3)} /> : <Empty>{t("Song packs will appear here when published.")}</Empty>}</section>
+    <section className="recent-scores"><div className="section-title"><h2>{t('Latest scores')}</h2><Link to="/rankings">{t('View rankings →')}</Link></div><Alert message={error} />
+      {loading ? <Empty>{t('Loading scores…')}</Empty> : scores?.length ? <div className="panel table-wrap"><table className="recent-score-table"><thead><tr>
+        <th>{t('Player')}</th><th>{t('Chart')}</th><th>EX SCORE</th><th>{t('Clear')}</th><th>{t('Uploaded at')}</th>
+      </tr></thead><tbody>{scores.map(score => <tr key={score.id}>
+        <td><Link className="ir-player-cell" to={'/players/id/' + score.uid}><Avatar user={score} /><span className="recent-player-name" title={score.displayName}>{score.displayName}</span></Link></td>
+        <td><Link className="recent-chart-name" title={score.title} to={'/rankings/' + score.chartId}>{score.title}</Link><span className="table-secondary recent-chart-meta" title={score.artist}>{score.artist} · {score.keys}K · {score.difficulty || t('Unspecified difficulty')} · Lv. {score.level}</span></td>
+        <td><Link className="score-number" to={'/scores/' + score.id}>{score.exScore.toLocaleString(locale)}</Link>{score.scoreMax ? <span className="table-secondary">{(score.exScore * 100 / score.scoreMax).toFixed(2)}%</span> : null}</td>
+        <td><span className={'clear-lamp clear-' + score.clear}>{t(score.clear === 'full-combo' ? 'FULL COMBO' : score.clear.toUpperCase())}</span></td>
+        <td><time dateTime={score.createdAt}>{new Date(score.createdAt).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></td>
+      </tr>)}</tbody></table></div> : !error && <Empty>{t('No public scores yet.')}</Empty>}
+    </section>
   </>;
 }
 

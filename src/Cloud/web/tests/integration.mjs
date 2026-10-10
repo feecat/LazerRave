@@ -72,6 +72,10 @@ try {
   const score = { chartId: chart.id, clientRunId: crypto.randomUUID(), ruleset: 'openlr2-v1', arrangement: 'off', gauge: 'normal', perfect: 10, great: 5, good: 3, bad: 2, poor: 1, maxCombo: 10, clear: 'normal', scoreMax: 50, normalScore: 12345, inputType: 'keyboard', comment: 'IR fixture' };
   const saved = await request('/scores', { token, method: 'POST', body: score }); assert.equal(saved.exScore, 25); assert.equal(saved.verified, false);
   assert.equal((await request('/scores', { token, method: 'POST', body: score })).id, saved.id);
+  const recentScores = await request('/scores/recent');
+  assert.equal(recentScores[0].id, saved.id); assert.equal(recentScores[0].chartId, chart.id);
+  assert.equal(recentScores[0].uid, me.uid); assert.equal(recentScores[0].createdAt, saved.createdAt);
+  assert.equal(recentScores.filter(row => row.id === saved.id).length, 1); assert.ok(recentScores.length <= 8); checks++;
   await request('/scores', { token, method: 'POST', body: { ...score, great: 6 }, expected: 409 });
   await request('/scores', { token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), autoplay: true }, expected: 400 });
   await request('/scores', { token: players[1].token, method: 'POST', body: { ...score, clientRunId: crypto.randomUUID(), perfect: 20, maxCombo: 20 } });
