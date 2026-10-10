@@ -51,6 +51,7 @@ internal partial class LibraryDirectorySettings(DesktopSettings settings) : Sett
                 Margin = new MarginPadding { Left = 20, Bottom = 8 },
             },
             rows,
+            new RoundedButton { Text = D("Browse song packs"), RelativeSizeAxes = Axes.X, Height = 40, Action = game.OpenSongPacks },
             new RoundedButton
             {
                 Text = D("Add folder"), RelativeSizeAxes = Axes.X, Height = 40,

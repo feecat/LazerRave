@@ -48,6 +48,7 @@ namespace osu.Game.Screens.Menu
         public Action? OnCustomMultiplayer;
         public bool FlattenPlayMenu { get; init; }
         public Func<Drawable?>? CreatePlayIcon { get; init; }
+        public osu.Framework.Localisation.LocalisableString BrowseText { get; init; } = ButtonSystemStrings.Browse;
 
         private readonly IBindable<bool> isIdle = new BindableBool();
 
@@ -180,7 +181,7 @@ namespace osu.Game.Screens.Menu
                     Padding = new MarginPadding { Left = WEDGE_WIDTH },
                 });
             }
-            buttonsTopLevel.Add(new MainMenuButton(ButtonSystemStrings.Browse, @"button-default-select", OsuIcon.Beatmap, new Color4(165, 204, 0, 255), (_, _) => OnBeatmapListing?.Invoke(), Key.B,
+            buttonsTopLevel.Add(new MainMenuButton(BrowseText, @"button-default-select", OsuIcon.Beatmap, new Color4(165, 204, 0, 255), (_, _) => OnBeatmapListing?.Invoke(), Key.B,
                 Key.D));
 
             if (host.CanExit)

@@ -22,10 +22,16 @@ internal partial class LazerRaveToolbar : Toolbar
     protected override Drawable[] CreateRightButtons() =>
     [
         new WebsiteButton("Website", FontAwesome.Solid.Globe, "/"),
+        new SongPacksButton(),
         new WebsiteButton("Download", FontAwesome.Solid.Download, "/download"),
         new WebsiteButton("GitHub", FontAwesome.Brands.Github, "https://github.com/feecat/LazerRave"),
         CreateUserButton(), new ToolbarClock(), new ToolbarNotificationButton(),
     ];
+    private partial class SongPacksButton : ToolbarButton
+    {
+        [Resolved] private LazerRaveGame game { get; set; } = null!;
+        public SongPacksButton() { TooltipMain = D("Song packs"); SetIcon(FontAwesome.Solid.FolderOpen); Action = () => game.OpenSongPacks(); }
+    }
 
     private partial class WebsiteButton : ToolbarButton
     {

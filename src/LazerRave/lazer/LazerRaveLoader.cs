@@ -24,6 +24,7 @@ internal partial class LazerRaveMainMenu : MainMenu
 {
     protected override bool AutomaticallyShowLogin => false;
     protected override bool FlattenPlayMenu => true;
+    protected override osu.Framework.Localisation.LocalisableString BrowseText => D("Song packs");
     protected override MainMenuButton CreateSecondaryMenuButton() => new(
         D("Native LR2"), "button-default-select", FontAwesome.Solid.Desktop,
         new Color4(52, 105, 127, 255), (_, _) => game.OpenClassicGame(), Key.N)
@@ -65,7 +66,7 @@ internal partial class LazerRaveMainMenu : MainMenu
     {
         base.LoadComplete();
         Buttons.OnCustomMultiplayer = game.OpenMultiplayer;
-        Buttons.OnBeatmapListing = Buttons.OnSolo;
+        Buttons.OnBeatmapListing = game.OpenSongPacks;
         Buttons.ReturnToTopOnIdle = false;
     }
 

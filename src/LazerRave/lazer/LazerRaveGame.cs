@@ -122,6 +122,18 @@ internal partial class LazerRaveGame : OsuGame
     }
     public void OpenCloudAccount() => cloudPanel.Show();
     public void OpenCloudWebsite(string url) => Host.OpenUrlExternally(url);
+    public void OpenSongPacks()
+    {
+        if (classicRunning || refreshing || ScreenStack.CurrentScreen is GamePlayScreen or LazerRaveSongPacksScreen) return;
+        CloseAllOverlays();
+        ScreenStack.Push(new LazerRaveSongPacksScreen(cloud));
+    }
+    public void OpenInstalledPack(string directory)
+    {
+        if (!Directory.Exists(directory)) { SetLibraryMessage(D("Song pack directory is missing.")); return; }
+        ScreenStack.Push(new LazerRaveSongSelect { InitialFolder = directory });
+    }
+    public void FocusLibraryFolder(string directory) => Navigate(directory);
     public void OpenRoomLibrary(bool chooseSong = true)
     {
         var room = cloud.Room ?? throw new InvalidOperationException("Join a room first.");

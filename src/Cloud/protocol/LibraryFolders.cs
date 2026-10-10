@@ -57,6 +57,11 @@ public static class LibraryFolders
             }
         }
         Directory.CreateDirectory(shared);
+        try { SongPackFiles.MigrateLegacy(applicationRoot); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Trace.TraceWarning("Legacy song pack migration deferred: " + error.Message);
+        }
     }
 
     public static void NoLink(string path)

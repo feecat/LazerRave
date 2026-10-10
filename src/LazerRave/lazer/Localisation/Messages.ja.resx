@@ -393,4 +393,19 @@
   <data name="Browse" xml:space="preserve"><value>参照</value></data>
   <data name="Choose folder" xml:space="preserve"><value>フォルダーを選択</value></data>
   <data name="Remove folder" xml:space="preserve"><value>フォルダーを削除</value></data>
+  <data name="Search song packs" xml:space="preserve"><value>曲パックを検索</value></data>
+  <data name="Sort by" xml:space="preserve"><value>並べ替え</value></data>
+  <data name="No song packs found." xml:space="preserve"><value>曲パックが見つかりません。</value></data>
+  <data name="Loading song packs…" xml:space="preserve"><value>曲パックを読み込み中…</value></data>
+  <data name="Open library" xml:space="preserve"><value>ライブラリを開く</value></data>
+  <data name="All keys" xml:space="preserve"><value>すべてのキー数</value></data>
+  <data name="Newest" xml:space="preserve"><value>新着順</value></data>
+  <data name="Browse song packs" xml:space="preserve"><value>曲パックを見る</value></data>
+  <data name="Song pack directory is missing." xml:space="preserve"><value>曲パックのフォルダーが見つかりません。</value></data>
+  <data name="Previous" xml:space="preserve"><value>前へ</value></data>
+  <data name="Next" xml:space="preserve"><value>次へ</value></data>
+  <data name="Refresh" xml:space="preserve"><value>更新</value></data>
+  <data name="Keys" xml:space="preserve"><value>キー数</value></data>
+  <data name="Difficulty" xml:space="preserve"><value>難易度</value></data>
+  <data name="Title" xml:space="preserve"><value>タイトル</value></data>
 </root>

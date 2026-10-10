@@ -20,6 +20,12 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
     public Func<BeatmapInfo, CancellationToken, Task>? ConfirmSelection { get; init; }
     public string ConfirmationText { get; init; } = "Use selected difficulty";
     public bool IsRoomSelection => ConfirmSelection is not null;
+    public string? InitialFolder { get; init; }
+    public override void OnEntering(ScreenTransitionEvent e)
+    {
+        base.OnEntering(e);
+        if (InitialFolder is not null) game.FocusLibraryFolder(InitialFolder);
+    }
     private bool confirming;
     private readonly CancellationTokenSource selectionLifetime = new();
     public override string Title => IsRoomSelection ? "Choose song" : "Library";

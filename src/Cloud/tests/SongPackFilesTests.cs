@@ -30,13 +30,14 @@ public sealed class SongPackFilesTests : IDisposable
         client.Changed += () => progress |= client.Progress?.Stage == "Installing";
         await client.ImportPack(zip, default);
         Assert.StartsWith(LibraryFolders.Shared(application) + Path.DirectorySeparatorChar, imported!);
-        Assert.Equal("audio", File.ReadAllText(Path.Combine(imported!, "Pack", "Song", "resources", "tone.ogg")));
-        Assert.True(File.Exists(Path.Combine(imported!, "Pack", "Song", "another.bms")));
+        Assert.Equal(Path.Combine(LibraryFolders.Shared(application), "Pack"), imported);
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(imported!, "Song", "resources", "tone.ogg")));
+        Assert.True(File.Exists(Path.Combine(imported!, "Song", "another.bms")));
         Assert.True(progress); Assert.False(client.Busy);
         Assert.Equal(imported, await SongPackFiles.Install(zip, application, default));
-        File.WriteAllText(Path.Combine(imported!, "Pack", "Song", "normal.bms"), "modified");
+        File.WriteAllText(Path.Combine(imported!, "Song", "normal.bms"), "modified");
         await Assert.ThrowsAsync<InvalidDataException>(() => SongPackFiles.Install(zip, application, default));
-        Assert.Equal("modified", File.ReadAllText(Path.Combine(imported!, "Pack", "Song", "normal.bms")));
+        Assert.Equal("modified", File.ReadAllText(Path.Combine(imported!, "Song", "normal.bms")));
     }
 
     [Theory]
@@ -50,9 +51,110 @@ public sealed class SongPackFilesTests : IDisposable
         var zip = Zip(("normal.bms", "#TITLE Test"), (unsafePath, "invalid"));
         var application = Path.Combine(root, "app");
         await Assert.ThrowsAsync<InvalidDataException>(() => SongPackFiles.Install(zip, application, default));
-        Assert.Empty(Directory.GetDirectories(LibraryFolders.Shared(application), "pack-*"));
+        Assert.Empty(Directory.GetFiles(LibraryFolders.Shared(application), "*.bms", SearchOption.AllDirectories));
         Assert.Empty(Directory.GetDirectories(Path.Combine(LibraryFolders.Shared(application), ".incoming")));
         Assert.False(File.Exists(Path.Combine(root, "escaped.bms")));
+    }
+
+    [Fact]
+    public async Task SingleSongIsInstalledDirectlyAndRetainsItsName()
+    {
+        var zip = Zip(("[0002]Pure Ruby/normal.bms", "#TITLE Pure Ruby"), ("[0002]Pure Ruby/tone.ogg", "audio"));
+        var application = Path.Combine(root, "app");
+        var installed = await SongPackFiles.Install(zip, application, default);
+        Assert.Equal(Path.Combine(LibraryFolders.Shared(application), "[0002]Pure Ruby"), installed);
+        Assert.Empty(Directory.GetDirectories(LibraryFolders.Shared(application), "pack-*"));
+        Assert.Equal(installed, SongPackFiles.InstalledDirectory(application, await SongContent.HashFile(zip, default)));
+    }
+
+    [Fact]
+    public async Task ConflictingSongsKeepBothVersionsAndRepeatedImportUsesTheSameFolder()
+    {
+        var first = Zip(("Song/normal.bms", "first"));
+        var second = Zip(("Song/normal.bms", "second"));
+        var application = Path.Combine(root, "app");
+        var a = await SongPackFiles.Install(first, application, default);
+        var b = await SongPackFiles.Install(second, application, default);
+        Assert.NotEqual(a, b); Assert.EndsWith("Song (2)", b);
+        Assert.Equal("first", File.ReadAllText(Path.Combine(a, "normal.bms")));
+        Assert.Equal("second", File.ReadAllText(Path.Combine(b, "normal.bms")));
+        Assert.Equal(b, await SongPackFiles.Install(second, application, default));
+    }
+
+    [Fact]
+    public async Task MultiSongPackHasNoAddedOuterFolder()
+    {
+        var zip = Zip(("One/normal.bms", "one"), ("Two/normal.bms", "two"));
+        var application = Path.Combine(root, "app");
+        Assert.Equal(LibraryFolders.Shared(application), await SongPackFiles.Install(zip, application, default));
+        Assert.True(File.Exists(Path.Combine(LibraryFolders.Shared(application), "One", "normal.bms")));
+        Assert.True(File.Exists(Path.Combine(LibraryFolders.Shared(application), "Two", "normal.bms")));
+    }
+
+    [Fact]
+    public async Task MultiSongNameConflictsReserveUniqueDestinationsBeforeMoving()
+    {
+        var application = Path.Combine(root, "app");
+        await SongPackFiles.Install(Zip(("Song/normal.bms", "original")), application, default);
+        await SongPackFiles.Install(Zip(("Song/normal.bms", "second"), ("Song (2)/normal.bms", "third")), application, default);
+        var shared = LibraryFolders.Shared(application);
+        Assert.Equal("original", File.ReadAllText(Path.Combine(shared, "Song", "normal.bms")));
+        Assert.Equal(3, Directory.GetFiles(shared, "normal.bms", SearchOption.AllDirectories).Length);
+        Assert.Contains("second", Directory.GetFiles(shared, "normal.bms", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("third", Directory.GetFiles(shared, "normal.bms", SearchOption.AllDirectories).Select(File.ReadAllText));
+    }
+
+    [Fact]
+    public async Task FlatArchiveUsesTheSuppliedSongName()
+    {
+        var zip = Zip(("normal.bms", "#TITLE Halcyon"), ("tone.ogg", "audio"));
+        var application = Path.Combine(root, "app");
+        var installed = await SongPackFiles.Install(zip, application, default, title: "Halcyon");
+        Assert.Equal(Path.Combine(LibraryFolders.Shared(application), "Halcyon"), installed);
+    }
+
+    [Fact]
+    public async Task LegacyHashFolderMigratesAndCanBeReimported()
+    {
+        var zip = Zip(("Song/normal.bms", "#TITLE Test"), ("Song/tone.ogg", "audio"));
+        var application = Path.Combine(root, "app");
+        var hash = await SongContent.HashFile(zip, default);
+        var legacy = Path.Combine(LibraryFolders.Shared(application), "pack-" + hash);
+        ZipFile.ExtractToDirectory(zip, legacy);
+        LibraryFolders.Ensure(application);
+        Assert.False(Directory.Exists(legacy));
+        var installed = Path.Combine(LibraryFolders.Shared(application), "Song");
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(installed, "tone.ogg")));
+        Assert.Equal(installed, await SongPackFiles.Install(zip, application, default));
+    }
+
+    [Fact]
+    public void UnwritableMigrationRecordDoesNotPreventStartupOrLoseSongs()
+    {
+        var application = Path.Combine(root, "app");
+        var legacy = Path.Combine(LibraryFolders.Shared(application), "pack-" + new string('a', 64), "Song");
+        Directory.CreateDirectory(legacy);
+        File.WriteAllText(Path.Combine(legacy, "normal.bms"), "original");
+        Directory.CreateDirectory(Path.Combine(application, "userdata"));
+        File.WriteAllText(Path.Combine(application, "userdata", "song-packs"), "unavailable");
+        LibraryFolders.Ensure(application);
+        Assert.Equal("original", File.ReadAllText(Path.Combine(legacy, "normal.bms")));
+        Assert.False(Directory.Exists(Path.Combine(LibraryFolders.Shared(application), "Song")));
+    }
+
+    [Fact]
+    public async Task FlatLegacyArchiveMigratesAndCanBeReimportedWithItsTitle()
+    {
+        var zip = Zip(("normal.bms", "#TITLE Test"), ("tone.ogg", "audio"));
+        var application = Path.Combine(root, "app");
+        var hash = await SongContent.HashFile(zip, default);
+        var legacy = Path.Combine(LibraryFolders.Shared(application), "pack-" + hash);
+        ZipFile.ExtractToDirectory(zip, legacy);
+        LibraryFolders.Ensure(application);
+        Assert.False(Directory.Exists(legacy));
+        var installed = SongPackFiles.InstalledDirectory(application, hash);
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(installed!, "tone.ogg")));
+        Assert.Equal(installed, await SongPackFiles.Install(zip, application, default, title: "Test"));
     }
 
     [Theory]
@@ -72,7 +174,7 @@ public sealed class SongPackFilesTests : IDisposable
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SongPackFiles.Install(zip, application, cancelled.Token));
-        Assert.Empty(Directory.GetDirectories(LibraryFolders.Shared(application), "pack-*"));
+        Assert.Empty(Directory.GetFiles(LibraryFolders.Shared(application), "*.bms", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -84,7 +186,7 @@ public sealed class SongPackFilesTests : IDisposable
         var linked = Zip(("song/normal.bms", "#TITLE Test"));
         using (var archive = ZipFile.Open(linked, ZipArchiveMode.Update)) archive.Entries[0].ExternalAttributes = unchecked((int)0xA0000000);
         await Assert.ThrowsAsync<InvalidDataException>(() => SongPackFiles.Install(linked, application, default));
-        Assert.Empty(Directory.GetDirectories(LibraryFolders.Shared(application), "pack-*"));
+        Assert.Empty(Directory.GetFiles(LibraryFolders.Shared(application), "*.bms", SearchOption.AllDirectories));
     }
 
     [Theory]

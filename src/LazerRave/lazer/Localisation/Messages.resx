@@ -419,4 +419,18 @@
   <data name="Browse" xml:space="preserve"><value>Browse</value></data>
   <data name="Choose folder" xml:space="preserve"><value>Choose folder</value></data>
   <data name="Remove folder" xml:space="preserve"><value>Remove folder</value></data>
+  <data name="Search song packs" xml:space="preserve"><value>Search song packs</value></data>
+  <data name="Sort by" xml:space="preserve"><value>Sort by</value></data>
+  <data name="No song packs found." xml:space="preserve"><value>No song packs found.</value></data>
+  <data name="Loading song packs…" xml:space="preserve"><value>Loading song packs…</value></data>
+  <data name="Open library" xml:space="preserve"><value>Open library</value></data>
+  <data name="All keys" xml:space="preserve"><value>All keys</value></data>
+  <data name="Newest" xml:space="preserve"><value>Newest</value></data>
+  <data name="Browse song packs" xml:space="preserve"><value>Browse song packs</value></data>
+  <data name="Song pack directory is missing." xml:space="preserve"><value>Song pack directory is missing.</value></data>
+  <data name="Previous" xml:space="preserve"><value>Previous</value></data>
+  <data name="Next" xml:space="preserve"><value>Next</value></data>
+  <data name="Keys" xml:space="preserve"><value>Keys</value></data>
+  <data name="Difficulty" xml:space="preserve"><value>Difficulty</value></data>
+  <data name="Title" xml:space="preserve"><value>Title</value></data>
 </root>

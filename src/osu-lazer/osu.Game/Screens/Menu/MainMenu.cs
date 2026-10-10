@@ -57,6 +57,7 @@ namespace osu.Game.Screens.Menu
         protected virtual bool AutomaticallyShowLogin => true;
         protected virtual bool FlattenPlayMenu => false;
         protected virtual Drawable CreatePlayIcon() => null;
+        protected virtual osu.Framework.Localisation.LocalisableString BrowseText => osu.Game.Localisation.ButtonSystemStrings.Browse;
         protected virtual MainMenuButton CreateSecondaryMenuButton() => null;
 
         public override bool? AllowGlobalTrackControl => true;
@@ -148,6 +149,7 @@ namespace osu.Game.Screens.Menu
                         {
                             FlattenPlayMenu = FlattenPlayMenu,
                             CreatePlayIcon = CreatePlayIcon,
+                            BrowseText = BrowseText,
                             OnSolo = loadSongSelect,
                             OnMultiplayer = () => this.Push(new Multiplayer()),
                             OnExit = e =>

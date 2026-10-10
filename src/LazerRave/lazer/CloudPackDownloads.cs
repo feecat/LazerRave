@@ -4,10 +4,32 @@ using LazerRave.Content;
 
 namespace LazerRave.Lazer;
 
+internal sealed record CloudSongPack(Guid Id, string Title, string Description, string Sha256, long SizeBytes, DateTime CreatedAt,
+    int ChartCount, int[] Keys, int MinimumLevel, int MaximumLevel);
+internal sealed record CloudPackPage(CloudSongPack[] Items, int Total, int Page, int PageSize);
+
 internal sealed partial class CloudClient
 {
+    public Uri PackServer => Server ?? ServerUri("https://lazerrave.com");
+    public string PackDirectory(CloudSongPack pack) => SongPackFiles.InstalledDirectory(applicationRoot, pack.Sha256) ?? SharedRoot;
+    public bool PackInstalled(CloudSongPack pack)
+    {
+        try { return SongContent.IsHash(pack.Sha256) && SongPackFiles.InstalledDirectory(applicationRoot, pack.Sha256) is not null; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+    public async Task<CloudPackPage> BrowsePacks(string query, int keys, string sort, int page, CancellationToken cancellation)
+    {
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = PackServer, Timeout = TimeSpan.FromSeconds(30) };
+        using var response = await client.GetAsync($"api/packs/catalog?q={Uri.EscapeDataString(query)}&keys={keys}&sort={Uri.EscapeDataString(sort)}&page={page}", cancellation);
+        await Check(response, cancellation);
+        var result = await response.Content.ReadFromJsonAsync<CloudPackPage>(json, cancellation) ?? throw new InvalidDataException("Song pack catalog is empty.");
+        if (result.Items.Length > 20 || result.PageSize != 20 || result.Items.Any(pack => !SongContent.IsHash(pack.Sha256) || pack.SizeBytes is <= 0 or > SongContent.MaxArchiveBytes))
+            throw new InvalidDataException("Song pack catalog contains invalid metadata.");
+        return result;
+    }
     private sealed record PackDetails(PackMetadata Pack);
-    private sealed record PackMetadata(string Sha256, long SizeBytes);
+    private sealed record PackMetadata(string Sha256, long SizeBytes, string Title);
 
     internal static Guid PackId(string link, Uri server)
     {
@@ -56,7 +78,7 @@ internal sealed partial class CloudClient
             }
             SetProgress(new("Verifying ZIP", 0, 1));
             if (await SongContent.HashFile(zip, ct) != metadata.Sha256) throw new InvalidDataException("Song pack ZIP checksum failed.");
-            await InstallPack(zip, ct);
+            await InstallPack(zip, ct, metadata.Title);
         }
         finally { if (File.Exists(zip)) File.Delete(zip); }
     }, cancellation);
@@ -67,9 +89,9 @@ internal sealed partial class CloudClient
         await InstallPack(Path.GetFullPath(zip), ct);
     }, cancellation);
 
-    private async Task InstallPack(string zip, CancellationToken cancellation)
+    private async Task InstallPack(string zip, CancellationToken cancellation, string? title = null)
     {
-        var directory = await Task.Run(() => SongPackFiles.Install(zip, applicationRoot, cancellation, new CallbackProgress<TransferProgress>(SetProgress)), cancellation);
+        var directory = await Task.Run(() => SongPackFiles.Install(zip, applicationRoot, cancellation, new CallbackProgress<TransferProgress>(SetProgress), title), cancellation);
         SetProgress(new("Scanning…", 0, 1));
         await installed(directory);
         Status = "Installed to BMS/Shared"; Progress = null; Notify();
