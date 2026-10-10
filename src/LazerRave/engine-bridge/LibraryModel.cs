@@ -81,7 +81,13 @@ internal sealed record Chart(string Path, string Title, string Artist, int Keys,
 {
     public string? Md5 { get; init; }
     public string? LegacyReplayPath { get; init; }
-    public string Label => Difficulty switch { 1 => "BEGINNER", 2 => "NORMAL", 3 => "HYPER", 4 => "ANOTHER", 5 => "INSANE", _ => "UNKNOWN" };
+    public string Subtitle { get; init; } = "";
+    public string FullTitle => SongTitleParser.FullTitle(Title, Subtitle);
+    public string? SongTitle { get; init; }
+    public string DisplayTitle => SongTitle ?? Title;
+    public string? DifficultyLabel { get; init; }
+    public string Label => DifficultyLabel ?? (Difficulty switch { 1 => "BEGINNER", 2 => "NORMAL", 3 => "HYPER", 4 => "ANOTHER", 5 => "INSANE", _ => "UNKNOWN" });
+    public string DifficultyText => $"{Keys}Key · {Label} · Lv.{Level}";
 }
 internal sealed record Song(string Directory, string Title, string Artist, Chart[] Charts);
 internal sealed record Folder(string Path, string? Parent, string Name);
@@ -110,7 +116,11 @@ internal sealed class SongLibrary
             int Int(string key) => int.TryParse((string?)row.Attribute(key), out var n) ? n : 0;
             var chart = new Chart(path, (string?)row.Attribute("title") ?? "", (string?)row.Attribute("artist") ?? "", Int("keys"),
                 Int("level"), Int("difficulty"), double.TryParse((string?)row.Attribute("bpm"), CultureInfo.InvariantCulture, out var bpm) ? bpm : 0,
-                Int("notes"), row.Attribute("score") is null ? null : Int("score")) { Md5 = (string?)row.Attribute("md5"), LegacyReplayPath = (string?)row.Attribute("replay") };
+                Int("notes"), row.Attribute("score") is null ? null : Int("score"))
+            {
+                Md5 = (string?)row.Attribute("md5"), LegacyReplayPath = (string?)row.Attribute("replay"),
+                Subtitle = (string?)row.Attribute("subtitle") ?? "",
+            };
             var directory = Path.GetDirectoryName(path)!;
             if (!songs.TryGetValue(directory, out var charts)) songs[directory] = charts = [];
             if (!charts.Any(existing => existing.Path.Equals(path, StringComparison.OrdinalIgnoreCase))) charts.Add(chart);
@@ -130,14 +140,22 @@ internal sealed class SongLibrary
             Songs = songs.Select(group =>
             {
                 var charts = group.Value.OrderBy(chart => chart.Level).ToArray();
-                return new Song(group.Key, charts[0].Title, charts[0].Artist, charts);
+                var labels = SongTitleParser.Classify(charts.Select((chart, index) =>
+                    new SongChart(new Guid(index + 1, 0, 0, new byte[8]), chart.Title, chart.Artist,
+                        chart.Difficulty is >= 1 and <= 5 ? chart.Difficulty.ToString(CultureInfo.InvariantCulture) : "",
+                        chart.Keys, Subtitle: chart.Subtitle)).ToArray());
+                charts = charts.Select((chart, index) => chart with
+                    { SongTitle = labels[index].Title, DifficultyLabel = labels[index].Difficulty }).ToArray();
+                return new Song(group.Key, charts[0].DisplayTitle, charts[0].Artist, charts);
             }).OrderBy(song => song.Directory, StringComparer.OrdinalIgnoreCase).ToArray()
         };
     }
     public Entry[] Browse(string? directory, string query, int? keys, int sort)
     {
         bool Matches(Song song) => song.Charts.Any(chart => keys is null || chart.Keys == keys)
-            && (song.Title + " " + song.Artist + " " + song.Directory).Contains(query, StringComparison.OrdinalIgnoreCase);
+            && ((song.Title + " " + song.Artist + " " + song.Directory).Contains(query, StringComparison.OrdinalIgnoreCase)
+                || song.Charts.Any(chart => (keys is null || chart.Keys == keys)
+                    && (chart.FullTitle + " " + chart.Artist + " " + chart.Label).Contains(query, StringComparison.OrdinalIgnoreCase)));
         var matching = Songs.Where(Matches).ToArray();
         IEnumerable<Entry> entries;
         if (query.Length > 0) entries = matching.Select(song => new Entry(song.Directory, song.Title, song));

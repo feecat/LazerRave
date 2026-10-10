@@ -78,10 +78,10 @@ internal sealed class PlayRecordStore(string root)
         string? replayError = null;
         try { if (File.Exists(replay)) fingerprint = ReplayFile.Validate(replay); }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException) { replayError = error.Message; }
-        var record = new PlayRecord(run, hash, chart.Title, player, (playedAt ?? DateTimeOffset.UtcNow).ToUniversalTime(), score, settings.Arrangement, gauge, fingerprint is null ? null : replay)
+        var record = new PlayRecord(run, hash, chart.FullTitle, player, (playedAt ?? DateTimeOffset.UtcNow).ToUniversalTime(), score, settings.Arrangement, gauge, fingerprint is null ? null : replay)
         { ReplayHash = fingerprint?.Hash, ReplaySize = fingerprint?.Size, ReplayError = replayError, Speed = settings.Speed, Offset = settings.Offset, PlayOptions = new Dictionary<string, int>(settings.PlayOptions) };
         var document = new XDocument(new XElement("play", new XAttribute("version", 1),
-            new XAttribute("id", run), new XAttribute("title", chart.Title), new XAttribute("player", player),
+            new XAttribute("id", run), new XAttribute("title", chart.FullTitle), new XAttribute("player", player),
             new XAttribute("date", record.PlayedAt.ToString("O")), new XAttribute("arrangement", record.Arrangement), new XAttribute("gauge", gauge),
             new XAttribute("ex", score.ExScore), new XAttribute("score", score.NormalScore), new XAttribute("combo", score.MaxCombo),
             new XAttribute("misses", score.Misses), new XAttribute("clear", score.ClearType), new XAttribute("ranked", score.Eligible ? 1 : 0),

@@ -9,6 +9,10 @@
     <Compile Include="../../LazerRave/engine-bridge/GameplaySnapshot.cs" Link="Desktop/GameplaySnapshot.cs" />
     <Compile Include="../../LazerRave/engine-bridge/ClassicLaunch.cs" Link="Desktop/ClassicLaunch.cs" />
     <Compile Include="../../LazerRave/engine-bridge/NativeConfiguration.cs" Link="Desktop/NativeConfiguration.cs" />
+    <Compile Include="../../LazerRave/engine-bridge/LibraryModel.cs" Link="Desktop/LibraryModel.cs" />
+    <Compile Include="../../LazerRave/engine-bridge/ApplicationPaths.cs" Link="Desktop/ApplicationPaths.cs" />
+    <Compile Include="../../LazerRave/engine-bridge/PlayOptions.cs" Link="Desktop/PlayOptions.cs" />
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
     <Compile Include="../../LazerRave/lazer/CloudScoreSession.cs" Link="Desktop/CloudScoreSession.cs" />
     <Compile Include="../../LazerRave/lazer/CloudClient.cs" Link="Desktop/CloudClient.cs" />
     <Compile Include="../../LazerRave/lazer/CloudPackDownloads.cs" Link="Desktop/CloudPackDownloads.cs" />

@@ -45,7 +45,7 @@ internal sealed partial class CloudClient
                 return new
                 {
                     Sha256 = sha, Md5 = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(bytes)).ToLowerInvariant(),
-                    chart.Title, chart.Artist, Difficulty = chart.Label, chart.Keys, chart.Level, chart.Bpm,
+                    Title = chart.FullTitle, chart.Artist, Difficulty = chart.Label, chart.Keys, chart.Level, chart.Bpm,
                     LengthMs = BmsTimeline.Read(chart, encoding()).Length, Visibility = privateRanking ? "restricted" : "public",
                 };
             }, cancellation);

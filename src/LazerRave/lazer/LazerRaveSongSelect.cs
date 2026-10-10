@@ -102,8 +102,7 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
             game.SetLibraryLevelRange(FilterControl.DifficultyMinimum, FilterControl.DifficultyMaximum);
             criteria.UserStarDifficulty.Min = null; criteria.UserStarDifficulty.Max = null;
             if (game.Keys == 0) return;
-            int columns = BmsBeatmapStore.Columns(game.Keys);
-            criteria.CircleSize.Min = columns; criteria.CircleSize.Max = columns;
+            criteria.CircleSize.Min = game.Keys; criteria.CircleSize.Max = game.Keys;
             criteria.CircleSize.IsLowerInclusive = true; criteria.CircleSize.IsUpperInclusive = true;
         };
         RefreshFilter();

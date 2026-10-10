@@ -398,7 +398,7 @@ int RunHeadless(const Request& request, game& state) {
         for (int i = 0; i < state.config.jukebox.numOfPath; ++i)
             Child(*root, "root", Normalize(state.config.jukebox.path[i].body));
         sqlite3_stmt* statement = nullptr;
-        CheckSql(sqlite3_prepare_v2(raw, "SELECT path,title,artist,level,difficulty,mode,maxbpm,karinotes,hash FROM song ORDER BY path", -1, &statement, nullptr), raw);
+        CheckSql(sqlite3_prepare_v2(raw, "SELECT path,title,artist,level,difficulty,mode,maxbpm,karinotes,hash,subtitle FROM song ORDER BY path", -1, &statement, nullptr), raw);
         std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> rows(statement, sqlite3_finalize);
         int result;
         while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
@@ -410,6 +410,8 @@ int RunHeadless(const Request& request, game& state) {
                 auto value = sqlite3_column_text(statement, i);
                 chart->SetAttribute(names[i], value ? reinterpret_cast<const char*>(value) : "");
             }
+            const auto subtitle = sqlite3_column_text(statement, 9);
+            chart->SetAttribute("subtitle", subtitle ? reinterpret_cast<const char*>(subtitle) : "");
             const auto hash = sqlite3_column_text(statement, 8);
             if (hash) {
                 chart->SetAttribute("md5", reinterpret_cast<const char*>(hash));

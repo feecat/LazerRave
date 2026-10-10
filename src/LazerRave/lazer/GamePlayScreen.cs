@@ -26,7 +26,7 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
     public string? ExpectedChartHash { get; init; }
     public CloudClient? MultiplayerClient { get; init; }
     public Guid? MatchId { get; init; }
-    public override string Title => chart.Title;
+    public override string Title => chart.FullTitle;
     public override bool ShowFooter => false;
     public override bool CursorVisible => settings.Presentation == "standalone";
     public override bool HideOverlaysOnEnter => true;

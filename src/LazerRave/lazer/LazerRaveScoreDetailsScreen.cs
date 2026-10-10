@@ -137,7 +137,7 @@ internal partial class BmsExpandedScoreContent(ScoreInfo score, BmsScoreDetails 
             Padding = new MarginPadding { Horizontal = 15, Top = 52 }, Spacing = new Vector2(0, 14),
             Children = new Drawable[]
             {
-                new TruncatingSpriteText { Text = chart.Title, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 22, weight: FontWeight.SemiBold) },
+                new TruncatingSpriteText { Text = chart.DisplayTitle, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 22, weight: FontWeight.SemiBold) },
                 new TruncatingSpriteText { Text = chart.Artist, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 16) },
                 new Container
                 {
@@ -151,7 +151,7 @@ internal partial class BmsExpandedScoreContent(ScoreInfo score, BmsScoreDetails 
                 new OsuSpriteText { Anchor = Anchor.TopCentre, Origin = Anchor.TopCentre, Text = $"EX {score.TotalScore:N0} / {(details.TotalNotes is { } notes ? (notes * 2).ToString("N0") : "—")}", Font = OsuFont.Numeric.With(size: 30) },
                 new OsuSpriteText { Anchor = Anchor.TopCentre, Origin = Anchor.TopCentre, Text = $"{score.Accuracy:P2}", Font = OsuFont.GetFont(size: 24) },
                 new OsuSpriteText { Anchor = Anchor.TopCentre, Origin = Anchor.TopCentre, Text = details.Clear, Font = OsuFont.GetFont(size: 20, weight: FontWeight.SemiBold), Colour = Color4.LightGreen },
-                new OsuSpriteText { Anchor = Anchor.TopCentre, Origin = Anchor.TopCentre, Text = $"{chart.Keys}Key · Lv. {chart.Level}", Font = OsuFont.GetFont(size: 17) },
+                new OsuSpriteText { Anchor = Anchor.TopCentre, Origin = Anchor.TopCentre, Text = chart.DifficultyText, Font = OsuFont.GetFont(size: 17) },
             },
         };
     }

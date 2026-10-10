@@ -147,7 +147,7 @@ internal partial class LazerRaveGame : OsuGame
                 if (cloud.Room?.Id != room.Id) throw new InvalidOperationException("The room has changed.");
                 if (!chooseSong) return;
                 var chart = catalog.ChartFor(info) ?? throw new InvalidOperationException("Choose a BMS chart first.");
-                await cloud.SelectChart(new(chart.Path, chart.Title, chart.Artist, chart.Keys, chart.Level), cancellation);
+                await cloud.SelectChart(new(chart.Path, chart.FullTitle, chart.Artist, chart.Keys, chart.Level), cancellation);
             },
         });
     }
@@ -464,7 +464,7 @@ internal partial class LazerRaveGame : OsuGame
         {
             menuTrackVolume.Value = 1;
             cloud.SetGameStatus(error ?? "Returned to room.");
-            ScreenStack.Push(new LazerRaveRoundResults(cloud, match, chart.Title, error) { RelativeSizeAxes = Axes.Both });
+            ScreenStack.Push(new LazerRaveRoundResults(cloud, match, chart.FullTitle, error) { RelativeSizeAxes = Axes.Both });
         }) { RelativeSizeAxes = Axes.Both, MultiplayerClient = cloud, MatchId = match, ExpectedChartHash = room.Chart?.Sha256, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, RecordSaved = AutoUploadRecord(chart, preferences.Value.IrUpload) });
     }
     private Action<PlayRecord> AutoUploadRecord(Chart chart, string mode) => record =>

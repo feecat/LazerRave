@@ -75,14 +75,15 @@ internal partial class BmsBeatmapStore : BeatmapStore
                 set.Files.Add(new RealmNamedFileUsage(new RealmFile { Hash = id.ToString("N") }, chart.Path));
                 set.Beatmaps.Add(new BeatmapInfo(ruleset)
                 {
-                    ID = id, BeatmapSet = set, Hash = id.ToString("N"), MD5Hash = id.ToString("N"),
-                    DifficultyName = $"{chart.Keys}Key · {chart.Label} · Lv.{chart.Level}",
+                    ID = id, BeatmapSet = set, Hash = id.ToString("N"),
+                    MD5Hash = chart.Md5 is { Length: 32 } md5 && md5.All(Uri.IsHexDigit) ? md5.ToLowerInvariant() : id.ToString("N"),
+                    DifficultyName = chart.DifficultyText,
                     BPM = chart.Bpm, StarRating = 0,
-                    Difficulty = new BeatmapDifficulty { CircleSize = Columns(chart.Keys) },
+                    Difficulty = new BeatmapDifficulty { CircleSize = chart.Keys },
                     Metadata = new BeatmapMetadata
                     {
-                        Title = chart.Title, TitleUnicode = chart.Title, Artist = chart.Artist, ArtistUnicode = chart.Artist,
-                        Source = Path.GetFileName(song.Directory), Tags = $"{song.Directory} {Path.GetFileName(chart.Path)} {chart.Label} Lv.{chart.Level}", PreviewTime = 0,
+                        Title = chart.DisplayTitle, TitleUnicode = chart.DisplayTitle, Artist = chart.Artist, ArtistUnicode = chart.Artist,
+                        Source = Path.GetFileName(song.Directory), Tags = $"{song.Directory} {Path.GetFileName(chart.Path)} {chart.FullTitle} {chart.Label} Lv.{chart.Level}", PreviewTime = 0,
                         AudioFile = song.Directory, BackgroundFile = chart.Path,
                     },
                 });
