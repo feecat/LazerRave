@@ -22,7 +22,7 @@ nav:
   - 项目概览: index.md
   - 构建入门: getting-started/build-and-run.md
   - 客户端开发:
-      - 仓库结构: development/project-layout.md
+      - 仓库结构与维护: development/project-layout.md
       - 客户端与设置: development/client.md
       - 前端资源包: development/resource-pack.md
       - 版本与发布包: development/versioning-and-release.md
@@ -43,5 +43,3 @@ nav:
   - 演奏模式与设置: development/gameplay-modes.md
   - 云端部署: operations/cloud-deployment.md
   - 运维规划: operations/server-capacity.md
-  - 文档维护: development/documentation.md
-  - 文档索引: contents.md

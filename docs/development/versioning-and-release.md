@@ -47,7 +47,7 @@ ZIP 使用 Deflate Optimal 压缩，包含一个同名顶层目录，并生成 `
 
 将版本对应的源码提交后，以 `v<version>` 标签创建 [GitHub Release](https://github.com/feecat/LazerRave/releases)，上传 ZIP 和同名 `.sha256` 文件；Beta、RC 版本标为 Pre-release。标签必须对应实际构建源码，附件保留脚本生成的文件名，例如 `LazerRave-0.1.0-beta.1-win-x64.zip`。
 
-网站 [下载页](https://lazerrave.com/download) 自动读取公开 Release 和其 Windows x64 ZIP 附件，支持预发布版，并展示最近发布的可下载版本。只有源码归档、草稿或没有匹配 ZIP 的 Release 不显示为客户端下载包。暂无公开附件时，页面显示未发布状态；上传后无需重新部署网页。
+网站 [下载页](https://lazerrave.com/download) 自动读取公开 Release 和 Windows x64 ZIP 附件，支持预发布版；草稿及无匹配 ZIP 的 Release 不显示为下载包，上传后无需重新部署网页。首个公开 Beta 为 [v0.1.0-beta.1](https://github.com/feecat/LazerRave/releases/tag/v0.1.0-beta.1)。
 
 ## 发布包内容
 
