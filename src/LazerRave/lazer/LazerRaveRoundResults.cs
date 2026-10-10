@@ -1,3 +1,6 @@
+using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Localisation;
+using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Screens;
@@ -12,7 +15,8 @@ namespace LazerRave.Lazer;
 
 internal partial class LazerRaveRoundResults(CloudClient client, Guid match, string title, string? error) : OsuScreen
 {
-    public override string Title => "Multiplayer results";
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
+    public override string Title => localisation?.GetLocalisedString(D("Multiplayer results")) ?? "Multiplayer results";
     public override bool HideOverlaysOnEnter => true;
     public override bool? AllowGlobalTrackControl => false;
     protected override void LoadComplete()
@@ -29,8 +33,8 @@ internal partial class LazerRaveRoundResults(CloudClient client, Guid match, str
                 [new CloudLeaderboard(client, match, false) { RelativeSizeAxes = Axes.Both }],
                 [new Container { RelativeSizeAxes = Axes.Both, Children = new Drawable[]
                 {
-                    new PurpleRoundedButton { Text = "Return to room", Size = new Vector2(200, 45), Anchor = Anchor.BottomRight, Origin = Anchor.BottomRight, Action = () => this.Exit() },
-                    new TruncatingSpriteText { Text = error ?? "", RelativeSizeAxes = Axes.X, Width = .7f, Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, Font = OsuFont.GetFont(size: 16) },
+                    new PurpleRoundedButton { Text = D("Return to room"), Size = new Vector2(200, 45), Anchor = Anchor.BottomRight, Origin = Anchor.BottomRight, Action = () => this.Exit() },
+                    new TruncatingSpriteText { Text = D(error ?? ""), RelativeSizeAxes = Axes.X, Width = .7f, Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, Font = OsuFont.GetFont(size: 16) },
                 } }],
             },
         });

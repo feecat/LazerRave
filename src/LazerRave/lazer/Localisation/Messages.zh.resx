@@ -481,4 +481,103 @@
   <data name="Keys" xml:space="preserve"><value>键数</value></data>
   <data name="Difficulty" xml:space="preserve"><value>难度</value></data>
   <data name="Title" xml:space="preserve"><value>名称</value></data>
+  <data name="Room" xml:space="preserve"><value>房间</value></data>
+  <data name="Multiplayer" xml:space="preserve"><value>多人游戏</value></data>
+  <data name="Multiplayer results" xml:space="preserve"><value>多人结算</value></data>
+  <data name="Participants" xml:space="preserve"><value>参与玩家</value></data>
+  <data name="Song" xml:space="preserve"><value>曲目</value></data>
+  <data name="Room name" xml:space="preserve"><value>房间名称</value></data>
+  <data name="Create room" xml:space="preserve"><value>创建房间</value></data>
+  <data name="Choose song" xml:space="preserve"><value>选择曲目</value></data>
+  <data name="Choose a song" xml:space="preserve"><value>请选择曲目</value></data>
+  <data name="Choosing a song" xml:space="preserve"><value>正在选择曲目</value></data>
+  <data name="Song files" xml:space="preserve"><value>曲目文件</value></data>
+  <data name="Upload and share song" xml:space="preserve"><value>上传并分享曲目</value></data>
+  <data name="Download song / continue" xml:space="preserve"><value>下载曲目 / 继续下载</value></data>
+  <data name="Open selected song" xml:space="preserve"><value>打开所选曲目</value></data>
+  <data name="Chat" xml:space="preserve"><value>聊天</value></data>
+  <data name="Send" xml:space="preserve"><value>发送</value></data>
+  <data name="Message" xml:space="preserve"><value>消息</value></data>
+  <data name="Leave room" xml:space="preserve"><value>离开房间</value></data>
+  <data name="Ready" xml:space="preserve"><value>准备</value></data>
+  <data name="Not ready" xml:space="preserve"><value>取消准备</value></data>
+  <data name="Start game" xml:space="preserve"><value>开始游戏</value></data>
+  <data name="New room" xml:space="preserve"><value>新房间</value></data>
+  <data name="Starting in {0}…" xml:space="preserve"><value>{0} 秒后开始…</value></data>
+  <data name="Share expires at {0}" xml:space="preserve"><value>分享将于 {0} 失效</value></data>
+  <data name="Available" xml:space="preserve"><value>已拥有</value></data>
+  <data name="Missing BMS chart" xml:space="preserve"><value>缺少 BMS 谱面</value></data>
+  <data name="{0} / {1} ready" xml:space="preserve"><value>{0} / {1} 人已准备</value></data>
+  <data name="Waiting for players" xml:space="preserve"><value>等待玩家</value></data>
+  <data name="Starting" xml:space="preserve"><value>即将开始</value></data>
+  <data name="Playing" xml:space="preserve"><value>演奏中</value></data>
+  <data name="Results" xml:space="preserve"><value>结算</value></data>
+  <data name="Idle" xml:space="preserve"><value>等待中</value></data>
+  <data name="Missing" xml:space="preserve"><value>缺少谱面</value></data>
+  <data name="Cancel the current transfer before leaving." xml:space="preserve"><value>请先取消当前传输，再离开房间。</value></data>
+  <data name="In progress" xml:space="preserve"><value>进行中的房间</value></data>
+  <data name="Full rooms" xml:space="preserve"><value>已满员的房间</value></data>
+  <data name="No rooms available. Create a room to begin." xml:space="preserve"><value>暂无房间，请创建房间开始游玩。</value></data>
+  <data name="{0} rooms · {1} players" xml:space="preserve"><value>{0} 个房间 · {1} 位玩家</value></data>
+  <data name="{0}'s room" xml:space="preserve"><value>{0} 的房间</value></data>
+  <data name="Return to room" xml:space="preserve"><value>返回房间</value></data>
+  <data name="Live ranking" xml:space="preserve"><value>实时排行</value></data>
+  <data name="Round unavailable" xml:space="preserve"><value>本局数据不可用</value></data>
+  <data name="{0} players" xml:space="preserve"><value>{0} 位玩家</value></data>
+  <data name="Connection lost · last received scores" xml:space="preserve"><value>连接已断开 · 显示最后收到的成绩</value></data>
+  <data name="Round complete · EX SCORE" xml:space="preserve"><value>本局已结束 · EX SCORE</value></data>
+  <data name="{0} / {1} finished · EX SCORE" xml:space="preserve"><value>{0} / {1} 人已完成 · EX SCORE</value></data>
+  <data name="Disconnected" xml:space="preserve"><value>已断线</value></data>
+  <data name="DNF" xml:space="preserve"><value>未完成</value></data>
+  <data name="Use selected difficulty" xml:space="preserve"><value>使用所选难度</value></data>
+  <data name="Checking local song resources…" xml:space="preserve"><value>正在检查本地曲目资源…</value></data>
+  <data name="Checking resources" xml:space="preserve"><value>检查资源</value></data>
+  <data name="Compressing" xml:space="preserve"><value>压缩中</value></data>
+  <data name="Uploading" xml:space="preserve"><value>上传中</value></data>
+  <data name="{0} remaining" xml:space="preserve"><value>剩余 {0}</value></data>
+  <data name="Signed in" xml:space="preserve"><value>已登录</value></data>
+  <data name="Restoring sign-in…" xml:space="preserve"><value>正在恢复登录…</value></data>
+  <data name="Automatic sign-in unavailable. Retry when the server is reachable." xml:space="preserve"><value>暂时无法自动登录，请在服务器恢复连接后重试。</value></data>
+  <data name="Session expired or revoked. Sign in again." xml:space="preserve"><value>登录已失效，请重新登录。</value></data>
+  <data name="Signed in. Multiplayer connection timed out." xml:space="preserve"><value>已登录，多人服务器连接超时。</value></data>
+  <data name="You were removed from the room by the host." xml:space="preserve"><value>你已被房主移出房间。</value></data>
+  <data name="Multiplayer disconnected. Reconnect, or close extra website tabs or clients if the connection limit was reached." xml:space="preserve"><value>多人连接已断开，请重新连接；若已达连接数量上限，请关闭多余的网站标签页或客户端。</value></data>
+  <data name="Connected" xml:space="preserve"><value>已连接</value></data>
+  <data name="Checking local BMS chart…" xml:space="preserve"><value>正在检查本地 BMS 谱面…</value></data>
+  <data name="Song available" xml:space="preserve"><value>已拥有所选曲目</value></data>
+  <data name="Song missing — download when the host shares it." xml:space="preserve"><value>缺少所选曲目，请在房主分享后下载。</value></data>
+  <data name="Server validating ZIP…" xml:space="preserve"><value>服务器正在校验 ZIP…</value></data>
+  <data name="Shared for 2 hours" xml:space="preserve"><value>曲目已分享，有效期 2 小时</value></data>
+  <data name="Cancelled — click the transfer button to continue." xml:space="preserve"><value>传输已取消，点击传输按钮可继续。</value></data>
+  <data name="Signed out" xml:space="preserve"><value>已退出登录</value></data>
+  <data name="Sign in first." xml:space="preserve"><value>请先登录。</value></data>
+  <data name="Join a room first." xml:space="preserve"><value>请先加入房间。</value></data>
+  <data name="Only the host may select a song." xml:space="preserve"><value>只有房主可以选择曲目。</value></data>
+  <data name="Select a BMS chart." xml:space="preserve"><value>请选择 BMS 谱面。</value></data>
+  <data name="The selected BMS chart must be available first." xml:space="preserve"><value>请先准备好所选 BMS 谱面。</value></data>
+  <data name="Only the host can start after every player has matched the BMS chart and is ready." xml:space="preserve"><value>所有玩家已拥有所选 BMS 谱面并准备后，房主才能开始游戏。</value></data>
+  <data name="Only the host with the selected BMS chart may force start." xml:space="preserve"><value>只有已拥有所选 BMS 谱面的房主可以强制开始。</value></data>
+  <data name="The selected local song is unavailable." xml:space="preserve"><value>所选本地曲目不可用。</value></data>
+  <data name="The selected BMS file has changed. Select it again." xml:space="preserve"><value>所选 BMS 文件已变化，请重新选择。</value></data>
+  <data name="The host has not shared this song yet." xml:space="preserve"><value>房主尚未分享该曲目。</value></data>
+  <data name="Shared content does not match the selected song." xml:space="preserve"><value>分享的内容与所选曲目不符。</value></data>
+  <data name="Download interrupted. Click Download song to continue." xml:space="preserve"><value>下载已中断，点击下载曲目继续。</value></data>
+  <data name="ZIP checksum failed. Download again." xml:space="preserve"><value>ZIP 校验失败，请重新下载。</value></data>
+  <data name="Another transfer is running." xml:space="preserve"><value>另一个传输任务正在进行。</value></data>
+  <data name="The room chart is not in the library. Rescan before starting another round." xml:space="preserve"><value>曲库中未找到房间谱面，请重新扫描后再开始下一局。</value></data>
+  <data name="Game settings could not be saved." xml:space="preserve"><value>无法保存游戏设置。</value></data>
+  <data name="Waiting for library synchronization." xml:space="preserve"><value>正在等待曲库同步。</value></data>
+  <data name="Returned to room." xml:space="preserve"><value>已返回房间。</value></data>
+  <data name="Back" xml:space="preserve"><value>返回</value></data>
+  <data name="Server" xml:space="preserve"><value>服务器</value></data>
+  <data name="Username or email" xml:space="preserve"><value>用户名或邮箱</value></data>
+  <data name="Password" xml:space="preserve"><value>密码</value></data>
+  <data name="Sign in" xml:space="preserve"><value>登录</value></data>
+  <data name="Sign out" xml:space="preserve"><value>退出登录</value></data>
+  <data name="Retry saved sign-in" xml:space="preserve"><value>重试已保存的登录</value></data>
+  <data name="Create an account on the website" xml:space="preserve"><value>前往网站注册账号</value></data>
+  <data name="Profile on the website" xml:space="preserve"><value>查看网站个人资料</value></data>
+  <data name="Change password on the website" xml:space="preserve"><value>前往网站修改密码</value></data>
+  <data name="Enter multiplayer" xml:space="preserve"><value>进入多人游戏</value></data>
+  <data name="Connect multiplayer" xml:space="preserve"><value>连接多人服务器</value></data>
 </root>

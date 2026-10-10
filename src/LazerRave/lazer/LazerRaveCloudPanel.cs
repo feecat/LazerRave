@@ -1,3 +1,4 @@
+using static LazerRave.Lazer.LazerRaveText;
 using LazerRave.Bridge;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -67,7 +68,7 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
                         Children = new Drawable[]
                         {
                             Label("LazerRave", 28),
-                            new RoundedButton { Text = "Back", Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Size = new Vector2(86, 34), Action = Hide },
+                            new RoundedButton { Text = D("Back"), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Size = new Vector2(86, 34), Action = Hide },
                             status = new OsuSpriteText { Y = 48, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 15), Text = "" },
                             new Container { Y = 82, RelativeSizeAxes = Axes.X, Height = 5, Masking = true, CornerRadius = 2,
                                 Children = new Drawable[] { new Box { RelativeSizeAxes = Axes.Both, Colour = colours.Background3 }, progress = new Box { RelativeSizeAxes = Axes.Both, Width = 0, Colour = Color4.Cyan } } },
@@ -87,7 +88,7 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
     private static OsuSpriteText Label(string text, float size = 18) => new() { Text = text, Font = OsuFont.GetFont(size: size) };
     private void Button(string text, Func<Task> action, bool enabled = true)
     {
-        var button = new RoundedButton { Text = text, RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Run(action) };
+        var button = new RoundedButton { Text = D(text), RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Run(action) };
         button.Enabled.Value = enabled && !working;
         body.Add(button);
     }
@@ -134,9 +135,9 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
         if (client.User is null)
         {
             if (client.HasSavedSession) Button("Retry saved sign-in", RestoreAndEnter);
-            body.Add(new FormTextBox { Caption = "Server", Current = endpoint, RelativeSizeAxes = Axes.X });
-            body.Add(new FormTextBox { Caption = "Username or email", Current = username, RelativeSizeAxes = Axes.X });
-            body.Add(new FormPasswordTextBox { Caption = "Password", Current = password, RelativeSizeAxes = Axes.X });
+            body.Add(new FormTextBox { Caption = D("Server"), Current = endpoint, RelativeSizeAxes = Axes.X });
+            body.Add(new FormTextBox { Caption = D("Username or email"), Current = username, RelativeSizeAxes = Axes.X });
+            body.Add(new FormPasswordTextBox { Caption = D("Password"), Current = password, RelativeSizeAxes = Axes.X });
             Button("Sign in", async () =>
             {
                 await client.Login(endpoint.Value, username.Value, password.Value, lifetime.Token);
@@ -167,8 +168,10 @@ internal partial class LazerRaveCloudPanel(LazerRaveGame game, CloudClient clien
         base.Update();
         if (Interlocked.Exchange(ref dirty, 0) == 0) return;
         var p = client.Progress;
-        status.Text = error.Length > 0 ? error : p is null ? client.Status : $"{p.Stage} · {p.Fraction:P0} · {p.Completed / 1048576d:F1}/{p.Total / 1048576d:F1} MiB" +
-            (p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1048576d:F1} MiB/s · {TimeSpan.FromSeconds(Math.Max(0, (p.Total - p.Completed) / p.BytesPerSecond)):mm\\:ss} remaining" : "");
+        status.Text = error.Length > 0 ? D(error) : p is null ? D(client.Status) : LocalisableString.Format("{0} · {1:P0} · {2:F1}/{3:F1} MiB{4}",
+            D(p.Stage), p.Fraction, p.Completed / 1048576d, p.Total / 1048576d,
+            p.BytesPerSecond > 0 ? LocalisableString.Format(" · {0:F1} MiB/s · {1}", p.BytesPerSecond / 1048576d,
+                D("{0} remaining", TimeSpan.FromSeconds(Math.Max(0, (p.Total - p.Completed) / p.BytesPerSecond)).ToString(@"mm\:ss"))) : "");
         status.Colour = error.Length > 0 ? Color4.OrangeRed : Color4.White;
         progress.Width = (float)(p?.Fraction ?? 0);
         var next = $"{client.Connected}/{client.User}/{working}";

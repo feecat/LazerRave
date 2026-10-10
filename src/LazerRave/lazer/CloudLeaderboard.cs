@@ -1,3 +1,5 @@
+using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Localisation;
 using osu.Framework.Allocation;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
@@ -26,6 +28,7 @@ internal partial class CloudLeaderboard(CloudClient client, Guid match, bool com
     private OsuSpriteText status = null!;
     private long version = -1;
     private bool connected;
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
     public CloudMember[] DisplayedMembers { get; private set; } = [];
     protected override void LoadComplete()
     {
@@ -39,7 +42,7 @@ internal partial class CloudLeaderboard(CloudClient client, Guid match, bool com
                 RowDimensions = [new Dimension(GridSizeMode.Absolute, 42), new Dimension(GridSizeMode.Absolute, 38), new Dimension()],
                 Content = new Drawable?[][]
                 {
-                    [header = new SectionHeader(compact ? "Live ranking" : "Results")],
+                    [header = new SectionHeader(D(compact ? "Live ranking" : "Results"))],
                     [status = new OsuSpriteText { RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: compact ? 14 : 18) }],
                     [new OsuScrollContainer { RelativeSizeAxes = Axes.Both, Child = list = new FillFlowContainer
                     {
@@ -56,14 +59,14 @@ internal partial class CloudLeaderboard(CloudClient client, Guid match, bool com
         var room = client.Room;
         if (version == room?.Version && connected == client.Connected) return;
         version = room?.Version ?? -1; connected = client.Connected;
-        if (room?.MatchId != match) { status.Text = "Round unavailable"; return; }
+        if (room?.MatchId != match) { status.Text = D("Round unavailable"); return; }
         var completed = room.State == "results" || room.State == "lobby" && room.Results is { Length: > 0 };
         // Preserve departed players in the completed round, without adding new lobby entrants.
         var members = room.Results is { Length: > 0 } ? room.Results : room.Members;
         DisplayedMembers = members.OrderByDescending(value => value.ExScore).ThenBy(value => value.Misses)
             .ThenByDescending(value => value.MaxCombo).ThenBy(value => value.Id).ToArray();
-        header.DetailsText.Value = $"{members.Length} players";
-        status.Text = !connected ? "Connection lost · last received scores" : completed ? "Round complete · EX SCORE" : $"{members.Count(value => value.Finished)} / {members.Length} finished · EX SCORE";
+        header.DetailsText.Value = localisation.GetLocalisedString(D("{0} players", members.Length));
+        status.Text = !connected ? D("Connection lost · last received scores") : completed ? D("Round complete · EX SCORE") : D("{0} / {1} finished · EX SCORE", members.Count(value => value.Finished), members.Length);
         foreach (var removed in rows.Keys.Except(members.Select(value => value.Id)).ToArray()) { list.Remove(rows[removed], true); rows.Remove(removed); }
         int rank = 0;
         for (int index = 0; index < DisplayedMembers.Length; index++)
@@ -106,7 +109,8 @@ internal partial class CloudScoreRow(bool compact) : CompositeDrawable
         rank.Text = position.ToString(); name.Text = member.DisplayName;
         score.Text = $"{member.ExScore:N0}";
         string state = member.Disconnected ? "Disconnected" : member.Aborted ? "DNF" : member.Finished ? ClearName(member.ClearType) : "Playing";
-        details.Text = compact ? $"{member.Combo}x · MAX {member.MaxCombo} · MISS {member.Misses} · {state}" : $"UID {member.Uid} · COMBO {member.Combo} · MAX {member.MaxCombo} · MISS {member.Misses} · {state}";
+        details.Text = compact ? LocalisableString.Format("{0}x · MAX {1} · MISS {2} · {3}", member.Combo, member.MaxCombo, member.Misses, D(state))
+            : LocalisableString.Format("UID {0} · COMBO {1} · MAX {2} · MISS {3} · {4}", member.Uid, member.Combo, member.MaxCombo, member.Misses, D(state));
         details.Colour = member.Disconnected || member.Aborted ? Color4.Orange : member.Finished ? Color4.LightGreen : Color4.White;
         highlight.Alpha = self ? 1 : 0;
         progress.ResizeWidthTo((float)member.Progress, 120);

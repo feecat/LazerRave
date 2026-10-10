@@ -1,5 +1,7 @@
 // Layout adapted from osu.Game.Screens.OnlinePlay.Multiplayer.MultiplayerMatchSubScreen.
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Localisation;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
@@ -33,7 +35,8 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
     [Resolved] private CloudClient client { get; set; } = null!;
     [Resolved] private CloudRoomMap rooms { get; set; } = null!;
     [Resolved] private LazerRaveGame game { get; set; } = null!;
-    public override string Title => "Room";
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
+    public override string Title => localisation?.GetLocalisedString(D("Room")) ?? "Room";
     protected override BackgroundScreen CreateBackground() => new BackgroundScreenBlack();
     private readonly Bindable<string> name = new(model.Name), message = new("");
     private readonly CancellationTokenSource lifetime = new();
@@ -91,7 +94,7 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                                             RowDimensions = [new Dimension(GridSizeMode.AutoSize), new Dimension()],
                                             Content = new Drawable?[][]
                                             {
-                                                [participantHeader = new SectionHeader("Participants")],
+                                                [participantHeader = new SectionHeader(D("Participants"))],
                                                 [new OsuScrollContainer { RelativeSizeAxes = Axes.Both, Child = participants = new FillFlowContainer
                                                 { RelativeSizeAxes = Axes.X, AutoSizeAxes = Axes.Y, Direction = FillDirection.Vertical, Spacing = new Vector2(0, 1) } }],
                                             },
@@ -104,13 +107,13 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                                                 RelativeSizeAxes = Axes.X, AutoSizeAxes = Axes.Y, Direction = FillDirection.Vertical, Spacing = new Vector2(0, 10), Padding = new MarginPadding { Right = 8, Bottom = 16 },
                                                 Children = new Drawable[]
                                                 {
-                                                    new SectionHeader("Song"),
-                                                    roomName = new FormTextBox { Caption = "Room name", Current = name, RelativeSizeAxes = Axes.X },
+                                                    new SectionHeader(D("Song")),
+                                                    roomName = new FormTextBox { Caption = D("Room name"), Current = name, RelativeSizeAxes = Axes.X },
                                                     create = Button("Create room", async () => { await client.CreateRoom(name.Value, lifetime.Token); roomId = client.Room!.Id; }),
                                                     chartTitle = new TruncatingSpriteText { RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 23) },
                                                     chartDetails = new TruncatingSpriteText { RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 16) },
                                                     choose = Button("Choose song", () => { game.OpenRoomLibrary(); return Task.CompletedTask; }),
-                                                    new SectionHeader("Song files"),
+                                                    new SectionHeader(D("Song files")),
                                                     transferStatus = new OsuTextFlowContainer(text => text.Font = OsuFont.GetFont(size: 15)) { RelativeSizeAxes = Axes.X, AutoSizeAxes = Axes.Y },
                                                     new Container { RelativeSizeAxes = Axes.X, Height = 5, Children = new Drawable[]
                                                     {
@@ -120,7 +123,7 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                                                     upload = Button("Upload and share song", () => client.Upload(lifetime.Token)),
                                                     download = Button("Download song / continue", () => client.Download(lifetime.Token)),
                                                     open = Button("Open selected song", () => { game.OpenSharedChart(client.AvailableChart!); return Task.CompletedTask; }),
-                                                    cancel = new PurpleRoundedButton { Text = "Cancel transfer", RelativeSizeAxes = Axes.X, Height = 40, Action = client.CancelTransfer },
+                                                    cancel = new PurpleRoundedButton { Text = D("Cancel transfer"), RelativeSizeAxes = Axes.X, Height = 40, Action = client.CancelTransfer },
                                                 },
                                             },
                                         }, null,
@@ -130,11 +133,11 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                                             RowDimensions = [new Dimension(GridSizeMode.AutoSize), new Dimension(), new Dimension(GridSizeMode.AutoSize), new Dimension(GridSizeMode.Absolute, 40)],
                                             Content = new Drawable?[][]
                                             {
-                                                [new SectionHeader("Chat")],
+                                                [new SectionHeader(D("Chat"))],
                                                 [chatScroll = new OsuScrollContainer { RelativeSizeAxes = Axes.Both, Child = messages = new FillFlowContainer
                                                 { RelativeSizeAxes = Axes.X, AutoSizeAxes = Axes.Y, Direction = FillDirection.Vertical, Spacing = new Vector2(0, 8), Padding = new MarginPadding { Right = 8, Bottom = 10 } } }],
                                                 [CreateChatInput()],
-                                                [send = new PurpleRoundedButton { Text = "Send", RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Send() }],
+                                                [send = new PurpleRoundedButton { Text = D("Send"), RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Send() }],
                                             },
                                         }],
                                     },
@@ -148,21 +151,21 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
                     Anchor = Anchor.BottomLeft, Origin = Anchor.BottomLeft, Y = 60, RelativeSizeAxes = Axes.X, Height = 50,
                     Children = new Drawable[]
                     {
-                        new PurpleRoundedButton { Text = "Leave room", Size = new Vector2(150, 50), Action = RequestLeave },
+                        new PurpleRoundedButton { Text = D("Leave room"), Size = new Vector2(150, 50), Action = RequestLeave },
                         status = new TruncatingSpriteText { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, X = 170, RelativeSizeAxes = Axes.X, Padding = new MarginPadding { Right = 700 }, Font = OsuFont.GetFont(size: 15) },
-                        ready = new PurpleRoundedButton { Text = "Ready", Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Size = new Vector2(150, 50), Action = () => _ = Run(() => client.Ready(lifetime.Token)) },
-                        start = new PurpleRoundedButton { Text = "Start game", Anchor = Anchor.TopRight, Origin = Anchor.TopRight, X = -166, Size = new Vector2(170, 50), Action = () => _ = Run(() => client.StartRound(lifetime.Token)) },
+                        ready = new PurpleRoundedButton { Text = D("Ready"), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, Size = new Vector2(150, 50), Action = () => _ = Run(() => client.Ready(lifetime.Token)) },
+                        start = new PurpleRoundedButton { Text = D("Start game"), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, X = -166, Size = new Vector2(170, 50), Action = () => _ = Run(() => client.StartRound(lifetime.Token)) },
                         forceStart = new PurpleRoundedButton { Text = LazerRaveText.D("Force start"), Anchor = Anchor.TopRight, Origin = Anchor.TopRight, X = -352, Size = new Vector2(150, 50), Action = () => _ = Run(() => client.ForceStartRound(lifetime.Token)) },
                     },
                 },
             },
         };
     }
-    private PurpleRoundedButton Button(string text, Func<Task> action) => new() { Text = text, RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Run(action) };
+    private PurpleRoundedButton Button(string text, Func<Task> action) => new() { Text = D(text), RelativeSizeAxes = Axes.X, Height = 40, Action = () => _ = Run(action) };
     private void Changed() => Interlocked.Exchange(ref dirty, 1);
     private FormTextBox CreateChatInput()
     {
-        var input = new FormTextBox { Caption = "Message", Current = message, RelativeSizeAxes = Axes.X };
+        var input = new FormTextBox { Caption = D("Message"), Current = message, RelativeSizeAxes = Axes.X };
         input.OnCommit += (textBox, enter) => { if (enter) _ = Send(); };
         return input;
     }
@@ -201,7 +204,7 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
         base.Update();
         if (Interlocked.Exchange(ref dirty, 0) == 0)
         {
-            if (error.Length == 0 && client.Room is { State: "countdown", StartAt: { } startAt }) status.Text = $"Starting in {Math.Max(0, Math.Ceiling((startAt - client.ServerNow).TotalSeconds))}…";
+            if (error.Length == 0 && client.Room is { State: "countdown", StartAt: { } startAt }) status.Text = D("Starting in {0}…", Math.Max(0, Math.Ceiling((startAt - client.ServerNow).TotalSeconds)));
             return;
         }
         var room = client.Room;
@@ -217,11 +220,12 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
         roomName.Alpha = create.Alpha = room is null ? 1 : 0;
         create.Enabled.Value = client.Connected && !working;
         choose.Enabled.Value = host && !working && room?.State is "lobby" or "results";
-        chartTitle.Text = room?.Chart?.Title ?? "Choose a song";
-        chartDetails.Text = room?.Chart is { } chart ? $"{chart.Keys}Key · {(available ? "Available" : "Missing BMS chart")}" : "";
+        chartTitle.Text = room?.Chart is { } selectedChart ? selectedChart.Title : D("Choose a song");
+        chartDetails.Text = room?.Chart is { } chart ? LocalisableString.Format("{0}K · {1}", chart.Keys, D(available ? "Available" : "Missing BMS chart")) : "";
         var p = client.Progress;
-        transferStatus.Text = p is null ? room?.Chart?.ExpiresAt is { } expiry ? "Share expires at " + expiry.ToLocalTime().ToString("HH:mm") : "" :
-            $"{p.Stage} · {p.Fraction:P0}\n{p.Completed / 1048576d:F1} / {p.Total / 1048576d:F1} MiB" + (p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1048576d:F1} MiB/s" : "");
+        transferStatus.Text = p is null ? room?.Chart?.ExpiresAt is { } expiry ? D("Share expires at {0}", expiry.ToLocalTime().ToString("HH:mm")) : "" :
+            LocalisableString.Format("{0} · {1:P0}\n{2:F1} / {3:F1} MiB{4}", D(p.Stage), p.Fraction, p.Completed / 1048576d, p.Total / 1048576d,
+                p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1048576d:F1} MiB/s" : "");
         progress.Width = (float)(p?.Fraction ?? 0);
         upload.Enabled.Value = host && available && !working && !client.Busy && room?.Chart is { } selected &&
             room.Members.Any(member => member.ContentState != "available") && (selected.ExpiresAt is null || selected.ExpiresAt <= DateTime.UtcNow);
@@ -229,15 +233,16 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
         open.Enabled.Value = available && !working;
         cancel.Alpha = client.Busy ? 1 : 0; cancel.Enabled.Value = client.Busy;
         var me = room?.Members.FirstOrDefault(member => member.Id == client.User?.Id);
-        ready.Text = me?.Ready == true ? "Not ready" : "Ready";
+        ready.Text = D(me?.Ready == true ? "Not ready" : "Ready");
         ready.Enabled.Value = available && me?.ContentState == "available" && !working && !client.Busy && room?.State is "lobby" or "results";
         start.Alpha = host ? 1 : 0;
         start.Enabled.Value = !working && client.CanStartRound;
         forceStart.Alpha = host && !client.CanStartRound ? 1 : 0;
         forceStart.Enabled.Value = !working && client.CanForceStartRound && !client.CanStartRound;
         send.Enabled.Value = client.Connected && !sending && message.Value.Trim().Length is > 0 and <= 500;
-        status.Text = error.Length > 0 ? error : !client.Connected ? client.Status : room is null ? "New room" : room.State == "lobby" && room.Chart is not null
-            ? $"{room.Members.Count(member => member.Ready)} / {room.Members.Length} ready · {client.Status}" : $"{room.State} · {client.Status}";
+        status.Text = error.Length > 0 ? D(error) : !client.Connected ? D(client.Status) : room is null ? D("New room") : room.State == "lobby" && room.Chart is not null
+            ? LocalisableString.Format("{0} · {1}", D("{0} / {1} ready", room.Members.Count(member => member.Ready), room.Members.Length), D(client.Status))
+            : LocalisableString.Format("{0} · {1}", RoomState(room.State), D(client.Status));
         status.Colour = error.Length > 0 ? Color4.OrangeRed : Color4.White;
         participantHeader.DetailsText.Value = $"{room?.Members.Length ?? 0} / 16";
         var members = room?.Members ?? [];
@@ -283,6 +288,7 @@ internal partial class LazerRaveRoomScreen(Room model) : OnlinePlaySubScreen
 
 internal partial class CloudRoomHeader : RoomPanel
 {
+    protected override LocalisableString Description => D(Room.Description ?? "");
     public CloudRoomHeader(Room room) : base(room) { ShowExternalLink = false; ShowUserProfiles = false; ShowBeatmapStatus = false; }
     public override MenuItem[] ContextMenuItems => [];
 }
@@ -311,7 +317,7 @@ internal partial class CloudParticipantRow : CompositeDrawable, IHasContextMenu
                 avatar = new UpdateableAvatar(isInteractive: false) { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, RelativeSizeAxes = Axes.None, Size = new Vector2(30) },
                 name = new TruncatingSpriteText { Anchor = Anchor.CentreLeft, Origin = Anchor.CentreLeft, RelativeSizeAxes = Axes.X, Font = OsuFont.GetFont(size: 16), Padding = new MarginPadding { Left = 5 } },
                 state = new OsuSpriteText { Anchor = Anchor.CentreRight, Origin = Anchor.CentreRight, Font = OsuFont.GetFont(size: 12), Padding = new MarginPadding { Horizontal = 5 } },
-                transferHost = new IconButton { Anchor = Anchor.Centre, Origin = Anchor.Centre, Icon = FontAwesome.Solid.Crown, TooltipText = "Transfer host", IconColour = Color4.LightYellow, Size = new Vector2(28) },
+                transferHost = new IconButton { Anchor = Anchor.Centre, Origin = Anchor.Centre, Icon = FontAwesome.Solid.Crown, TooltipText = D("Transfer host"), IconColour = Color4.LightYellow, Size = new Vector2(28) },
                 kickPlayer = new IconButton { Anchor = Anchor.Centre, Origin = Anchor.Centre, Icon = FontAwesome.Solid.UserTimes, TooltipText = LazerRaveText.D("Kick player"), IconColour = Color4.OrangeRed, Size = new Vector2(28) },
             ] },
         },
@@ -324,7 +330,7 @@ internal partial class CloudParticipantRow : CompositeDrawable, IHasContextMenu
         kickPlayer.Alpha = canTransfer ? 1 : 0; kickPlayer.Enabled.Value = canTransfer; kickPlayer.Action = kick;
         ContextMenuItems = canTransfer ? [new OsuMenuItem(LazerRaveText.D("Transfer host"), MenuItemType.Standard, transfer), new OsuMenuItem(LazerRaveText.D("Kick player"), MenuItemType.Destructive, kick)] : [];
         name.Text = member.DisplayName;
-        state.Text = member.Ready ? "Ready" : member.ContentState switch { "available" => "Idle", "missing" => "Missing", "downloading" => "Downloading", _ => "Idle" };
+        state.Text = D(member.Ready ? "Ready" : member.ContentState switch { "available" => "Idle", "missing" => "Missing", "downloading" => "Downloading", _ => "Idle" });
         state.Colour = member.Ready ? Color4.LightGreen : member.ContentState == "missing" ? Color4.Orange : Color4.White;
         if (previous?.AvatarUrl != member.AvatarUrl || previous?.Uid != member.Uid || previous?.DisplayName != member.DisplayName)
         { avatar.User = null; avatar.User = user; }

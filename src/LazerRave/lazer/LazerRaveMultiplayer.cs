@@ -1,3 +1,5 @@
+using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Localisation;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
@@ -22,7 +24,8 @@ internal partial class LazerRaveMultiplayer : OnlinePlayScreen
 {
     [Cached] private readonly CloudRoomMap rooms = new();
     protected override bool RequiresOnlineAPI => false;
-    protected override string ScreenTitle => "Multiplayer";
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
+    protected override string ScreenTitle => localisation?.GetLocalisedString(D("Multiplayer")) ?? "Multiplayer";
     protected override LoungeSubScreen CreateLounge() => new LazerRaveLounge();
 }
 
@@ -60,6 +63,7 @@ internal sealed class CloudRoomMap
 internal partial class LazerRaveLounge : LoungeSubScreen
 {
     public override string ShortTitle => string.Empty;
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
     [Resolved] private CloudClient client { get; set; } = null!;
     [Resolved] private CloudRoomMap rooms { get; set; } = null!;
     private FormCheckBox showPlaying = null!, showFull = null!;
@@ -72,8 +76,8 @@ internal partial class LazerRaveLounge : LoungeSubScreen
     {
         foreach (var control in base.CreateFilterControls()) yield return control;
         StatusDropdown.Items = [RoomModeFilter.Open, RoomModeFilter.Owned, RoomModeFilter.Participated];
-        yield return new Container { Width = 200, AutoSizeAxes = Axes.Y, Child = showPlaying = new FormCheckBox { Caption = "In progress", ExtendedHeight = true } };
-        yield return new Container { Width = 180, AutoSizeAxes = Axes.Y, Child = showFull = new FormCheckBox { Caption = "Full rooms", ExtendedHeight = true } };
+        yield return new Container { Width = 200, AutoSizeAxes = Axes.Y, Child = showPlaying = new FormCheckBox { Caption = D("In progress"), ExtendedHeight = true } };
+        yield return new Container { Width = 180, AutoSizeAxes = Axes.Y, Child = showFull = new FormCheckBox { Caption = D("Full rooms"), ExtendedHeight = true } };
         showPlaying.Current.BindValueChanged(_ => UpdateFilter()); showFull.Current.BindValueChanged(_ => UpdateFilter());
     }
     protected override LoungeFilterCriteria CreateFilterCriteria()
@@ -91,10 +95,10 @@ internal partial class LazerRaveLounge : LoungeSubScreen
     protected override void Update()
     {
         base.Update();
-        status.Text = error.Length > 0 ? error : !client.Connected ? client.Status : client.Rooms.Length == 0 ? "No rooms available. Create a room to begin." : $"{client.Rooms.Length} rooms · {client.Rooms.Sum(room => room.Members.Length)} players";
+        status.Text = error.Length > 0 ? D(error) : !client.Connected ? D(client.Status) : client.Rooms.Length == 0 ? D("No rooms available. Create a room to begin.") : D("{0} rooms · {1} players", client.Rooms.Length, client.Rooms.Sum(room => room.Members.Length));
     }
     protected override OsuButton CreateNewRoomButton() => new CloudCreateRoomButton();
-    protected override Room CreateNewRoom() => new() { Name = client.User!.DisplayName + "'s room", Description = "Choosing a song", MaxParticipants = 16, Type = MatchType.HeadToHead };
+    protected override Room CreateNewRoom() => new() { Name = localisation.GetLocalisedString(D("{0}'s room", client.User!.DisplayName)), Description = "Choosing a song", MaxParticipants = 16, Type = MatchType.HeadToHead };
     protected override OnlinePlaySubScreen CreateRoomSubScreen(Room room) => new LazerRaveRoomScreen(room);
     protected override void JoinInternal(Room room, string? password, Action<Room> onSuccess, Action<string, Exception?> onFailure) => _ = JoinCloudRoom(room, onSuccess, onFailure);
     private async Task JoinCloudRoom(Room room, Action<Room> success, Action<string, Exception?> failure)
@@ -108,7 +112,7 @@ internal partial class LazerRaveLounge : LoungeSubScreen
 internal partial class CloudCreateRoomButton : CreateRoomButton
 {
     [Resolved] private CloudClient client { get; set; } = null!;
-    public CloudCreateRoomButton() { Text = "Create room"; }
+    public CloudCreateRoomButton() { Text = D("Create room"); }
     protected override void Update() { base.Update(); Enabled.Value = client.Connected && client.Room is null; }
 }
 
@@ -144,6 +148,7 @@ internal partial class CloudRoomListing : RoomListing
 
 internal partial class CloudLoungeRoomPanel : LoungeRoomPanel
 {
+    protected override LocalisableString Description => D(Room.Description ?? "");
     public CloudLoungeRoomPanel(Room room) : base(room) { ShowUserProfiles = false; ShowBeatmapStatus = false; }
     public override MenuItem[] ContextMenuItems => [];
 }

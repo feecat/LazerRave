@@ -61,6 +61,8 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
 
         public bool ShowDescription { get; init; }
 
+        protected virtual LocalisableString Description => Room.Description ?? string.Empty;
+
         private DrawableRoomParticipantsList? drawableRoomParticipantsList;
         private RoomSpecialCategoryPill? specialCategoryPill;
         private CornerIcon? passwordIcon;
@@ -116,7 +118,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
                     yield return descriptionText = new TruncatingSpriteText
                     {
                         RelativeSizeAxes = Axes.X,
-                        Text = Room.Description,
+                        Text = Description,
                         Font = OsuFont.Style.Caption2,
                         Colour = colourProvider.Content2,
                     };
@@ -339,7 +341,7 @@ namespace osu.Game.Screens.OnlinePlay.Lounge.Components
             switch (e.PropertyName)
             {
                 case nameof(Room.Description):
-                    if (descriptionText != null) descriptionText.Text = Room.Description ?? string.Empty;
+                    if (descriptionText != null) descriptionText.Text = Description;
                     break;
                 case nameof(Room.RoomID):
                     updateRoomID();

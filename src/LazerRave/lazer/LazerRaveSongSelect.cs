@@ -1,4 +1,5 @@
 using static LazerRave.Lazer.LazerRaveText;
+using osu.Framework.Localisation;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Sprites;
@@ -28,7 +29,8 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
     }
     private bool confirming;
     private readonly CancellationTokenSource selectionLifetime = new();
-    public override string Title => IsRoomSelection ? "Choose song" : "Library";
+    [Resolved] private LocalisationManager localisation { get; set; } = null!;
+    public override string Title => localisation?.GetLocalisedString(D(IsRoomSelection ? "Choose song" : "Library")) ?? (IsRoomSelection ? "Choose song" : "Library");
     public override bool SupportsBeatmapManagement => false;
     public override bool? AllowGlobalTrackControl => false;
     public LazerRaveSongSelect() { ControlGlobalMusic = false; TopPadding = 80; }
