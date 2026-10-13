@@ -23,6 +23,10 @@ internal sealed record PlayRecord(Guid Id, string ChartHash, string Title, strin
 
 internal sealed class PlayRecordStore(string root)
 {
+    public event Action? Changed;
+    public static int BestClear(IEnumerable<PlayRecord> records, string player) => records
+        .Where(record => record.Ranked && record.Player == player && record.Score.ClearType is >= 1 and <= 5)
+        .Select(record => record.Score.ClearType).DefaultIfEmpty(0).Max();
     public static PlayRecord? PersonalBest(IEnumerable<PlayRecord> records, string player) => records.Where(record => record.Ranked && record.Player == player)
         .OrderByDescending(record => record.Score.ExScore).ThenBy(record => record.PlayedAt).FirstOrDefault();
     public string ReplayPath(Guid run) => Path.Combine(root, "replays", run.ToString("N") + ".lr2rep");
@@ -95,6 +99,7 @@ internal sealed class PlayRecordStore(string root)
         string target = Path.Combine(folder, run.ToString("N") + ".xml"), temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try { document.Save(temporary); File.Move(temporary, target, true); }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        Changed?.Invoke();
         return record;
     }
     private static bool IsHash(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);

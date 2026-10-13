@@ -68,6 +68,7 @@ namespace osu.Game.Screens.Select
         private ISongSelect? songSelect { get; set; }
 
         private BeatmapInfo beatmap => ((GroupedBeatmap)Item!.Model).Beatmap;
+        protected virtual bool ShowDifficultyIcon => true;
 
         public PanelBeatmap()
         {
@@ -84,6 +85,8 @@ namespace osu.Game.Screens.Select
                 Size = new Vector2(9f),
                 Margin = new MarginPadding { Left = 2.5f, Right = 1.5f },
                 Colour = colourProvider.Background5,
+                Alpha = ShowDifficultyIcon ? 1 : 0,
+                AlwaysPresent = true,
             };
 
             Background = backgroundBorder = new Box

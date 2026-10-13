@@ -26,6 +26,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
     public Bindable<string> FrameLimit { get; } = new(initial.FrameLimit switch { 0 => "Display", -1 => "Unlimited", _ => initial.FrameLimit.ToString() });
 
     public Bindable<string> IrUpload { get; } = new(initial.IrUpload);
+    public BindableBool ShowClearLamps { get; } = new(initial.ShowClearLamps);
 
     public Bindable<string> Presentation { get; } = new(initial.Presentation);
 
@@ -38,6 +39,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
         || FrontendFrameLimit.Value != Value.FrontendFrameLimit
         || Player.Value != Value.Player || Avatar.Value != (Value.Avatar ?? "")
         || IrUpload.Value != Value.IrUpload
+        || ShowClearLamps.Value != Value.ShowClearLamps
         || Presentation.Value != Value.Presentation
         || RenderProfile.Value != RenderProfiles.Labels[Value.RenderProfile]
         || FrameLimit.Value != (Value.FrameLimit switch { 0 => "Display", -1 => "Unlimited", _ => Value.FrameLimit.ToString() });
@@ -64,7 +66,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
         if (!new[] { "public", "private", "off" }.Contains(IrUpload.Value)) throw new ArgumentException("Invalid IR upload mode.");
         var profile = RenderProfiles.Labels.Single(pair => pair.Value == RenderProfile.Value).Key;
         var next = Value with { Roots = roots, FrontendFrameLimit = FrontendFrameLimit.Value, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
-            Encoding = Encoding.Value, Width = width, Height = height, Player = Player.Value.Trim(), Avatar = avatar.Length > 0 ? Path.GetFullPath(avatar) : null, FrameLimit = frameLimit, RenderProfile = profile, Presentation = Presentation.Value, IrUpload = IrUpload.Value };
+            Encoding = Encoding.Value, Width = width, Height = height, Player = Player.Value.Trim(), Avatar = avatar.Length > 0 ? Path.GetFullPath(avatar) : null, FrameLimit = frameLimit, RenderProfile = profile, Presentation = Presentation.Value, IrUpload = IrUpload.Value, ShowClearLamps = ShowClearLamps.Value };
         if (!readOnly)
         {
             var table = File.Exists(path) ? Toml.ToModel(File.ReadAllText(path)) : new TomlTable();
@@ -78,6 +80,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             table["game_render_profile"] = next.RenderProfile;
             table["game_presentation"] = next.Presentation;
             table["ir_upload"] = next.IrUpload;
+            table["show_clear_lamps"] = next.ShowClearLamps;
             var playTable = table.TryGetValue("play", out var savedPlay) && savedPlay is TomlTable previousPlay ? previousPlay : new TomlTable();
             foreach (var option in playOptions) playTable[option.Key] = (long)option.Value;
             table["play"] = playTable;

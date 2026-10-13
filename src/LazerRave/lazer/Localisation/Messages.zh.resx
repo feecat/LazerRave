@@ -580,4 +580,8 @@
   <data name="Change password on the website" xml:space="preserve"><value>前往网站修改密码</value></data>
   <data name="Enter multiplayer" xml:space="preserve"><value>进入多人游戏</value></data>
   <data name="Connect multiplayer" xml:space="preserve"><value>连接多人服务器</value></data>
+  <data name="Song select" xml:space="preserve"><value>选曲</value></data>
+  <data name="Clear lamps" xml:space="preserve"><value>通关灯</value></data>
+  <data name="Show clear lamps" xml:space="preserve"><value>显示通关灯</value></data>
 </root>
+

@@ -17,6 +17,7 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../../res/branding/logo.png" LogicalName="LazerRave.Branding.logo.png" />
+    <EmbeddedResource Include="../../../res/branding/clear-lamp.png" LogicalName="LazerRave.Branding.clear-lamp.png" />
     <ProjectReference Include="../../osu-lazer/osu.Game/osu.Game.csproj" />
     <ProjectReference Include="../../osu-lazer/osu.Game.Rulesets.Mania/osu.Game.Rulesets.Mania.csproj" />
     <ProjectReference Include="../resource-pack/LazerRave.ResourcePack.csproj" ReferenceOutputAssembly="false" OutputItemType="_ResourcePackBuilder" Private="false" PrivateAssets="all" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir" />

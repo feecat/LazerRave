@@ -69,6 +69,10 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
             new SettingsTextBox { LabelText = D("Custom size (width x height)"), Current = settings.Window },
         })));
         AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings)));
+        AddSection(new Section("Song select", FontAwesome.Solid.List, new Subsection("Clear lamps", new Drawable[]
+        {
+            new SettingsCheckbox { LabelText = D("Show clear lamps"), Current = settings.ShowClearLamps },
+        })));
         AddSection(new NativeSettingsSection(game.NativeSettings, game.ReloadNativeSettings, game.OpenClassicConfiguration));
     }
 

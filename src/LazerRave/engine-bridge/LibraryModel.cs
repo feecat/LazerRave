@@ -12,6 +12,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
 {
     public string FrontendFrameLimit { get; init; } = "240";
     public string IrUpload { get; init; } = "public";
+    public bool ShowClearLamps { get; init; } = true;
     public IReadOnlyDictionary<string, int> PlayOptions { get; init; } = new Dictionary<string, int>();
     public static FrontendSettings Read(string path)
     {
@@ -33,6 +34,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
             FrontendFrameLimit = Text("frontend_frame_limit", ReadLegacyFrameLimit(path)),
             PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
             IrUpload = Text("ir_upload", "public"),
+            ShowClearLamps = Get("show_clear_lamps") as bool? ?? true,
         };
         if (settings.Speed is < .5 or > 10 || !double.IsFinite(settings.Speed) || Math.Abs(settings.Offset) > 1000
             || settings.Width is < 320 or > 7680 || settings.Height is < 240 or > 4320

@@ -120,6 +120,8 @@ internal static class AdapterChecks
         Directory.CreateDirectory(second);
         var relative = Path.GetRelativePath(AppContext.BaseDirectory, second);
         var settings = new DesktopSettings(defaults, file, false);
+        if (!settings.ShowClearLamps.Value) throw new InvalidDataException("Clear lamps should be enabled by default.");
+        settings.ShowClearLamps.Value = false;
         settings.Roots.Add(relative);
         settings.Roots.Add(second);
         settings.Roots.Add("");
@@ -129,6 +131,7 @@ internal static class AdapterChecks
         {
             Directory.SetCurrentDirectory(fixtures);
             var saved = FrontendSettings.Read(file);
+            if (saved.ShowClearLamps) throw new InvalidDataException("The clear lamp display setting must survive restart.");
             if (!saved.Roots.SequenceEqual(new[] { @".\BMS", relative }) || settings.HasChanges)
                 throw new InvalidDataException("Library settings must retain relative paths and deduplicate resolved directories.");
             var request = EngineBridge.Request("catalog", saved);
@@ -389,6 +392,18 @@ internal static class AdapterChecks
         if (records.Length != 4 || records.Single(value => value.Id == run).Score != score ||
             records.Single(value => value.Id == run).ReplayPath != replay || PlayRecordStore.PersonalBest(records, "Fixture")?.Score.ExScore != 180)
             throw new InvalidDataException("Play records lost judgements, replay linkage, personal best eligibility or player separation.");
+        using var lamps = new LocalClearLampStore(store);
+        if (lamps.GetClear(chart, "Fixture").GetAwaiter().GetResult() != 4 || lamps.GetClear(chart with { Path = movedChart }, "Fixture").GetAwaiter().GetResult() != 4
+            || lamps.GetClear(chart, "Unplayed").GetAwaiter().GetResult() != 0)
+            throw new InvalidDataException("Clear lamps must follow chart content and the current player.");
+        store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ExScore = 190, ClearType = 1 });
+        store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ClearType = 5, Eligible = false });
+        store.Save(Guid.NewGuid(), hash, chart, "Other", settings, score with { ClearType = 5 });
+        if (lamps.GetClear(chart, "Fixture").GetAwaiter().GetResult() != 4 || lamps.GetClear(chart, "Other").GetAwaiter().GetResult() != 5)
+            throw new InvalidDataException("A high score, failed attempt, autoplay or another player must not overwrite the best clear lamp.");
+        store.Save(Guid.NewGuid(), hash, chart, "Fixture", settings, score with { ClearType = 5 });
+        if (lamps.GetClear(chart, "Fixture").GetAwaiter().GetResult() != 5)
+            throw new InvalidDataException("A new best clear must refresh an already cached lamp.");
         File.Delete(replay);
         if (store.Read(hash).Single(value => value.Id == run).ReplayPath is not null) throw new InvalidDataException("A deleted replay is still available for playback.");
     }

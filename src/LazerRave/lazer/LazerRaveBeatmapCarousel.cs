@@ -116,6 +116,7 @@ internal partial class LazerRaveBeatmapCarousel : BeatmapCarousel
     private readonly Action<string> enterFolder;
 
     private readonly DrawablePool<FolderPanel> folderPanelPool = new DrawablePool<FolderPanel>(10);
+    private readonly DrawablePool<LazerRaveBeatmapPanel> beatmapPanelPool = new(100);
 
     public LazerRaveBeatmapCarousel(Func<IReadOnlyList<FolderDefinition>> getFolders, Action<string> enterFolder)
     {
@@ -127,6 +128,7 @@ internal partial class LazerRaveBeatmapCarousel : BeatmapCarousel
     {
         base.LoadComplete();
         AddInternal(folderPanelPool);
+        AddInternal(beatmapPanelPool);
     }
 
     protected override IEnumerable<CarouselItem> GetPinnedItems() =>
@@ -195,6 +197,8 @@ internal partial class LazerRaveBeatmapCarousel : BeatmapCarousel
     {
         if (item.Model is FolderDefinition)
             return folderPanelPool.Get();
+        if (item.Model is GroupedBeatmap)
+            return beatmapPanelPool.Get();
 
         return base.GetDrawableForDisplay(item);
     }

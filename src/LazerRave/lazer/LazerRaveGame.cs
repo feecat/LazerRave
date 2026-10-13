@@ -46,6 +46,8 @@ internal partial class LazerRaveGame : OsuGame
     public NativeSettings NativeSettings { get; }
     private readonly CloudClient cloud;
     public PlayRecordStore Records { get; } = new(Path.Combine(ApplicationPaths.UserData, "play-records"));
+    public LocalClearLampStore ClearLamps { get; }
+    public Chart? ChartFor(BeatmapInfo info) => catalog.ChartFor(info);
     public CloudClient Cloud => cloud;
     private LazerRaveCloudPanel cloudPanel = null!;
     private LazerRaveMultiplayer? multiplayer;
@@ -164,7 +166,7 @@ internal partial class LazerRaveGame : OsuGame
         var library = Directory.Exists(path)
             ? await bridge.Catalog(preferences.Value, true, lifetime.Token)
             : await bridge.Import(preferences.Value, path, lifetime.Token);
-        Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); unavailablePreviews.Clear(); previewsExhausted = false; ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
+        Schedule(() => { catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); ClearLamps.Invalidate(); unavailablePreviews.Clear(); previewsExhausted = false; ResetMedia(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
     }
     public override bool UseDevelopmentServer => false;
     protected override bool ShowDeveloperBuildBanner => false;
@@ -173,6 +175,7 @@ internal partial class LazerRaveGame : OsuGame
 
     public LazerRaveGame(EngineBridge bridge, FrontendSettings initial, SongLibrary library, string message, PerformanceRun? benchmark = null)
     {
+        ClearLamps = new(Records);
         this.bridge = bridge; startupMessage = message;
         this.benchmark = benchmark;
         preferences = new(initial, FrontendSettings.SharedPath, benchmark is not null);
@@ -313,6 +316,7 @@ internal partial class LazerRaveGame : OsuGame
             };
         });
         preferences.FrontendFrameLimit.BindValueChanged(_ => { ApplyFrontendFrameLimit(); QueueSettingsSave(); }, true);
+        preferences.ShowClearLamps.BindValueChanged(_ => QueueSettingsSave());
         foreach (var setting in new[] { preferences.Arrangement, preferences.Encoding, preferences.Window,
             preferences.Player, preferences.Avatar, preferences.FrameLimit, preferences.RenderProfile, preferences.Presentation })
             setting.BindValueChanged(_ => QueueSettingsSave());
@@ -568,7 +572,7 @@ internal partial class LazerRaveGame : OsuGame
             var library = await bridge.Catalog(preferences.Value, sync, lifetime.Token);
             Schedule(() =>
             {
-                catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); UpdateFolderBar(); songSelect?.RefreshKeyFilter();
+                catalog.Replace(library, ApplicationPaths.LibraryRoots(preferences.Value.Roots)); ClearLamps.Invalidate(); UpdateFolderBar(); songSelect?.RefreshKeyFilter();
                 unavailablePreviews.Clear();
                 previewsExhausted = false;
                 var selected = catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).FirstOrDefault(info => info.ID == Beatmap.Value.BeatmapInfo.ID);
@@ -715,7 +719,7 @@ internal partial class LazerRaveGame : OsuGame
                 try { Directory.CreateDirectory(Path.GetDirectoryName(file)!); File.WriteAllText(file, error.ToString()); }
                 catch (Exception logError) when (logError is IOException or UnauthorizedAccessException) { Console.Error.WriteLine(error); }
             }
-            lifetime.Cancel(); StopPreview(); viewport?.Dispose(); preview?.Dispose(); windowPlacement?.Dispose();
+            lifetime.Cancel(); StopPreview(); viewport?.Dispose(); preview?.Dispose(); windowPlacement?.Dispose(); ClearLamps.Dispose();
             cloud.Changed -= CloudChanged;
             _ = cloud.DisposeAsync();
         }
