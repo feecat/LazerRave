@@ -125,7 +125,13 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
                 try { await scores.Finish(); }
                 catch (Exception error) { failure ??= "Result upload failed: " + error.Message; }
             }
-            if (!IsDisposed) Schedule(() => { finished = true; this.Exit(); returned(failure); });
+            if (!IsDisposed) Schedule(() =>
+            {
+                if (GetContainingInputManager() is { } input) LazerRaveInputPolicy.ReleaseGameplayInput(input);
+                finished = true;
+                this.Exit();
+                returned(failure);
+            });
         }
     }
     public void RequestReturn() { if (!finished) { status.Text = D("Returning…"); session.Cancel(); } }

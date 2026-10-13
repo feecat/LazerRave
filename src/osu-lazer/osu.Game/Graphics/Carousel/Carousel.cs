@@ -475,6 +475,7 @@ namespace osu.Game.Graphics.Carousel
                 // matching with exact modifier consideration (so Ctrl+Enter would be ignored).
                 case Key.Enter:
                 case Key.KeypadEnter:
+                    if (e.Repeat) return true;
                     return activateSelection();
             }
 
@@ -486,6 +487,7 @@ namespace osu.Game.Graphics.Carousel
             switch (e.Action)
             {
                 case GlobalAction.Select:
+                    if (e.Repeat) return true;
                     return activateSelection();
 
                 // the selection traversal handlers below are scheduled to avoid an issue

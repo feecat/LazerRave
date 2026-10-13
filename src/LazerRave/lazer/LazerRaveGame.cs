@@ -66,6 +66,7 @@ internal partial class LazerRaveGame : OsuGame
     private Container chrome = null!;
     private bool refreshing;
     private bool classicRunning;
+    private bool gameLaunchPending;
     private bool libraryRefreshPending;
     private DesktopWindowPlacement? windowPlacement;
     private readonly BindableDouble menuTrackVolume = new(1);
@@ -429,7 +430,7 @@ internal partial class LazerRaveGame : OsuGame
     }
     private void StartChart(BeatmapInfo info, string? replay, PlayRecord? record = null)
     {
-        if (classicRunning || refreshing || ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
+        if (gameLaunchPending || classicRunning || refreshing || ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
         if (preferences.PlayOptions["battle"].Value == 4)
         {
             SetLibraryMessage(D("Ghost Battle requires rival selection in the classic menu."));
@@ -439,8 +440,19 @@ internal partial class LazerRaveGame : OsuGame
         StopPreview(); settingsPanel.Hide(); chrome.Hide();
         CloseAllOverlays();
         menuTrackVolume.Value = 0;
-        ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned)
-        { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, RecordSaved = AutoUploadRecord(chart, preferences.Value.IrUpload), ReplaySource = replay, ReplayRecord = record });
+        gameLaunchPending = true;
+        try
+        {
+            ScreenStack.Push(new GamePlayScreen(bridge, preferences.Value, chart, viewport, OnGameReturned)
+            { RelativeSizeAxes = Axes.Both, Records = Records, RecordPlayer = cloud.User?.Username ?? preferences.Value.Player, RecordSaved = AutoUploadRecord(chart, preferences.Value.IrUpload), ReplaySource = replay, ReplayRecord = record });
+        }
+        catch
+        {
+            gameLaunchPending = false;
+            menuTrackVolume.Value = 1;
+            chrome.Show();
+            throw;
+        }
     }
     public void SetLibraryMessage(osu.Framework.Localisation.LocalisableString text) => Notifications.Post(new osu.Game.Overlays.Notifications.SimpleNotification { Text = text });
     private void UpdateMultiplayerStart()
@@ -492,6 +504,7 @@ internal partial class LazerRaveGame : OsuGame
 
     private void OnGameReturned(string? error)
     {
+        gameLaunchPending = false;
         if (benchmark is not null)
         {
             SaveFrontendFrames();

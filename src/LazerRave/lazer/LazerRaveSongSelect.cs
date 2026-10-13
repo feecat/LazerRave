@@ -28,6 +28,12 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         if (InitialFolder is not null) game.FocusLibraryFolder(InitialFolder);
     }
     private bool confirming;
+    private double resumeReadyAt;
+    public override void OnResuming(ScreenTransitionEvent e)
+    {
+        resumeReadyAt = Time.Current + 400;
+        base.OnResuming(e);
+    }
     private readonly CancellationTokenSource selectionLifetime = new();
     [Resolved] private LocalisationManager localisation { get; set; } = null!;
     public override string Title => localisation?.GetLocalisedString(D(IsRoomSelection ? "Choose song" : "Library")) ?? (IsRoomSelection ? "Choose song" : "Library");
@@ -61,6 +67,7 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
 
     protected override void OnStart()
     {
+        if (!this.IsCurrentScreen() || Time.Current < resumeReadyAt) return;
         if (!IsRoomSelection) game.StartGame(Beatmap.Value.BeatmapInfo);
         else if (!confirming) _ = ConfirmRoomSelection();
     }
@@ -91,8 +98,12 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
     public override bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
     {
         if (!this.IsCurrentScreen()) return false;
-        if (e.Action == GlobalAction.Select) { SelectAndRun(Beatmap.Value.BeatmapInfo, OnStart); return true; }
-        if (e.Action == GlobalAction.Back) return game.ParentFolder();
+        if (e.Action == GlobalAction.Select)
+        {
+            if (!e.Repeat && Time.Current >= resumeReadyAt) SelectAndRun(Beatmap.Value.BeatmapInfo, OnStart);
+            return true;
+        }
+        if (e.Action == GlobalAction.Back) return e.Repeat || Time.Current < resumeReadyAt || game.ParentFolder();
         return base.OnPressed(e);
     }
     public void RefreshKeyFilter()
