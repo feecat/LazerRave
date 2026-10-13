@@ -243,6 +243,7 @@ internal partial class LazerRaveGame : OsuGame
     {
         var defaults = base.GetFrameworkConfigDefaults();
         defaults[FrameworkSetting.Locale] = "en";
+        defaults[FrameworkSetting.AudioUseExperimentalWasapi] = true;
         defaults[FrameworkSetting.FrameSync] = FrameSync.Unlimited;
         defaults[FrameworkSetting.WindowMode] = WindowMode.Windowed;
         defaults[FrameworkSetting.WindowedSize] = new System.Drawing.Size(1920, 1080);

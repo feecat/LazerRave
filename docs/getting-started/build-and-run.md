@@ -35,7 +35,7 @@
 
 运行 `out/app/LazerRave.exe`，移动时保留完整目录。程序自带 .NET 运行时；`OpenLR2_x64.exe`、FMOD、其他原生 DLL、`Resources/`、`Localization/` 和 `LR2files/` 必须保留。
 
-默认曲库为 EXE 同级的 `BMS/`，不可从设置移除；可添加绝对或相对路径，相对路径以 EXE 所在目录解析。共享及网站曲包安装到 `BMS/Shared/`，原生 LR2 使用相同曲库设置。默认 Game viewport 为 1024×768、同窗口 E 模式、240 FPS；前端默认 1920×1080 窗口，并适应屏幕工作区。
+默认曲库为 EXE 同级的 `BMS/`，不可从设置移除；可添加绝对或相对路径，相对路径以 EXE 所在目录解析。共享及网站曲包安装到 `BMS/Shared/`，原生 LR2 使用相同曲库设置。默认 Game viewport 为 1024×768、同窗口 D 模式、240 FPS；前端默认 1920×1080 窗口，并适应屏幕工作区。前端默认不启用旧版音频引擎。
 
 更新前保留 `userdata/`、`BMS/` 与 `LR2files/`。首次正常启动可复制旧 AppData 持久数据，不覆盖目标已有文件；后续使用 EXE 同级数据。窗口、速度、帧率等已有配置继续保留，细节见 [客户端](../development/client.md)。
 

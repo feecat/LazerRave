@@ -8,7 +8,7 @@ namespace LazerRave.Bridge;
 
 internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Offset = 0,
     string Arrangement = "off", string Encoding = "auto", int Width = 1024, int Height = 768,
-    string Player = "Player", string? Avatar = null, int FrameLimit = 240, string RenderProfile = "discard", string Presentation = "embedded")
+    string Player = "Player", string? Avatar = null, int FrameLimit = 240, string RenderProfile = "directshow", string Presentation = "embedded")
 {
     public string FrontendFrameLimit { get; init; } = "240";
     public string IrUpload { get; init; } = "public";
@@ -29,7 +29,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
         var roots = LibraryFolders.NormalizeRoots((directoryValue as TomlArray)?.OfType<string>() ?? [], AppContext.BaseDirectory);
         var settings = new FrontendSettings(roots, Number("speed", 2), (int)Number("offset", 0),
             Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1024),
-            (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 240), Text("game_render_profile", "discard"), Text("game_presentation", "embedded"))
+            (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 240), Text("game_render_profile", "directshow"), Text("game_presentation", "embedded"))
         {
             FrontendFrameLimit = Text("frontend_frame_limit", ReadLegacyFrameLimit(path)),
             PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
