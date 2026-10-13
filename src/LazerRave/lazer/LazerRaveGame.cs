@@ -54,6 +54,7 @@ internal partial class LazerRaveGame : OsuGame
     private readonly string startupMessage;
     private readonly CancellationTokenSource lifetime = new();
     private LazerRaveSettingsPanel settingsPanel = null!;
+    private LazerRaveKeyBindingWindow keyBindingWindow = null!;
     private LazerRaveSongSelect songSelect = null!;
     private ResourceStore<byte[]> media = null!;
     private PreviewPlayer preview = null!;
@@ -124,6 +125,13 @@ internal partial class LazerRaveGame : OsuGame
         ScreenStack.Push(multiplayer = new LazerRaveMultiplayer());
     }
     public void OpenCloudAccount() => cloudPanel.Show();
+    public void OpenKeyBindings()
+    {
+        if (classicRunning || gameLaunchPending || ScreenStack.CurrentScreen is GamePlayScreen)
+        { SetLibraryMessage(D("Close the current game before editing key bindings.")); return; }
+        settingsPanel.Hide();
+        keyBindingWindow.Open();
+    }
     public void OpenCloudWebsite(string url) => Host.OpenUrlExternally(url);
     public void OpenSongPacks()
     {
@@ -296,6 +304,7 @@ internal partial class LazerRaveGame : OsuGame
         if (benchmark is not null) benchmarkClock.Start();
         if (Host.Window is not null) viewport = new NativeGameViewport(Host.Window);
         ScreenContainer.Add(chrome = new PopoverContainer { RelativeSizeAxes = Axes.Both, Depth = -2 });
+        ScreenContainer.Add(keyBindingWindow = new LazerRaveKeyBindingWindow(new NativeKeyBindings(bridge.Runtime)) { Depth = -100 });
         BuildChrome();
         cloudPanel.Hide();
         chrome.Hide();

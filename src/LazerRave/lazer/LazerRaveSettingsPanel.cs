@@ -13,12 +13,15 @@ using osu.Game.Overlays.Settings;
 using osu.Game.Overlays.Settings.Sections;
 using osu.Game.Overlays.Settings.Sections.Audio;
 using osu.Game.Overlays.Settings.Sections.General;
+using osu.Game.Overlays.Settings.Sections.Input;
+using osu.Game.Rulesets;
 
 namespace LazerRave.Lazer;
 
 internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action apply) : SettingsOverlay()
 {
     protected override SettingsSection CreateGeneralSection() => new ClientGeneralSection();
+    protected override KeyBindingPanel CreateKeyBindingPanel() => new GameplayKeyBindingPanel();
     protected override bool IncludeRulesetSettings => false;
     protected override bool IncludeSection(SettingsSection section) => section is not (OnlineSection or MaintenanceSection or GameplaySection or AudioSection);
     private readonly OsuSpriteText saveStatus = new() { Font = osu.Game.Graphics.OsuFont.GetFont(size: 15), Margin = new MarginPadding { Horizontal = 20, Bottom = 10 } };
@@ -74,6 +77,32 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
             new SettingsCheckbox { LabelText = D("Show clear lamps"), Current = settings.ShowClearLamps },
         })));
         AddSection(new NativeSettingsSection(game.NativeSettings, game.ReloadNativeSettings, game.OpenClassicConfiguration));
+    }
+
+    private partial class GameplayKeyBindingPanel : KeyBindingPanel
+    {
+        protected override IEnumerable<SettingsSection> CreateRulesetBindingSections(RulesetStore rulesets)
+            => [new Section("LazerRave", FontAwesome.Solid.Keyboard, new GameplayKeyBindings())];
+    }
+
+    private partial class GameplayKeyBindings : SettingsSubsection
+    {
+        protected override LocalisableString Header => GameplaySettingsStrings.GameplaySectionHeader;
+
+        [BackgroundDependencyLoader]
+        private void load(LazerRaveGame game)
+        {
+            Children = new Drawable[]
+            {
+                new SettingsButtonV2
+                {
+                    Text = D("Configure gameplay key bindings"),
+                    TooltipText = D("Configure LR2 key bindings"),
+                    Height = 60,
+                    Action = game.OpenKeyBindings,
+                },
+            };
+        }
     }
 
     private partial class ClientGeneralSection : SettingsSection

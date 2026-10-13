@@ -35,6 +35,7 @@ namespace osu.Game.Overlays
         protected override Drawable CreateHeader() => new SettingsHeader(Title, Description);
 
         protected virtual SettingsSection CreateGeneralSection() => new GeneralSection();
+        protected virtual KeyBindingPanel CreateKeyBindingPanel() => new KeyBindingPanel();
         protected virtual bool IncludeRulesetSettings => true;
         protected virtual bool IncludeSection(SettingsSection section) => true;
 
@@ -79,7 +80,7 @@ namespace osu.Game.Overlays
                 // This list should be kept in sync with ScreenBehaviour.
                 CreateGeneralSection(),
                 new SkinSection(),
-                new InputSection(createSubPanel(new KeyBindingPanel())),
+                new InputSection(createSubPanel(CreateKeyBindingPanel())),
                 new UserInterfaceSection(),
                 new GameplaySection()
             };

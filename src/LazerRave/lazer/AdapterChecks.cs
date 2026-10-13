@@ -7,6 +7,36 @@ namespace LazerRave.Lazer;
 
 internal static class AdapterChecks
 {
+    private static void CheckNativeKeyBindings(string directory)
+    {
+        string runtime = Path.Combine(directory, "key-bindings");
+        string folder = Path.Combine(runtime, "LR2files", "Config");
+        Directory.CreateDirectory(folder);
+        string file = Path.Combine(folder, "keyconfig.xml");
+        File.WriteAllText(file, "<keyconfig><key01><id>31</id><id>263</id></key01><key02><id>32</id></key02><key10><id>30</id><id>768</id></key10><future>retained</future></keyconfig>");
+        var store = new NativeKeyBindings(runtime);
+        var draft = store.Read(7);
+        draft.Assign(1, 33, false);
+        store.Save([draft]);
+        var saved = XDocument.Load(file);
+        if (!saved.Root!.Element("key01")!.Elements("id").Select(node => (int)node).SequenceEqual(new[] { 33, 263 })
+            || saved.Root.Element("future")?.Value != "retained" || !File.Exists(file + ".lazerrave.bak"))
+            throw new InvalidDataException("Editing LR2 keyboard bindings lost controller assignments, unknown fields or the backup.");
+        draft = store.Read(7);
+        draft.Assign(2, 36, false);
+        saved.Root.Element("key02")!.Element("id")!.Value = "37";
+        saved.Save(file);
+        try { store.Save([draft]); throw new InvalidDataException("An external LR2 binding edit was silently overwritten."); }
+        catch (IOException error) when (error.Message.Contains("changed outside")) { }
+        draft = store.Read(7); draft.RestoreDefaults(); store.Save([draft]);
+        var defaults = store.Read(7);
+        if (!Enumerable.Range(1, 7).Select(row => defaults.Bindings[row].Single()).SequenceEqual(new[] { 31, 32, 33, 57, 36, 37, 38 })
+            || defaults.Bindings[10].Single() != 30 || defaults.Bindings[11].Single() != 39)
+            throw new InvalidDataException("The LR2 default layout must use A / semicolon and S D F Space J K L.");
+        if (NativeKeyBindings.FileName(5) == NativeKeyBindings.FileName(7) || NativeKeyBindings.FileName(9) == NativeKeyBindings.FileName(7))
+            throw new InvalidDataException("Native key modes must retain their separate LR2 files.");
+    }
+
     private static void CheckNativeSettings(string directory)
     {
         string runtime = Path.Combine(directory, "native-settings");
@@ -65,6 +95,7 @@ internal static class AdapterChecks
         CheckPlaySettings(directory);
         CheckLibraryDefaults(directory);
         CheckNativeSettings(directory);
+        CheckNativeKeyBindings(directory);
 
         var path = Path.Combine(directory, "settings.toml");
         File.WriteAllText(path, "signature = \"preserved\"\n[play]\nfuture_option = 7\n");

@@ -36,6 +36,7 @@ if ($source -ne $destinationPath) {
     if ($pending.Count) { throw 'The resource database has pending SQLite journal data. Close the game and finish database recovery before copying it.' }
 }
 New-Item -ItemType Directory -Force -Path $destinationPath | Out-Null
+$existingKeyConfig = Test-Path -LiteralPath (Join-Path $destinationPath 'LR2files/Config/keyconfig.xml') -PathType Leaf
 if ($source -ne $destinationPath) {
     foreach ($folder in @('LR2files', 'BMS')) {
         $inputFolder = Join-Path $source $folder
@@ -48,6 +49,10 @@ if ($source -ne $destinationPath) {
     }
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $destinationPath 'BMS/Shared') | Out-Null
+Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig_def.xml') -Force
+if (!$existingKeyConfig) {
+    Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig.xml') -Force
+}
 if (!$PrepareOnly) { Copy-Item -LiteralPath $DesktopExecutable -Destination (Join-Path $destinationPath 'LazerRave.exe') -Force }
 Copy-Item -LiteralPath (Join-Path $EnginePackage 'OpenLR2_x64.exe') -Destination $destinationPath -Force
 Get-ChildItem -LiteralPath $EnginePackage -Filter '*.dll' -File |

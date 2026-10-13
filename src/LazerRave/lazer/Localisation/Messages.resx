@@ -436,4 +436,29 @@
   <data name="Song select" xml:space="preserve"><value>Song select</value></data>
   <data name="Clear lamps" xml:space="preserve"><value>Clear lamps</value></data>
   <data name="Show clear lamps" xml:space="preserve"><value>Show clear lamps</value></data>
+  <data name="LR2 key bindings" xml:space="preserve"><value>LR2 key bindings</value></data>
+  <data name="Configure LR2 key bindings" xml:space="preserve"><value>Configure LR2 key bindings</value></data>
+  <data name="Click a binding, then press a key. Use + to add another binding; Esc cancels capture." xml:space="preserve"><value>Click a binding, then press a key. Use + to add another binding; Esc cancels capture.</value></data>
+  <data name="Restore defaults" xml:space="preserve"><value>Restore defaults</value></data>
+  <data name="Reload from LR2" xml:space="preserve"><value>Reload from LR2</value></data>
+  <data name="Save key bindings" xml:space="preserve"><value>Save key bindings</value></data>
+  <data name="Scratch" xml:space="preserve"><value>Scratch</value></data>
+  <data name="Scratch up" xml:space="preserve"><value>Scratch up</value></data>
+  <data name="Scratch down" xml:space="preserve"><value>Scratch down</value></data>
+  <data name="Add binding" xml:space="preserve"><value>Add binding</value></data>
+  <data name="Clear keyboard bindings" xml:space="preserve"><value>Clear keyboard bindings</value></data>
+  <data name="Press a key…" xml:space="preserve"><value>Press a key…</value></data>
+  <data name="Unsaved changes" xml:space="preserve"><value>Unsaved changes</value></data>
+  <data name="Press a key. Esc cancels; Delete clears keyboard bindings." xml:space="preserve"><value>Press a key. Esc cancels; Delete clears keyboard bindings.</value></data>
+  <data name="Existing LR2 bindings are loaded. Changes take effect on the next game launch." xml:space="preserve"><value>Existing LR2 bindings are loaded. Changes take effect on the next game launch.</value></data>
+  <data name="Key bindings saved to LR2. Changes take effect on the next game launch." xml:space="preserve"><value>Key bindings saved to LR2. Changes take effect on the next game launch.</value></data>
+  <data name="This key is reserved by LR2 or is not supported." xml:space="preserve"><value>This key is reserved by LR2 or is not supported.</value></data>
+  <data name="Press one key at a time." xml:space="preserve"><value>Press one key at a time.</value></data>
+  <data name="That key is already assigned to another button." xml:space="preserve"><value>That key is already assigned to another button.</value></data>
+  <data name="LR2 supports at most 16 bindings per button." xml:space="preserve"><value>LR2 supports at most 16 bindings per button.</value></data>
+  <data name="LR2 key bindings changed outside this window. Reload before saving." xml:space="preserve"><value>LR2 key bindings changed outside this window. Reload before saving.</value></data>
+  <data name="Close the current game before editing key bindings." xml:space="preserve"><value>Close the current game before editing key bindings.</value></data>
+  <data name="Invalid LR2 key configuration." xml:space="preserve"><value>Invalid LR2 key configuration.</value></data>
+  <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>Duplicate LR2 key configuration element.</value></data>
+  <data name="Configure gameplay key bindings" xml:space="preserve"><value>Configure gameplay key bindings</value></data>
 </root>

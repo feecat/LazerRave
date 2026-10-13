@@ -583,5 +583,29 @@
   <data name="Song select" xml:space="preserve"><value>选曲</value></data>
   <data name="Clear lamps" xml:space="preserve"><value>通关灯</value></data>
   <data name="Show clear lamps" xml:space="preserve"><value>显示通关灯</value></data>
+  <data name="LR2 key bindings" xml:space="preserve"><value>LR2 键位设置</value></data>
+  <data name="Configure LR2 key bindings" xml:space="preserve"><value>配置 LR2 键位</value></data>
+  <data name="Click a binding, then press a key. Use + to add another binding; Esc cancels capture." xml:space="preserve"><value>点击键位后按下键盘按键；使用 + 添加备用键，Esc 取消录入。</value></data>
+  <data name="Restore defaults" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="Reload from LR2" xml:space="preserve"><value>从 LR2 重新读取</value></data>
+  <data name="Save key bindings" xml:space="preserve"><value>保存键位</value></data>
+  <data name="Scratch" xml:space="preserve"><value>转盘</value></data>
+  <data name="Scratch up" xml:space="preserve"><value>转盘 ↑</value></data>
+  <data name="Scratch down" xml:space="preserve"><value>转盘 ↓</value></data>
+  <data name="Add binding" xml:space="preserve"><value>添加备用键</value></data>
+  <data name="Clear keyboard bindings" xml:space="preserve"><value>清空键盘绑定</value></data>
+  <data name="Press a key…" xml:space="preserve"><value>请按下按键…</value></data>
+  <data name="Unsaved changes" xml:space="preserve"><value>有未保存的修改</value></data>
+  <data name="Press a key. Esc cancels; Delete clears keyboard bindings." xml:space="preserve"><value>请按下按键。Esc 取消，Delete 清空键盘绑定。</value></data>
+  <data name="Existing LR2 bindings are loaded. Changes take effect on the next game launch." xml:space="preserve"><value>已读取 LR2 键位，保存后在下次启动演奏时生效。</value></data>
+  <data name="Key bindings saved to LR2. Changes take effect on the next game launch." xml:space="preserve"><value>已保存到 LR2，下次启动演奏时生效。</value></data>
+  <data name="This key is reserved by LR2 or is not supported." xml:space="preserve"><value>此按键为 LR2 保留键，或暂不支持。</value></data>
+  <data name="Press one key at a time." xml:space="preserve"><value>请一次按下一个键。</value></data>
+  <data name="That key is already assigned to another button." xml:space="preserve"><value>此按键已绑定到其他键位，请先清除原绑定。</value></data>
+  <data name="LR2 supports at most 16 bindings per button." xml:space="preserve"><value>LR2 每个键位最多支持 16 个输入绑定。</value></data>
+  <data name="LR2 key bindings changed outside this window. Reload before saving." xml:space="preserve"><value>LR2 键位已被外部修改，请重新读取后再保存。</value></data>
+  <data name="Close the current game before editing key bindings." xml:space="preserve"><value>请先结束当前演奏或退出经典 LR2，再修改键位。</value></data>
+  <data name="Invalid LR2 key configuration." xml:space="preserve"><value>LR2 键位配置格式无效。</value></data>
+  <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>LR2 键位配置存在重复项。</value></data>
+  <data name="Configure gameplay key bindings" xml:space="preserve"><value>配置演奏键位</value></data>
 </root>
-

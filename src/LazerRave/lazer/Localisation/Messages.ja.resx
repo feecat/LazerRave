@@ -411,4 +411,29 @@
   <data name="Song select" xml:space="preserve"><value>選曲</value></data>
   <data name="Clear lamps" xml:space="preserve"><value>クリアランプ</value></data>
   <data name="Show clear lamps" xml:space="preserve"><value>クリアランプを表示</value></data>
+  <data name="LR2 key bindings" xml:space="preserve"><value>LR2 キー設定</value></data>
+  <data name="Configure LR2 key bindings" xml:space="preserve"><value>LR2 キー設定を開く</value></data>
+  <data name="Click a binding, then press a key. Use + to add another binding; Esc cancels capture." xml:space="preserve"><value>割り当てをクリックしてキーを押してください。+ で追加、Esc でキャンセル。</value></data>
+  <data name="Restore defaults" xml:space="preserve"><value>初期設定に戻す</value></data>
+  <data name="Reload from LR2" xml:space="preserve"><value>LR2 から再読み込み</value></data>
+  <data name="Save key bindings" xml:space="preserve"><value>キー設定を保存</value></data>
+  <data name="Scratch" xml:space="preserve"><value>スクラッチ</value></data>
+  <data name="Scratch up" xml:space="preserve"><value>スクラッチ ↑</value></data>
+  <data name="Scratch down" xml:space="preserve"><value>スクラッチ ↓</value></data>
+  <data name="Add binding" xml:space="preserve"><value>割り当てを追加</value></data>
+  <data name="Clear keyboard bindings" xml:space="preserve"><value>キーボード割り当てを解除</value></data>
+  <data name="Press a key…" xml:space="preserve"><value>キーを押してください…</value></data>
+  <data name="Unsaved changes" xml:space="preserve"><value>未保存の変更あり</value></data>
+  <data name="Press a key. Esc cancels; Delete clears keyboard bindings." xml:space="preserve"><value>キーを押してください。Esc でキャンセル、Delete で割り当てを解除。</value></data>
+  <data name="Existing LR2 bindings are loaded. Changes take effect on the next game launch." xml:space="preserve"><value>LR2 のキー設定を読み込みました。保存後、次の演奏から有効になります。</value></data>
+  <data name="Key bindings saved to LR2. Changes take effect on the next game launch." xml:space="preserve"><value>LR2 に保存しました。次の演奏から有効になります。</value></data>
+  <data name="This key is reserved by LR2 or is not supported." xml:space="preserve"><value>LR2 の予約キー、または未対応のキーです。</value></data>
+  <data name="Press one key at a time." xml:space="preserve"><value>一度に一つのキーを押してください。</value></data>
+  <data name="That key is already assigned to another button." xml:space="preserve"><value>このキーは別のボタンに割り当て済みです。先に解除してください。</value></data>
+  <data name="LR2 supports at most 16 bindings per button." xml:space="preserve"><value>LR2 の各ボタンには最大 16 個まで割り当てできます。</value></data>
+  <data name="LR2 key bindings changed outside this window. Reload before saving." xml:space="preserve"><value>LR2 のキー設定が外部で変更されました。再読み込みしてから保存してください。</value></data>
+  <data name="Close the current game before editing key bindings." xml:space="preserve"><value>演奏またはクラシック LR2 を終了してからキーを設定してください。</value></data>
+  <data name="Invalid LR2 key configuration." xml:space="preserve"><value>LR2 キー設定の形式が不正です。</value></data>
+  <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>LR2 キー設定に重複した項目があります。</value></data>
+  <data name="Configure gameplay key bindings" xml:space="preserve"><value>演奏キー設定を開く</value></data>
 </root>

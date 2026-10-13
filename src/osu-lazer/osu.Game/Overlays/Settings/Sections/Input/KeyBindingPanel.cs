@@ -39,8 +39,8 @@ namespace osu.Game.Overlays.Settings.Sections.Input
                 }
             });
 
-            foreach (var ruleset in rulesets.AvailableRulesets)
-                AddSection(new RulesetBindingsSection(ruleset));
+            foreach (var section in CreateRulesetBindingSections(rulesets))
+                AddSection(section);
 
             AddSection(new GlobalKeyBindingsSection(OsuIcon.Beatmap, InputSettingsStrings.SongSelectSection)
             {
@@ -51,5 +51,8 @@ namespace osu.Game.Overlays.Settings.Sections.Input
             });
 
         }
+
+        protected virtual IEnumerable<SettingsSection> CreateRulesetBindingSections(RulesetStore rulesets)
+            => rulesets.AvailableRulesets.Select(ruleset => new RulesetBindingsSection(ruleset));
     }
 }
