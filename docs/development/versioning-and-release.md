@@ -2,7 +2,7 @@
 
 ## 版本来源
 
-桌面客户端版本由仓库根目录 `version.props` 中的 `Version` 维护，当前为 `0.1.0-beta.2`。客户端工程导入该文件，主页底部、程序版本标识、EXE 产品版本与 ZIP 文件名使用同一版本来源。主页用独立的 **BETA** 标识明确当前测试阶段；版本信息持续显示，不受原“你知道吗”提示开关影响。
+桌面客户端版本由仓库根目录 `version.props` 中的 `Version` 维护，当前为 `0.1.0-beta.3`。客户端工程导入该文件，主页底部、程序版本标识、EXE 产品版本与 ZIP 文件名使用同一版本来源。主页用独立的 **BETA** 标识明确当前测试阶段；版本信息持续显示，不受原“你知道吗”提示开关影响。
 
 Windows 的数字程序集版本和文件版本使用 `MAJOR.MINOR.PATCH.0`。完整预发布编号保留在产品版本与程序集信息版本中；构建系统可能追加 Git 提交信息，主页和发布文件名省略 `+` 后的构建元数据。
 
@@ -37,8 +37,8 @@ Windows 的数字程序集版本和文件版本使用 `MAJOR.MINOR.PATCH.0`。�
 
 ```text
 out/releases/
-  LazerRave-0.1.0-beta.1-win-x64.zip
-  LazerRave-0.1.0-beta.1-win-x64.zip.sha256
+  LazerRave-0.1.0-beta.3-win-x64.zip
+  LazerRave-0.1.0-beta.3-win-x64.zip.sha256
 ```
 
 ZIP 使用 Deflate Optimal 压缩，包含一个同名顶层目录，并生成 `VERSION.txt`。校验文件采用 SHA-256。打包前检查 EXE 产品版本、依赖清单和默认皮肤引用，缺少必要文件或版本不一致时失败，不启动游戏。清洁 OpenLR2 本地档案由 Python 3.11 及以上版本的标准库按引擎源码中的表结构生成，不读取现有成绩库。
