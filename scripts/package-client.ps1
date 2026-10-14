@@ -37,6 +37,7 @@ if ($source -ne $destinationPath) {
 }
 New-Item -ItemType Directory -Force -Path $destinationPath | Out-Null
 $existingKeyConfig = Test-Path -LiteralPath (Join-Path $destinationPath 'LR2files/Config/keyconfig.xml') -PathType Leaf
+$existingFiveKeyConfig = Test-Path -LiteralPath (Join-Path $destinationPath 'LR2files/Config/keyconfig_5.xml') -PathType Leaf
 if ($source -ne $destinationPath) {
     foreach ($folder in @('LR2files', 'BMS')) {
         $inputFolder = Join-Path $source $folder
@@ -52,6 +53,10 @@ New-Item -ItemType Directory -Force -Path (Join-Path $destinationPath 'BMS/Share
 Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig_def.xml') -Force
 if (!$existingKeyConfig) {
     Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig.xml') -Force
+}
+Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_5_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig_5_def.xml') -Force
+if (!$existingFiveKeyConfig) {
+    Copy-Item -LiteralPath (Join-Path $repository 'res/release/keyconfig_5_def.xml') -Destination (Join-Path $destinationPath 'LR2files/Config/keyconfig_5.xml') -Force
 }
 if (!$PrepareOnly) { Copy-Item -LiteralPath $DesktopExecutable -Destination (Join-Path $destinationPath 'LazerRave.exe') -Force }
 Copy-Item -LiteralPath (Join-Path $EnginePackage 'OpenLR2_x64.exe') -Destination $destinationPath -Force

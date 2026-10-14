@@ -7,4 +7,18 @@ frontend_frame_limit = "240"
 game_frame_limit = 240
 game_render_profile = "directshow"
 game_presentation = "embedded"
-speed = 2.0
+speed = 3.0
+
+[reading_speed.five]
+automatic = false
+manual = 3.0
+target = 600
+normalize_base = true
+base_bpm = 150
+
+[reading_speed.seven]
+automatic = false
+manual = 3.0
+target = 600
+normalize_base = true
+base_bpm = 150

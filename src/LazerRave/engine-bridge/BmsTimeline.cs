@@ -7,6 +7,8 @@ namespace LazerRave.Bridge;
 internal sealed record BmsTempo(double Time, double Bpm);
 internal sealed record BmsTimeline(double Length, BmsTempo[] Tempos)
 {
+    public double NoteBaseBpm { get; init; }
+    public IReadOnlyDictionary<double, int> NotesPerBpm { get; init; } = new Dictionary<double, int>();
     public static BmsTimeline Read(Chart chart, string encoding)
     {
         if (new FileInfo(chart.Path).Length > 16 * 1024 * 1024) throw new InvalidDataException("Chart is too large to read timing metadata.");
@@ -74,9 +76,13 @@ internal sealed record BmsTimeline(double Length, BmsTempo[] Tempos)
         }
         var beats = new double[1001];
         for (int measure = 0; measure < 1000; measure++) beats[measure + 1] = beats[measure] + 4 * measures.GetValueOrDefault(measure, 1);
-        double bpm = headers.TryGetValue("BPM", out var initial) && Number(initial) > 0 ? Number(initial) : chart.Bpm > 0 ? chart.Bpm : 120;
+        double bpm = headers.TryGetValue("BPM", out var initial) && Number(initial) > 0 ? Number(initial) : chart.Bpm > 0 && double.IsFinite(chart.Bpm) ? chart.Bpm : 120;
+        double initialBpm = bpm;
         double seconds = 0, lastBeat = 0, end = 0;
         var tempos = new List<BmsTempo> { new(0, bpm) };
+        var notesPerBpm = new Dictionary<double, int>();
+        var longNotes = new HashSet<string>();
+        string playableLanes = chart.Keys == 5 ? "123456" : "12345689";
         foreach (var item in events.OrderBy(item => beats[item.Measure] + 4 * measures.GetValueOrDefault(item.Measure, 1) * item.Fraction)
             .ThenBy(item => item.Channel is "03" or "08" ? 0 : item.Channel == "09" ? 2 : 1))
         {
@@ -94,9 +100,20 @@ internal sealed record BmsTimeline(double Length, BmsTempo[] Tempos)
             }
             else if (item.Channel is "01" or "04" or "06" or "07" ||
                 "1256DE".Contains(item.Channel[0]) && item.Channel[1] is >= '1' and <= '9')
+            {
                 end = Math.Max(end, seconds * 1000);
+                bool playable = item.Channel[0] is '1' or '5' && playableLanes.Contains(item.Channel[1]);
+                if (!playable) continue;
+                if (item.Channel[0] == '5')
+                {
+                    if (!longNotes.Add(item.Channel)) { longNotes.Remove(item.Channel); continue; }
+                }
+                else if (headers.TryGetValue("LNOBJ", out var tail) && item.Value.Equals(tail, StringComparison.OrdinalIgnoreCase)) continue;
+                notesPerBpm[bpm] = notesPerBpm.GetValueOrDefault(bpm) + 1;
+            }
         }
-        return new(end, tempos.ToArray());
+        double noteBaseBpm = notesPerBpm.OrderByDescending(pair => pair.Value).Select(pair => pair.Key).DefaultIfEmpty(initialBpm).First();
+        return new(end, tempos.ToArray()) { NoteBaseBpm = noteBaseBpm, NotesPerBpm = notesPerBpm };
     }
 
     private static double Number(string value) => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double result) && double.IsFinite(result) ? result : 0;

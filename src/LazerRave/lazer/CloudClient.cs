@@ -64,9 +64,9 @@ internal sealed partial class CloudClient : IAsyncDisposable
     public string? AvailableChart { get; private set; }
     public TransferProgress? Progress { get; private set; }
     public bool CanStartRound => Connected && !Busy && Room is { State: "lobby", Chart: not null } room && room.HostId == User?.Id
-        && AvailableChart is not null && room.Members.Length > 0 && room.Members.All(member => member.Ready && member.ContentState == "available");
+        && SupportedKeyModes.Contains(room.Chart.Keys) && AvailableChart is not null && room.Members.Length > 0 && room.Members.All(member => member.Ready && member.ContentState == "available");
     public bool CanForceStartRound => Connected && !Busy && Room is { State: "lobby", Chart: not null } room && room.HostId == User?.Id
-        && AvailableChart is not null && room.Members.Any(member => member.Id == User.Id && member.ContentState == "available");
+        && SupportedKeyModes.Contains(room.Chart.Keys) && AvailableChart is not null && room.Members.Any(member => member.Id == User.Id && member.ContentState == "available");
     public CloudChat[] Messages { get; private set; } = [];
     public event Action? Changed;
     public CloudClient(Func<IEnumerable<string>> songDirectories, Func<string> encoding, Func<string, Task> installed, string? applicationRoot = null, CloudSessionStore? sessions = null)
@@ -229,6 +229,11 @@ internal sealed partial class CloudClient : IAsyncDisposable
     {
         try
         {
+            if (room.Chart is { } selected && !SupportedKeyModes.Contains(selected.Keys))
+            {
+                await ReportContent(room, "missing", cancellation);
+                Status = "The modern client supports 5K and 7K charts only."; Notify(); return;
+            }
             Status = "Checking local BMS chart…"; Notify();
             foreach (var directory in songDirectories().ToArray())
             {
@@ -267,6 +272,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
     {
         var room = Room ?? throw new InvalidOperationException("Join a room first.");
         if (room.HostId != User?.Id) throw new InvalidOperationException("Only the host may select a song.");
+        SupportedKeyModes.Require(chart.Keys);
         if (!SongContent.IsChart(chart.Path)) throw new InvalidDataException("Select a BMS chart.");
         var sha256 = await SongContent.HashFile(chart.Path, cancellation);
         var updated = await hub!.InvokeAsync<CloudRoom>("SelectLocalChart", new { sha256, contentSha256 = (string?)null, chart.Title, chart.Artist, chart.Keys, chart.Level }, room.Version, cancellation);
@@ -275,6 +281,7 @@ internal sealed partial class CloudClient : IAsyncDisposable
     public async Task Ready(CancellationToken cancellation)
     {
         var room = Room ?? throw new InvalidOperationException("Join a room first.");
+        SupportedKeyModes.Require(room.Chart?.Keys ?? 0);
         if (AvailableChart is null || room.Members.Single(m => m.Id == User!.Id).ContentState != "available") throw new InvalidOperationException("The selected BMS chart must be available first.");
         UpdateRoom(await hub!.InvokeAsync<CloudRoom>("SetReady", !room.Members.Single(m => m.Id == User!.Id).Ready, room.Chart!.Sha256, room.Version, cancellation));
     }

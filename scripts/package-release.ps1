@@ -69,7 +69,7 @@ foreach ($tree in @('Resources', 'Localization', 'LR2files/Bgm', 'LR2files/Mouse
     Add-ReleaseTree $tree
 }
 foreach ($name in @('black.bmp', 'white.bmp', 'foon.bmp', 'muon.wav', 'title.bmp', 'optionstr.csv',
-    'keyconfig_5_def.xml', 'keyconfig_p_def.xml', 'midi_def.xml',
+    'keyconfig_p_def.xml', 'midi_def.xml',
     'sample_5.bme', 'sample_7.bme', 'sample_9.pms', 'sample_10.bme', 'sample_14.bme')) {
     Add-ReleaseFile (Join-Path $source "LR2files/Config/$name") "LR2files/Config/$name"
 }
@@ -79,6 +79,8 @@ foreach ($name in @('config.xml', 'openlr2-config.xml')) {
 Add-ReleaseFile (Join-Path $repository 'res/release/settings.toml') 'userdata/settings.toml'
 Add-ReleaseFile (Join-Path $repository 'res/release/keyconfig_def.xml') 'LR2files/Config/keyconfig_def.xml'
 Add-ReleaseFile (Join-Path $repository 'res/release/keyconfig_def.xml') 'LR2files/Config/keyconfig.xml'
+Add-ReleaseFile (Join-Path $repository 'res/release/keyconfig_5_def.xml') 'LR2files/Config/keyconfig_5_def.xml'
+Add-ReleaseFile (Join-Path $repository 'res/release/keyconfig_5_def.xml') 'LR2files/Config/keyconfig_5.xml'
 Add-ReleaseFile (Join-Path $repository 'LICENSE') 'LICENSE'
 Add-ReleaseFile (Join-Path $repository 'src/osu-lazer/LICENCE') 'licenses/osu-lazer-MIT.txt'
 foreach ($notice in Get-ChildItem -LiteralPath (Join-Path $repository 'res/licenses') -File) {

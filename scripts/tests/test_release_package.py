@@ -58,7 +58,7 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(result.returncode == 0, success, result.stderr.decode(errors="replace"))
 
     def test_archive_excludes_private_data_and_has_playable_fresh_profile(self):
-        private_files = ["userdata/cloud-session.bin", "userdata/settings.toml", "BMS/private/chart.bms",
+        private_files = ["userdata/cloud-session.bin", "userdata/settings.toml", "userdata/library-preferences.json", "BMS/private/chart.bms", "BMS/Shared/private/chart.bms",
                          "Shared/private/chart.bms", "LR2files/Database/Score/Player.db",
                          "LR2files/Config/config.xml", "LR2files/Config/openlr2-config.xml",
                          "LR2files/Config/lazerrave-roots.xml", "LR2files/Replay/private.lr2rep",
@@ -79,7 +79,7 @@ class ReleasePackageTests(unittest.TestCase):
             for relative in generated:
                 self.assertNotIn(b"PRIVATE PLAYER DATA", archive.read(prefix + relative))
             for name in ("LazerRave.exe", "OpenLR2_x64.exe", "fmod.dll", "native.dll",
-                         "Resources/osu.Game.Resources.dll", "licenses/dxlib-NOTICE.txt", "BMS/", "Shared/"):
+                         "Resources/osu.Game.Resources.dll", "licenses/dxlib-NOTICE.txt", "BMS/", "BMS/Shared/"):
                 self.assertIn(name, names)
             connection = sqlite3.connect(":memory:")
             try:

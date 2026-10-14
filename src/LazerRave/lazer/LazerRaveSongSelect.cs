@@ -90,11 +90,13 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
     public override IEnumerable<OsuMenuItem> GetForwardActions(BeatmapInfo beatmap)
     {
         yield return new OsuMenuItem(D(IsRoomSelection ? ConfirmationText : "Play"), MenuItemType.Highlighted, () => SelectAndRun(beatmap, OnStart)) { Icon = IsRoomSelection ? FontAwesome.Solid.Check : FontAwesome.Solid.Play };
+        if (game.ChartFor(beatmap) is not null)
+            yield return new OsuMenuItem(D(game.IsSongFavorite(beatmap) ? "Remove from favorites" : "Add to favorites"), MenuItemType.Standard, () => game.ToggleFavorite(beatmap)) { Icon = FontAwesome.Solid.Star };
     }
     public override IReadOnlyList<ScreenFooterButton> CreateFooterButtons() => base.CreateFooterButtons().SelectMany(button =>
         button is FooterButtonMods
             ? new ScreenFooterButton[] { new LazerRavePlayButton("Gauge"), new LazerRavePlayButton("Speed"), new LazerRavePlayButton("Lanes") }
-            : new[] { button }).ToArray();
+            : new[] { button }).Append(new LazerRaveFavoriteButton()).ToArray();
     public override bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
     {
         if (!this.IsCurrentScreen()) return false;
@@ -111,6 +113,7 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
         if (!IsLoaded) return;
         FilterControl.ApplyRequiredCriteria = criteria =>
         {
+            if (game.BrowsingRecent) criteria.Sort = osu.Game.Screens.Select.Filter.SortMode.LastPlayed;
             game.SetLibrarySearch(criteria.SearchText);
             game.SetLibraryLevelRange(FilterControl.DifficultyMinimum, FilterControl.DifficultyMaximum);
             criteria.UserStarDifficulty.Min = null; criteria.UserStarDifficulty.Max = null;
@@ -126,6 +129,7 @@ internal partial class LazerRaveSongSelect : SoloSongSelect
     public void ClearSearch() => FilterControl.Search(string.Empty);
     protected override bool OnKeyDown(KeyDownEvent e)
     {
+        if (e.Key == Key.D && e.ControlPressed && !e.Repeat) { game.ToggleSelectedFavorite(); return true; }
         if (e.Key == Key.Delete) return true;
         if (e.Key == Key.BackSpace) { game.ParentFolder(); return true; }
         return base.OnKeyDown(e);

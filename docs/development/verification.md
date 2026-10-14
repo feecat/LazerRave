@@ -17,9 +17,12 @@ python -m mkdocs build --strict
 | `scripts/check.ps1` | 文档入口，测试和编译由显式参数启用 |
 | `scripts/tests/` | 构建与打包规则、玩家数据保留、引擎桥接及帧时间分析 |
 | `LazerRave.exe --check report.txt` | BMS 分组、参数保存、原生选项映射及裁剪边界 |
+| `LazerRave.exe --check-experience report.txt` | 无主窗口、无引擎的 5K／7K、收藏、最近游玩、速度偏好和旧配置检查 |
 | `src/Cloud/tests/` | 账户、IR、房间、传输、目录安装及部分客户端适配 |
 | `src/Cloud/web/tests/` | 独立数据库的 HTTP/SignalR 与无窗口浏览器检查 |
 | `scripts/performance/` | 显式启动的游戏窗口、自动演奏与帧时间诊断 |
+
+`--check-experience` 在创建 GameHost 或调用引擎前运行，使用临时曲库与临时配置，不读取玩家收藏数据或启动主窗口。可在编译后使用本机 SDK 执行 `dotnet out/build/client/bin/Release/net10.0-windows/win-x64/LazerRave.dll --check-experience report.txt`。它不代替实际皮肤、音频和多人游玩验收。
 
 引擎集成检查需显式提供 `LAZERRAVE_TEST_ENGINE` 和 `LAZERRAVE_TEST_FMOD`。网站集成检查仅使用独立测试数据库，性能诊断使用隔离运行目录。正常构建不调用这些工具。
 

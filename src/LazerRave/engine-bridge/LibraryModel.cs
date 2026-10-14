@@ -6,13 +6,15 @@ using Tomlyn.Model;
 
 namespace LazerRave.Bridge;
 
-internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Offset = 0,
+internal sealed record FrontendSettings(string[] Roots, double Speed = 3, int Offset = 0,
     string Arrangement = "off", string Encoding = "auto", int Width = 1024, int Height = 768,
     string Player = "Player", string? Avatar = null, int FrameLimit = 240, string RenderProfile = "directshow", string Presentation = "embedded")
 {
     public string FrontendFrameLimit { get; init; } = "240";
     public string IrUpload { get; init; } = "public";
     public bool ShowClearLamps { get; init; } = true;
+    public ReadingSpeedProfiles SpeedProfiles { get; init; } = ReadingSpeedProfiles.Defaults(Speed);
+    public FrontendSettings ForChart(Chart chart) => ReadingSpeed.Apply(this, chart);
     public IReadOnlyDictionary<string, int> PlayOptions { get; init; } = new Dictionary<string, int>();
     public static FrontendSettings Read(string path)
     {
@@ -27,7 +29,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
         if (directoryValue is not null && (directoryValue is not TomlArray directories || directories.Any(item => item is not string)))
             throw new InvalidDataException("Directories must be an array of paths.");
         var roots = LibraryFolders.NormalizeRoots((directoryValue as TomlArray)?.OfType<string>() ?? [], AppContext.BaseDirectory);
-        var settings = new FrontendSettings(roots, Number("speed", 2), (int)Number("offset", 0),
+        var settings = new FrontendSettings(roots, Number("speed", 3), (int)Number("offset", 0),
             Text("arrangement", "off"), Text("chart_encoding", "auto"), (int)Number("window_width", 1024),
             (int)Number("window_height", 768), Text("display_name", "Player"), Get("avatar_path") as string, (int)Number("game_frame_limit", 240), Text("game_render_profile", "directshow"), Text("game_presentation", "embedded"))
         {
@@ -35,6 +37,7 @@ internal sealed record FrontendSettings(string[] Roots, double Speed = 2, int Of
             PlayOptions = PlayOptionCatalog.Read(play as TomlTable),
             IrUpload = Text("ir_upload", "public"),
             ShowClearLamps = Get("show_clear_lamps") as bool? ?? true,
+            SpeedProfiles = ReadingSpeedProfiles.Read(Get("reading_speed"), Number("speed", 3), fresh: !File.Exists(path)),
         };
         if (settings.Speed is < .5 or > 10 || !double.IsFinite(settings.Speed) || Math.Abs(settings.Offset) > 1000
             || settings.Width is < 320 or > 7680 || settings.Height is < 240 or > 4320

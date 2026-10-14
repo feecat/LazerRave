@@ -74,6 +74,18 @@ internal static class PlayOptionCatalog
         new("lunaris", "Lunaris", "Modifiers", 0, 1, 0, ["OFF", "ON"]),
     ];
 
+    public static bool IsSinglePlay(PlayOption option) => !option.Name.EndsWith('2') && option.Name is not ("dp_flip" or "battle");
+    public static bool IsPractice(PlayOption option) => option.Name is "autoplay" or "auto_key" or "assist" or "gauge_shift" or "auto_judge" || option.Category == "Modifiers";
+    public static IEnumerable<PlayOption> Visible(string category, bool advanced) => All.Where(IsSinglePlay).Where(option => category switch
+    {
+        "Common" => option.Name is "gauge" or "bga" or "target",
+        "Speed" => advanced && option.Category == "Speed",
+        "Lanes" => option.Name is "lane_cover" or "cover" or "lift_enabled" or "lift" || advanced && option.Category == "Lanes",
+        "Practice" => IsPractice(option) && (option.Category != "Modifiers" || advanced),
+        "Advanced" => option.Category == "More" && !IsPractice(option) && option.Name is not ("bga" or "target"),
+        _ => false,
+    });
+
     public static int Get(FrontendSettings settings, PlayOption option) =>
         settings.PlayOptions.TryGetValue(option.Name, out int value) ? value : option.Default;
 

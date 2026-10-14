@@ -44,6 +44,7 @@ internal partial class LazerRaveGame : OsuGame
     private readonly BmsBeatmapStore catalog;
     private readonly DesktopSettings preferences;
     public NativeSettings NativeSettings { get; }
+    public UserLibraryStore LibraryPreferences { get; }
     private readonly CloudClient cloud;
     public PlayRecordStore Records { get; } = new(Path.Combine(ApplicationPaths.UserData, "play-records"));
     public LocalClearLampStore ClearLamps { get; }
@@ -100,8 +101,9 @@ internal partial class LazerRaveGame : OsuGame
     /// <summary>Descends into a folder chosen from the carousel.</summary>
     public void EnterFolder(string path) => Navigate(path);
     public int Keys => catalog.Keys;
+    public bool BrowsingRecent => catalog.View == LibraryView.Recent;
     public IReadOnlyList<Chart> SelectedDifficulties => SelectedChart is { } selected
-        ? catalog.Library.Songs.First(song => song.Directory.Equals(Path.GetDirectoryName(selected.Path), StringComparison.OrdinalIgnoreCase)).Charts : [];
+        ? catalog.Library.Songs.First(song => song.Directory.Equals(Path.GetDirectoryName(selected.Path), StringComparison.OrdinalIgnoreCase)).Charts.Where(chart => SupportedKeyModes.Contains(chart.Keys)).ToArray() : [];
     public int MaximumChartLevel => catalog.Library.Songs.SelectMany(song => song.Charts).Select(chart => chart.Level).DefaultIfEmpty(20).Max();
     public void SetLibraryLevelRange(double? minimum, double? maximum) => catalog.SetLevelRange(minimum, maximum);
     public void SetLibrarySearch(string query) { catalog.SetSearch(query); }
@@ -189,7 +191,9 @@ internal partial class LazerRaveGame : OsuGame
         this.benchmark = benchmark;
         preferences = new(initial, FrontendSettings.SharedPath, benchmark is not null);
         NativeSettings = new(bridge.Runtime, benchmark is not null);
-        catalog = new(); catalog.Replace(library, ApplicationPaths.LibraryRoots(initial.Roots));
+        LibraryPreferences = new(Path.Combine(ApplicationPaths.UserData, "library-preferences.json"), benchmark is not null);
+        catalog = new() { UserLibrary = LibraryPreferences }; catalog.Replace(library, ApplicationPaths.LibraryRoots(initial.Roots));
+        LibraryPreferences.Changed += OnLibraryPreferencesChanged;
         cloud = new CloudClient(() => catalog.Library.Songs.Select(s => s.Directory).ToArray(), () => preferences.Value.Encoding, ImportSharedChart,
             sessions: new CloudSessionStore(Path.Combine(ApplicationPaths.UserData, "cloud-session.bin")));
         cloud.Changed += CloudChanged;
@@ -311,7 +315,13 @@ internal partial class LazerRaveGame : OsuGame
         chrome.Hide();
         Beatmap.BindValueChanged(OnSelectionChanged);
         ReportLibraryError(startupMessage);
+        ReportLibraryError(LibraryPreferences.Error);
         preferences.Speed.BindValueChanged(_ => QueueSettingsSave());
+        preferences.AutomaticSpeed.BindValueChanged(_ => QueueSettingsSave());
+        preferences.NormalizeBaseSpeed.BindValueChanged(_ => QueueSettingsSave());
+        preferences.BaseBpm.BindValueChanged(_ => QueueSettingsSave());
+        preferences.TargetSpeed.BindValueChanged(_ => QueueSettingsSave());
+        preferences.IrUpload.BindValueChanged(_ => QueueSettingsSave());
         preferences.Offset.BindValueChanged(_ => QueueSettingsSave());
         NativeSettings.ScreenMode.BindValueChanged(_ => QueueNativeSettingsSave());
         foreach (var value in NativeSettings.Numbers.Values) value.BindValueChanged(_ => QueueNativeSettingsSave());
@@ -342,8 +352,8 @@ internal partial class LazerRaveGame : OsuGame
     private void BuildChrome()
     {
         chrome.Clear();
-        chrome.Add(folderBar = new LazerRaveFolderBar(catalog, Navigate) { Position = new Vector2(28, 8) });
-        keys = new OsuDropdown<string> { Width = 128, Scale = new Vector2(1.25f), Position = new Vector2(464, 8), Items = new[] { "7Key", "5Key", "9Key", "10Key", "14Key", "All" } };
+        chrome.Add(folderBar = new LazerRaveFolderBar(catalog, Navigate, ChangeLibraryView) { Position = new Vector2(28, 8) });
+        keys = new OsuDropdown<string> { Width = 128, Scale = new Vector2(1.25f), Position = new Vector2(464, 8), Items = new[] { "7Key", "5Key", "All" } };
         keys.Current.Value = catalog.Keys == 0 ? "All" : $"{catalog.Keys}Key";
         keys.Current.BindValueChanged(change => { catalog.Filter(catalog.Directory, change.NewValue == "All" ? 0 : int.Parse(change.NewValue.Replace("Key", ""))); songSelect?.RefreshKeyFilter(); });
         chrome.Add(keys);
@@ -360,8 +370,28 @@ internal partial class LazerRaveGame : OsuGame
     {
         if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
         songSelect.ClearSearch(); catalog.SetSearch("");
+        catalog.SetView(LibraryView.Folders);
         catalog.Filter(path, catalog.Keys); UpdateFolderBar();
         songSelect.RefreshKeyFilter();
+    }
+    private void ChangeLibraryView(LibraryView view)
+    {
+        if (ScreenStack.CurrentScreen is not LazerRaveSongSelect) return;
+        songSelect.ClearSearch(); catalog.SetSearch(""); catalog.SetView(view); UpdateFolderBar(); songSelect.RefreshKeyFilter();
+    }
+    private void OnLibraryPreferencesChanged()
+    {
+        if (!IsDisposed) Schedule(() => { catalog.RefreshView(); UpdateFolderBar(); songSelect?.RefreshKeyFilter(); });
+    }
+    public event Action? SongSelectionChanged;
+    public bool IsSongFavorite(BeatmapInfo info) => catalog.ChartFor(info) is { } chart && catalog.Library.Songs.First(song => song.Directory.Equals(Path.GetDirectoryName(chart.Path), StringComparison.OrdinalIgnoreCase)).Charts.Any(LibraryPreferences.IsFavorite);
+    public bool IsSelectedSongFavorite => IsSongFavorite(Beatmap.Value.BeatmapInfo);
+    public void ToggleSelectedFavorite() => ToggleFavorite(Beatmap.Value.BeatmapInfo);
+    public void ToggleFavorite(BeatmapInfo info)
+    {
+        if (catalog.ChartFor(info) is not { } chart) return;
+        try { LibraryPreferences.ToggleFavorite(catalog.Library.Songs.First(song => song.Directory.Equals(Path.GetDirectoryName(chart.Path), StringComparison.OrdinalIgnoreCase)).Charts); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { SetLibraryMessage(error.Message); }
     }
     private void ReportLibraryError(string? error)
     {
@@ -372,6 +402,7 @@ internal partial class LazerRaveGame : OsuGame
         if (settingsPanel.State.Value == Visibility.Visible) { settingsPanel.Hide(); return true; }
         if (ScreenStack.CurrentScreen is GamePlayScreen play) { play.RequestReturn(); return true; }
         if (catalog.Query.Length > 0) { songSelect.ClearSearch(); catalog.SetSearch(""); songSelect.RefreshKeyFilter(); return true; }
+        if (catalog.View != LibraryView.Folders) { ChangeLibraryView(LibraryView.Folders); return true; }
         if (catalog.Directory is null) return false;
         var parent = catalog.Library.Folders.FirstOrDefault(folder => string.Equals(folder.Path, catalog.Directory, StringComparison.OrdinalIgnoreCase))?.Parent;
         Navigate(parent); return true;
@@ -441,9 +472,9 @@ internal partial class LazerRaveGame : OsuGame
     private void StartChart(BeatmapInfo info, string? replay, PlayRecord? record = null)
     {
         if (gameLaunchPending || classicRunning || refreshing || ScreenStack.CurrentScreen is not LazerRaveSongSelect { IsRoomSelection: false } || catalog.ChartFor(info) is not { } chart || !catalog.IsVisible(info) || viewport is null) return;
-        if (preferences.PlayOptions["battle"].Value == 4)
+        if (preferences.PlayOptions["battle"].Value != 0)
         {
-            SetLibraryMessage(D("Ghost Battle requires rival selection in the classic menu."));
+            SetLibraryMessage(D("Battle and DP conversions are available in classic LR2 only. Disable classic battle in play options."));
             return;
         }
         if (!SaveSettings() || refreshing) { settingsPanel.Show(); return; }
@@ -476,6 +507,7 @@ internal partial class LazerRaveGame : OsuGame
         if (!participating || member is not { ContentState: "available" } || cloud.AvailableChart is not { } path) return;
         var chart = catalog.Library.Songs.SelectMany(song => song.Charts).FirstOrDefault(chart => chart.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
         if (chart is null) { launchedCloudMatch = match; cloud.SetGameStatus("The room chart is not in the library. Rescan before starting another round."); return; }
+        if (!SupportedKeyModes.Contains(chart.Keys) || preferences.PlayOptions["battle"].Value != 0) { launchedCloudMatch = match; cloud.SetGameStatus("Multiplayer supports 5K and 7K single play only. Disable classic battle in play options."); return; }
         if (ScreenStack.CurrentScreen is LazerRaveSongSelect selection) { selection.Exit(); return; }
         if (ScreenStack.CurrentScreen is not LazerRaveMultiplayer)
         {
@@ -495,6 +527,8 @@ internal partial class LazerRaveGame : OsuGame
     }
     private Action<PlayRecord> AutoUploadRecord(Chart chart, string mode) => record =>
     {
+        try { if (benchmark is null) LibraryPreferences.RecordPlay(chart, record.PlayedAt); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { if (!IsDisposed) Schedule(() => SetLibraryMessage(error.Message)); }
         if (benchmark is not null || mode == "off" || !record.Ranked || cloud.User?.Username != record.Player) return;
         _ = Upload();
         async Task Upload()
@@ -531,7 +565,6 @@ internal partial class LazerRaveGame : OsuGame
     {
         if (!SaveSettings()) return;
         settingsPanel.Hide();
-        if (!refreshing) Rescan();
     }
     private void QueueSettingsSave()
     {
@@ -613,7 +646,12 @@ internal partial class LazerRaveGame : OsuGame
             });
         }
     }
-    private void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change) => StartPreview(change.NewValue);
+    private void OnSelectionChanged(osu.Framework.Bindables.ValueChangedEvent<WorkingBeatmap> change)
+    {
+        if (catalog.ChartFor(change.NewValue.BeatmapInfo) is { } chart) preferences.SelectSpeedProfile(chart.Keys);
+        SongSelectionChanged?.Invoke();
+        StartPreview(change.NewValue);
+    }
     private bool CanPreview => benchmark is null && !classicRunning && !refreshing && menuTrackVolume.Value > 0
         && ScreenStack.CurrentScreen is LazerRaveMainMenu { IsLoaded: true } or LazerRaveSongSelect { IsLoaded: true };
     private void StartPreview(WorkingBeatmap working)
@@ -744,6 +782,7 @@ internal partial class LazerRaveGame : OsuGame
             }
             lifetime.Cancel(); StopPreview(); viewport?.Dispose(); preview?.Dispose(); windowPlacement?.Dispose(); ClearLamps.Dispose();
             cloud.Changed -= CloudChanged;
+            LibraryPreferences.Changed -= OnLibraryPreferencesChanged;
             _ = cloud.DisposeAsync();
         }
         base.Dispose(isDisposing);

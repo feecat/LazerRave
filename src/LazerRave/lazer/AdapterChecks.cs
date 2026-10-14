@@ -63,8 +63,122 @@ internal static class AdapterChecks
             throw new InvalidDataException("Native audio settings did not survive a restart.");
     }
 
+    private static void CheckFrontendBaseSpeed(string directory)
+    {
+        static void Require(bool value, string message) { if (!value) throw new InvalidDataException(message); }
+        string file = Path.Combine(directory, "note-base.bms");
+        var chart = new Chart(file, "Note base", "", 7, 10, 4, 999, 100, null);
+        File.WriteAllText(file, "#BPM 120\n#BPM01 200\n#STOP01 192000\n#LNOBJ ZZ\n#00101:01010101\n#00108:00010000\n#00109:01000000\n#00111:010001ZZ\n#00112:00000100\n#00116:00000100\n#00151:00000101\n#00152:01000001\n#001D1:01010101\n");
+        var timeline = BmsTimeline.Read(chart, "auto");
+        Require(timeline.NoteBaseBpm == 200 && timeline.NotesPerBpm[120] == 2 && timeline.NotesPerBpm[200] == 4, "Base BPM must count playable note heads, not duration, BGM, mines or long-note tails.");
+        var profile = new ReadingSpeedProfile(true, 2, 1500) { NormalizeBase = true, BaseBpm = 150 };
+        var settings = new FrontendSettings([]) { SpeedProfiles = new(profile, profile), PlayOptions = new Dictionary<string, int> { ["hsfix"] = 4, ["base_speed"] = 200, ["lane_cover"] = 1, ["cover"] = 95 } };
+        var applied = settings.ForChart(chart);
+        Require(Math.Abs(applied.Speed * applied.PlayOptions["base_speed"] / 100 - 1.5) < .0001 && applied.PlayOptions["hsfix"] == 0, "Frontend normalization must apply base BPM / note-dominant BPM times the manual multiplier with LR2 speed fixing off.");
+        Require(settings.SpeedProfiles.Seven.Target == 1500 && settings.PlayOptions["hsfix"] == 4, "Frontend normalization changed saved automatic reading or classic options.");
+        var request = EngineBridge.Request("validate", applied, chart);
+        var sent = request.Root!.Element("play-options")!.Elements("option").ToDictionary(option => (string)option.Attribute("name")!, option => (int)option.Attribute("value")!);
+        Require(request.Root.Element("speed")!.Value == "150" && sent["hsfix"] == 0 && sent["base_speed"] == 100, "Bridge did not send frontend-computed speed values.");
+        File.WriteAllText(file, "#BPM 120\n#BPM01 200\n#BPM02 120\n#00011:01\n#00108:01\n#00111:0101\n#00208:02\n#00211:010101\n");
+        Require(BmsTimeline.Read(chart, "auto").NoteBaseBpm == 120, "Repeated BPM segments must share one note count.");
+        File.WriteAllText(file, "#BPM 120\n#BPM01 200\n#00011:01\n#00108:01\n#00111:01\n");
+        Require(BmsTimeline.Read(chart, "auto").NoteBaseBpm == 120, "Equal note counts must choose the first playable BPM deterministically.");
+        File.WriteAllText(file, "#BPM 1000\n#00011:0101\n"); applied = settings.ForChart(chart);
+        Require(Math.Abs(applied.Speed * applied.PlayOptions["base_speed"] / 100 - .3) < .0001, "Low normalized multipliers must not be silently clipped to 0.5.");
+        string preferences = Path.Combine(directory, "base-speed.toml");
+        var desktop = new DesktopSettings(new FrontendSettings([]), preferences, false);
+        desktop.NormalizeBaseSpeed.Value = true; desktop.BaseBpm.Value = 180; desktop.Speed.Value = 2.5;
+        desktop.SelectSpeedProfile(5); desktop.NormalizeBaseSpeed.Value = true; desktop.BaseBpm.Value = 150; desktop.Speed.Value = 2; desktop.Save();
+        var saved = FrontendSettings.Read(preferences);
+        Require(saved.SpeedProfiles.Seven.NormalizeBase && saved.SpeedProfiles.Seven.BaseBpm == 180 && saved.SpeedProfiles.Five.BaseBpm == 150, "Independent frontend base BPM settings did not survive profile switches and reload.");
+    }
+
+    public static void RunExperience(string directory)
+    {
+        static void Require(bool value, string message) { if (!value) throw new InvalidDataException(message); }
+        Directory.CreateDirectory(directory);
+        using (var keyWindow = new LazerRaveKeyBindingWindow(new NativeKeyBindings(directory)))
+        {
+            keyWindow.BuildLayout();
+            using var dropdown = keyWindow.CreateModeDropdown();
+            Require(dropdown.AutoSizeAxes.HasFlag(osu.Framework.Graphics.Axes.Y) && !dropdown.RelativeSizeAxes.HasFlag(osu.Framework.Graphics.Axes.Y), "Key-mode dropdown height must remain automatic.");
+            Require(dropdown.Items.SequenceEqual(new[] { "7Key", "5Key" }), "Key-mode dropdown must expose only 7K and 5K.");
+        }
+        CheckFrontendBaseSpeed(directory);
+        string root = Path.Combine(directory, "experience-library"); Directory.CreateDirectory(root);
+        var document = new XDocument(new XElement("lazerrave", new XAttribute("status", "ok")));
+        Chart Create(string name, int keys)
+        {
+            string folder = Path.Combine(root, name); Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, name + ".bms"); File.WriteAllText(path, "#TITLE " + name);
+            string md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(File.ReadAllBytes(path)));
+            document.Root!.Add(new XElement("chart", new XAttribute("path", path), new XAttribute("title", name), new XAttribute("keys", keys), new XAttribute("level", 10), new XAttribute("difficulty", 4), new XAttribute("bpm", 150), new XAttribute("md5", md5)));
+            return new(path, name, "", keys, 10, 4, 150, 100, null) { Md5 = md5 };
+        }
+        var five = Create("Five", 5); var seven = Create("Seven", 7); var other = Create("DP", 14);
+        var library = SongLibrary.Parse(document, directory, [root]);
+        var annotations = new UserLibraryStore(Path.Combine(directory, "library-preferences.json"));
+        var catalog = new BmsBeatmapStore { UserLibrary = annotations }; catalog.Replace(library, [root]); catalog.Filter(root, 0);
+        Require(catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).All(info => catalog.ChartFor(info)?.Keys is 5 or 7), "Unsupported key modes leaked into modern selection.");
+        Require(library.Songs.SelectMany(song => song.Charts).Any(chart => chart.Keys == 14), "Unsupported charts must remain in the library metadata.");
+        annotations.ToggleFavorite([five]); catalog.SetView(LibraryView.Favorites);
+        Require(catalog.ChildFolders.Count() == 0 && catalog.GetBeatmapSets(null).SelectMany(set => set.Beatmaps).Single().Difficulty.CircleSize == 5, "Favorites must flatten supported songs without folder rows.");
+        catalog.SetSearch("no-match"); Require(catalog.GetBeatmapSets(null).Count == 0, "Favorite search did not filter."); catalog.SetSearch("");
+        catalog.SetLevelRange(11, null); Require(catalog.GetBeatmapSets(null).Count == 0, "Favorite difficulty filter did not apply."); catalog.SetLevelRange(null, null);
+        var time = DateTimeOffset.UtcNow; annotations.RecordPlay(five, time); annotations.RecordPlay(seven, time.AddMinutes(1)); annotations.RecordPlay(five, time.AddMinutes(2));
+        catalog.SetView(LibraryView.Recent);
+        Require(catalog.GetBeatmapSets(null).Count == 2 && catalog.GetBeatmapSets(null)[0].Beatmaps[0].LastPlayed == time.AddMinutes(2), "Recent plays must be unique and most recent first.");
+        Require(new UserLibraryStore(Path.Combine(directory, "library-preferences.json")).IsFavorite(five), "Favorite did not survive reload.");
+        string moved = Path.Combine(root, "moved.bms"); File.Move(five.Path, moved); var renamed = five with { Path = moved };
+        Require(annotations.IsFavorite(renamed), "Favorite identity must survive moving a chart.");
+        annotations.ToggleFavorite([seven with { Md5 = null }]);
+        Require(annotations.IsFavorite(seven), "Favorite identity changed when catalog hashes became available.");
+        var history = new UserLibraryStore(Path.Combine(directory, "recent-bound.json"));
+        for (int i = 0; i < 110; i++) history.RecordPlay(seven with { Md5 = i.ToString("x32") }, time.AddMinutes(i));
+        Require(new UserLibraryStore(Path.Combine(directory, "recent-bound.json")).Recent.Count == 100, "Recent history must remain bounded after reload.");
+        var lockedPath = Path.Combine(directory, "locked.json"); var lockedStore = new UserLibraryStore(lockedPath); lockedStore.RecordPlay(seven, time);
+        var before = File.ReadAllBytes(lockedPath);
+        if (OperatingSystem.IsWindows())
+        {
+            using var locked = new FileStream(lockedPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            bool writeRejected = false; try { lockedStore.ToggleFavorite([seven]); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { writeRejected = true; }
+            Require(writeRejected && !lockedStore.IsFavorite(seven) && before.SequenceEqual(File.ReadAllBytes(lockedPath)), "Failed preference write changed saved data or memory.");
+        }
+        string corrupt = Path.Combine(directory, "corrupt.json"); File.WriteAllText(corrupt, "{broken"); var damaged = new UserLibraryStore(corrupt);
+        bool rejected = false; try { damaged.ToggleFavorite([renamed]); } catch (InvalidDataException) { rejected = true; }
+        Require(rejected && File.ReadAllText(corrupt) == "{broken", "Corrupt preferences were overwritten.");
+        var settings = new FrontendSettings([root]) { SpeedProfiles = new(new(true, 3, 600), new(true, 2, 750)) };
+        Require(settings.ForChart(renamed).Speed == 4 && settings.ForChart(seven).Speed == 5 && settings.ForChart(seven).PlayOptions["hsfix"] == 5, "Automatic reading speed must use main BPM, not constant speed.");
+        var covered = settings with { PlayOptions = new Dictionary<string, int> { ["lane_cover"] = 1, ["cover"] = 25, ["lift_enabled"] = 1, ["lift"] = 25 } };
+        Require(covered.ForChart(renamed).Speed == 2 && settings.SpeedProfiles.Five.Target == 600, "Cover or lift changed the saved target or did not adjust initial speed.");
+        var legacyOptions = new FrontendSettings([root]) { PlayOptions = new Dictionary<string, int> { ["assist2"] = 1, ["dp_flip"] = 1 } };
+        Require(legacyOptions.ForChart(seven).PlayOptions["assist2"] == 0 && legacyOptions.ForChart(seven).PlayOptions["dp_flip"] == 0 && legacyOptions.PlayOptions["assist2"] == 1, "Hidden 2P options must not affect single play or overwrite legacy preferences.");
+        var effective = covered.ForChart(seven);
+        var records = new PlayRecordStore(Path.Combine(directory, "experience-records"));
+        string chartHash = PlayRecordStore.HashChart(seven.Path).GetAwaiter().GetResult();
+        var result = records.Save(Guid.NewGuid(), chartHash, seven, "Player", effective, new GameplaySnapshot(150, 5000, 100, 0, 1, 5, true, false));
+        var playback = records.Read(chartHash).Single().PlaybackSettings(settings);
+        Require(result is not null && playback.Speed == effective.Speed && playback.PlayOptions["hsfix"] == 5, "Replay snapshot lost the effective automatic speed.");
+        rejected = false; try { settings.ForChart(other); } catch (ArgumentException) { rejected = true; } Require(rejected, "Unsupported play launch was accepted.");
+        string file = Path.Combine(directory, "experience-settings.toml"); File.WriteAllText(file, "future = 7\n[reading_speed.five]\nfuture_profile = 9\n");
+        var desktop = new DesktopSettings(new FrontendSettings([root]), file, false);
+        desktop.Speed.Value = 3.5; desktop.AutomaticSpeed.Value = true; desktop.TargetSpeed.Value = 750;
+        desktop.SelectSpeedProfile(5); desktop.Speed.Value = 2.5; desktop.TargetSpeed.Value = 600; desktop.Save();
+        var restored = FrontendSettings.Read(file);
+        Require(restored.SpeedProfiles.Seven.Automatic && restored.SpeedProfiles.Seven.Manual == 3.5 && restored.SpeedProfiles.Five.Manual == 2.5, "Per-key speed settings did not survive a restart.");
+        var saved = Toml.ToModel(File.ReadAllText(file)); Require((long)saved["future"] == 7 && (long)((TomlTable)((TomlTable)saved["reading_speed"])["five"])["future_profile"] == 9, "Speed persistence lost unknown fields.");
+        Require(PlayOptionCatalog.Visible("Common", false).Count() == 3 && PlayOptionCatalog.Visible("Practice", false).All(PlayOptionCatalog.IsPractice), "Common and practice options are not separated.");
+        Require(new[] { "Common", "Speed", "Lanes", "Practice", "Advanced" }.SelectMany(category => PlayOptionCatalog.Visible(category, true)).All(PlayOptionCatalog.IsSinglePlay), "2P options leaked into modern settings.");
+        CheckNativeKeyBindings(directory);
+        var draft = new NativeKeyBindings(Path.Combine(directory, "key-bindings")).Read(7);
+        var second = draft.Bindings.Where(pair => pair.Key >= 20).ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
+        draft.RestoreDefaults(firstPlayerOnly: true);
+        Require(second.All(pair => pair.Value.SequenceEqual(draft.Bindings[pair.Key])), "Restoring single-play bindings changed legacy 2P bindings.");
+    }
+
     public static void Run(FrontendSettings settings, SongLibrary library, string directory)
     {
+        RunExperience(Path.Combine(directory, "experience"));
         static void Require(bool value, string message) { if (!value) throw new InvalidDataException(message); }
         var store = new BmsBeatmapStore(); store.Replace(library, ApplicationPaths.LibraryRoots(settings.Roots));
         Require(library.Songs.SelectMany(song => song.Charts).All(chart => BmsBeatmapStore.StableId(chart.Path) == BmsBeatmapStore.StableId(chart.Path.ToUpperInvariant())), "Chart identities must ignore Windows path case.");
@@ -81,7 +195,7 @@ internal static class AdapterChecks
             Require(sets.SelectMany(set => set.Beatmaps).All(info => store.ChartFor(info) is { } chart && info.DifficultyName.Contains($"Lv.{chart.Level}")), "BMS difficulty labels must preserve chart levels.");
             var expected = library.Browse(folder, "", keys == 0 ? null : keys, 0)
                 .Where(entry => entry.Song is not null).SelectMany(entry => entry.Song!.Charts)
-                .Where(chart => keys == 0 || chart.Keys == keys)
+                .Where(chart => SupportedKeyModes.Contains(chart.Keys) && (keys == 0 || chart.Keys == keys))
                 .Select(chart => BmsBeatmapStore.StableId(chart.Path)).ToHashSet();
             Require(expected.SetEquals(sets.SelectMany(set => set.Beatmaps).Where(store.IsVisible).Select(info => info.ID)),
                 "Folder scope included a nested chart or a sibling folder.");
@@ -107,6 +221,7 @@ internal static class AdapterChecks
         var fixtureChart = new Chart(Path.Combine(directory, "fixture.bms"), "Fixture", "", 7, 1, 2, 120, 1, null);
         File.WriteAllText(fixtureChart.Path, "#TITLE Fixture");
         foreach (var option in PlayOptionCatalog.All) preferences.PlayOptions[option.Name].Value = option.Max;
+        preferences.PlayOptions["battle"].Value = 0;
         preferences.PlayOptions["hs_min"].Value = 10;
         preferences.PlayOptions["hs_max"].Value = 1000;
         preferences.Arrangement.Value = "s-random";

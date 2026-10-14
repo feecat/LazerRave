@@ -11,7 +11,7 @@ internal sealed class NativeKeyBindings(string runtime)
     public static string FileName(int keys) => keys switch
     { 7 => "keyconfig.xml", 5 => "keyconfig_5.xml", 9 => "keyconfig_p.xml", _ => throw new ArgumentOutOfRangeException(nameof(keys)) };
     public static int[] Rows(int keys) => keys == 9 ? [.. Enumerable.Range(1, 9), 12, 13]
-        : [.. Enumerable.Range(1, keys), 10, 11, 12, 13, .. Enumerable.Range(21, keys), 30, 31, 32, 33];
+        : [.. Enumerable.Range(1, keys), 10, 11, 12, 13, .. Enumerable.Range(21, 7), 30, 31, 32, 33];
 
     public KeyBindingDraft Read(int keys)
     {
@@ -26,6 +26,7 @@ internal sealed class NativeKeyBindings(string runtime)
         var writes = new List<(string Path, byte[] Bytes, byte[]? Original)>();
         foreach (var draft in drafts.Where(draft => draft.HasChanges || !File.Exists(Path.Combine(DirectoryPath, FileName(draft.Keys)))))
         {
+            if (draft.SinglePlayConflicts.Length > 0) throw new ArgumentException("Resolve 1P/2P keyboard conflicts before saving.");
             string path = Path.Combine(DirectoryPath, FileName(draft.Keys));
             byte[]? original = File.Exists(path) ? File.ReadAllBytes(path) : null;
             var document = ReadDocument(path, draft.Keys);
@@ -104,27 +105,28 @@ internal sealed class KeyBindingDraft(int keys, Dictionary<int, int[]> original)
     public Dictionary<int, int[]> Bindings { get; } = original.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
     public IEnumerable<int> ChangedRows => Bindings.Keys.Where(row => !Bindings[row].SequenceEqual(Original[row]));
     public bool HasChanges => ChangedRows.Any();
-    public void Assign(int row, int code, bool append)
+    public int[] SinglePlayConflicts => Bindings.Where(pair => pair.Key < 20).SelectMany(pair => pair.Value)
+        .Intersect(Bindings.Where(pair => pair.Key >= 20).SelectMany(pair => pair.Value)).Order().ToArray();
+    public void ClearSecondPlayerKeyboardBindings() { foreach (int row in Bindings.Keys.Where(row => row >= 20)) Bindings[row] = []; }
+    public void Assign(int row, int code, bool append, bool firstPlayerOnly = false)
     {
         if (code is <= 0 or >= 256) throw new ArgumentOutOfRangeException(nameof(code));
-        if (Bindings.Any(pair => pair.Key != row && pair.Value.Contains(code)))
+        if (Bindings.Any(pair => pair.Key != row && (!firstPlayerOnly || pair.Key < 20) && pair.Value.Contains(code)))
             throw new ArgumentException("That key is already assigned to another button.");
         int[] values = append ? Bindings[row].Append(code).Distinct().ToArray() : [code];
         if (values.Length > 16) throw new ArgumentException("LR2 supports at most 16 bindings per button.");
         Bindings[row] = values;
     }
-    public void RestoreDefaults() { foreach (var pair in Defaults(Keys)) Bindings[pair.Key] = pair.Value; }
+    public void RestoreDefaults(bool firstPlayerOnly = false) { foreach (var pair in Defaults(Keys).Where(pair => !firstPlayerOnly || pair.Key < 20)) Bindings[pair.Key] = pair.Value; }
     public static Dictionary<int, int[]> Defaults(int keys)
     {
-        int[] first = keys switch { 9 => [30, 31, 32, 33, 57, 36, 37, 38, 39], 5 => [31, 32, 33, 36, 37], _ => [31, 32, 33, 57, 36, 37, 38] };
+        int[] first = keys switch { 9 => [30, 31, 32, 33, 57, 36, 37, 38, 39], 5 => [32, 33, 57, 36, 37], _ => [31, 32, 33, 57, 36, 37, 38] };
         var result = Enumerable.Range(1, keys).ToDictionary(row => row, row => new[] { first[row - 1] });
         result[12] = [16]; result[13] = [17];
         if (keys != 9)
         {
             result[10] = [30]; result[11] = [39];
-            int[] second = [44, 45, 46, 47, 48, 49, 50];
-            for (int i = 0; i < keys; i++) result[21 + i] = [second[i]];
-            result[30] = [42]; result[31] = [54]; result[32] = [24]; result[33] = [25];
+            foreach (int row in NativeKeyBindings.Rows(keys).Where(row => row >= 20)) result[row] = [];
         }
         return result;
     }

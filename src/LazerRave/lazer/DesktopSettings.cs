@@ -12,7 +12,29 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
     private bool defaultLibrarySaved = File.Exists(path) && Toml.ToModel(File.ReadAllText(path)).TryGetValue("directories", out var savedRoots)
         && savedRoots is TomlArray directories && directories.OfType<string>().Contains(LibraryFolders.DefaultRoot);
     public FrontendSettings Value { get; private set; } = initial with { Roots = LibraryFolders.NormalizeRoots(initial.Roots, AppContext.BaseDirectory) };
-    public BindableDouble Speed { get; } = new(initial.Speed) { MinValue = .5, MaxValue = 10, Precision = .05 };
+    public BindableDouble Speed { get; } = new(initial.SpeedProfiles.Seven.Manual) { MinValue = .5, MaxValue = 10, Precision = .05 };
+    public BindableBool AutomaticSpeed { get; } = new(initial.SpeedProfiles.Seven.Automatic);
+    public BindableBool NormalizeBaseSpeed { get; } = new(initial.SpeedProfiles.Seven.NormalizeBase);
+    public BindableInt BaseBpm { get; } = new(initial.SpeedProfiles.Seven.BaseBpm) { MinValue = 30, MaxValue = 1000 };
+    public BindableInt TargetSpeed { get; } = new(initial.SpeedProfiles.Seven.Target) { MinValue = 100, MaxValue = 1500 };
+    public BindableInt SpeedKeys { get; } = new(7);
+    private ReadingSpeedProfiles speedProfiles = initial.SpeedProfiles;
+    private bool switchingSpeed;
+    public ReadingSpeedProfiles CurrentSpeedProfiles => speedProfiles with
+    {
+        Five = SpeedKeys.Value == 5 ? ActiveSpeedProfile : speedProfiles.Five,
+        Seven = SpeedKeys.Value == 7 ? ActiveSpeedProfile : speedProfiles.Seven,
+    };
+    private ReadingSpeedProfile ActiveSpeedProfile => new(AutomaticSpeed.Value, Speed.Value, TargetSpeed.Value) { NormalizeBase = NormalizeBaseSpeed.Value, BaseBpm = BaseBpm.Value };
+    public void SelectSpeedProfile(int keys)
+    {
+        if (!SupportedKeyModes.Contains(keys) || keys == SpeedKeys.Value || switchingSpeed) return;
+        speedProfiles = CurrentSpeedProfiles;
+        var next = speedProfiles.ForKeys(keys);
+        switchingSpeed = true;
+        try { SpeedKeys.Value = keys; Speed.Value = next.Manual; AutomaticSpeed.Value = next.Automatic; TargetSpeed.Value = next.Target; NormalizeBaseSpeed.Value = next.NormalizeBase; BaseBpm.Value = next.BaseBpm; }
+        finally { switchingSpeed = false; }
+    }
     public BindableInt Offset { get; } = new(initial.Offset) { MinValue = -1000, MaxValue = 1000 };
     public Bindable<string> Arrangement { get; } = new(initial.Arrangement);
     public IReadOnlyDictionary<string, BindableInt> PlayOptions { get; } = PlayOptionCatalog.All.ToDictionary(
@@ -33,7 +55,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
     public Bindable<string> RenderProfile { get; } = new(RenderProfiles.Labels[initial.RenderProfile]);
 
     public bool HasChanges => !frontendFrameLimitSaved || !defaultLibrarySaved || PlayOptionCatalog.All.Any(option => PlayOptions[option.Name].Value != PlayOptionCatalog.Get(Value, option))
-        || Speed.Value != Value.Speed || Offset.Value != Value.Offset
+        || CurrentSpeedProfiles != Value.SpeedProfiles || Offset.Value != Value.Offset
         || Arrangement.Value != Value.Arrangement || Encoding.Value != Value.Encoding
         || !LibraryDirectories.SequenceEqual(Value.Roots, StringComparer.OrdinalIgnoreCase) || Window.Value != $"{Value.Width}x{Value.Height}"
         || FrontendFrameLimit.Value != Value.FrontendFrameLimit
@@ -65,7 +87,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
         if (!new[] { "embedded", "standalone" }.Contains(Presentation.Value)) throw new ArgumentException("Invalid game presentation mode.");
         if (!new[] { "public", "private", "off" }.Contains(IrUpload.Value)) throw new ArgumentException("Invalid IR upload mode.");
         var profile = RenderProfiles.Labels.Single(pair => pair.Value == RenderProfile.Value).Key;
-        var next = Value with { Roots = roots, FrontendFrameLimit = FrontendFrameLimit.Value, Speed = Speed.Value, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
+        var next = Value with { Roots = roots, FrontendFrameLimit = FrontendFrameLimit.Value, Speed = Speed.Value, SpeedProfiles = CurrentSpeedProfiles, Offset = Offset.Value, Arrangement = Arrangement.Value, PlayOptions = playOptions,
             Encoding = Encoding.Value, Width = width, Height = height, Player = Player.Value.Trim(), Avatar = avatar.Length > 0 ? Path.GetFullPath(avatar) : null, FrameLimit = frameLimit, RenderProfile = profile, Presentation = Presentation.Value, IrUpload = IrUpload.Value, ShowClearLamps = ShowClearLamps.Value };
         if (!readOnly)
         {
@@ -81,6 +103,7 @@ internal sealed class DesktopSettings(FrontendSettings initial, string path, boo
             table["game_presentation"] = next.Presentation;
             table["ir_upload"] = next.IrUpload;
             table["show_clear_lamps"] = next.ShowClearLamps;
+            next.SpeedProfiles.Write(table);
             var playTable = table.TryGetValue("play", out var savedPlay) && savedPlay is TomlTable previousPlay ? previousPlay : new TomlTable();
             foreach (var option in playOptions) playTable[option.Key] = (long)option.Value;
             table["play"] = playTable;

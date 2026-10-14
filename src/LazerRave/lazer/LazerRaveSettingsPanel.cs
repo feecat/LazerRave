@@ -23,7 +23,7 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
     protected override SettingsSection CreateGeneralSection() => new ClientGeneralSection();
     protected override KeyBindingPanel CreateKeyBindingPanel() => new GameplayKeyBindingPanel();
     protected override bool IncludeRulesetSettings => false;
-    protected override bool IncludeSection(SettingsSection section) => section is not (OnlineSection or MaintenanceSection or GameplaySection or AudioSection);
+    protected override bool IncludeSection(SettingsSection section) => section is ClientGeneralSection or GraphicsSection or UserInterfaceSection;
     private readonly OsuSpriteText saveStatus = new() { Font = osu.Game.Graphics.OsuFont.GetFont(size: 15), Margin = new MarginPadding { Horizontal = 20, Bottom = 10 } };
     public void SetSaveStatus(LocalisableString text, bool error)
     {
@@ -44,39 +44,41 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
         Direction = FillDirection.Vertical,
         Children = new[]
         {
-            new RoundedButton { Text = D("Apply & rescan"), RelativeSizeAxes = Axes.X, Height = 40, Action = apply },
+            new RoundedButton { Text = D("Apply settings"), RelativeSizeAxes = Axes.X, Height = 40, Action = apply },
             base.CreateFooter(),
         },
     };
     [BackgroundDependencyLoader]
     private void load(LazerRaveGame game)
     {
-        AddSection(new FrontendAudioSection());
+        var native = new NativeSettingsSection(game.NativeSettings, game.ReloadNativeSettings, game.OpenClassicConfiguration, new Subsection("Rendering and chart compatibility", new Drawable[]
+        {
+            new SettingsDropdown<string> { LabelText = D("Embedded rendering preset"), Items = RenderProfiles.Labels.Values, Current = settings.RenderProfile },
+            new SettingsDropdown<string> { LabelText = D("Chart encoding"), Items = new[] { "auto", "utf-8", "cp932", "gb18030" }, Current = settings.Encoding },
+        }));
+        AddSection(new FrontendAudioSection(native));
         AddSection(new Section("Internet Ranking", FontAwesome.Solid.ChartBar, new Subsection("Internet Ranking", new Drawable[]
         {
             new IrUploadDropdown { LabelText = D("Score upload"), Items = new[] { "public", "private", "off" }, Current = settings.IrUpload },
         })));
-        AddSection(new Section("OpenLR2", FontAwesome.Solid.Keyboard, new Subsection("OpenLR2", new Drawable[]
+        AddSection(new Section("Gameplay and controls", FontAwesome.Solid.Keyboard, new Subsection("Gameplay and controls", new Drawable[]
         {
-            new SettingsSlider<double> { LabelText = D("Scroll speed"), Current = settings.Speed, DisplayAsPercentage = false, KeyboardStep = .05f },
+            new SettingsButton { Text = D("Configure gameplay key bindings"), Action = game.OpenKeyBindings },
             new SettingsSlider<int> { LabelText = D("Judgement offset (ms)"), Current = settings.Offset, DisplayAsPercentage = false, KeyboardStep = 1 },
             new LazerRavePlayPopover.ArrangementSetting { LabelText = D("Arrangement"), Items = PlayOptionCatalog.Arrangements, Current = settings.Arrangement },
-            new SettingsDropdown<string> { LabelText = D("Chart encoding"), Items = new[] { "auto", "utf-8", "cp932", "gb18030" }, Current = settings.Encoding },
         })));
-        AddSection(new Section("Game viewport", FontAwesome.Solid.Desktop, new Subsection("Game viewport", new Drawable[]
+        AddSection(new Section("Display and skins", FontAwesome.Solid.Desktop, new Subsection("Game viewport", new Drawable[]
         {
             new PresentationDropdown { LabelText = D("Game presentation"), Items = new[] { "embedded", "standalone" }, Current = settings.Presentation },
-            new SettingsDropdown<string> { LabelText = D("Embedded rendering preset"), Items = RenderProfiles.Labels.Values, Current = settings.RenderProfile },
             new SettingsDropdown<string> { LabelText = D("Embedded frame limit"), Items = new[] { "Display", "60", "120", "144", "165", "240", "360", "480", "1000", "Unlimited", settings.FrameLimit.Value }.Distinct(), Current = settings.FrameLimit },
             new SettingsDropdown<string> { LabelText = D("Preset"), Items = new[] { "640x480", "1024x768", "1280x720", "1920x1080", "2560x1440", settings.Window.Value }.Distinct(), Current = settings.Window },
             new SettingsTextBox { LabelText = D("Custom size (width x height)"), Current = settings.Window },
-        })));
-        AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings)));
-        AddSection(new Section("Song select", FontAwesome.Solid.List, new Subsection("Clear lamps", new Drawable[]
+        }), native.DisplayGroup(), native.SkinGroup()));
+        AddSection(new Section("Library", FontAwesome.Solid.FolderOpen, new LibraryDirectorySettings(settings), new Subsection("Song select", new Drawable[]
         {
             new SettingsCheckbox { LabelText = D("Show clear lamps"), Current = settings.ShowClearLamps },
         })));
-        AddSection(new NativeSettingsSection(game.NativeSettings, game.ReloadNativeSettings, game.OpenClassicConfiguration));
+        AddSection(native);
     }
 
     private partial class GameplayKeyBindingPanel : KeyBindingPanel
@@ -121,15 +123,17 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
         }
     }
 
-    private partial class FrontendAudioSection : SettingsSection
+    private partial class FrontendAudioSection(NativeSettingsSection native) : SettingsSection
     {
-        public override LocalisableString Header => D("Frontend audio");
+        public override LocalisableString Header => D("Audio");
         public override Drawable CreateIcon() => new SpriteIcon { Icon = FontAwesome.Solid.VolumeUp };
         [BackgroundDependencyLoader]
         private void load()
         {
+            Add(new Subsection("Menu and preview audio", new Drawable[] { new OsuSpriteText { Text = D("Only affects menu music and song previews."), Font = osu.Game.Graphics.OsuFont.GetFont(size: 15) } }));
             Add(new AudioDevicesSettings());
             Add(new VolumeSettings());
+            Add(native.AudioGroup());
         }
     }
 
@@ -152,11 +156,11 @@ internal partial class LazerRaveSettingsPanel(DesktopSettings settings, Action a
         }
     }
 
-    private partial class Section(string title, IconUsage icon, SettingsSubsection subsection) : SettingsSection
+    private partial class Section(string title, IconUsage icon, params SettingsSubsection[] subsections) : SettingsSection
     {
         public override LocalisableString Header => D(title);
         public override Drawable CreateIcon() => new SpriteIcon { Icon = icon };
-        [BackgroundDependencyLoader] private void load() => Add(subsection);
+        [BackgroundDependencyLoader] private void load() { foreach (var subsection in subsections) Add(subsection); }
     }
 
     private partial class Subsection(string title, Drawable[] controls) : SettingsSubsection

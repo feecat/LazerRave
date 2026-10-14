@@ -608,4 +608,40 @@
   <data name="Invalid LR2 key configuration." xml:space="preserve"><value>LR2 键位配置格式无效。</value></data>
   <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>LR2 键位配置存在重复项。</value></data>
   <data name="Configure gameplay key bindings" xml:space="preserve"><value>配置演奏键位</value></data>
+  <data name="Common" xml:space="preserve"><value>常用</value></data>
+  <data name="Advanced" xml:space="preserve"><value>高级</value></data>
+  <data name="Favorites" xml:space="preserve"><value>收藏夹</value></data>
+  <data name="Recently played" xml:space="preserve"><value>最近游玩</value></data>
+  <data name="Favorite" xml:space="preserve"><value>收藏</value></data>
+  <data name="Favorited" xml:space="preserve"><value>已收藏</value></data>
+  <data name="Add to favorites" xml:space="preserve"><value>加入收藏夹</value></data>
+  <data name="Remove from favorites" xml:space="preserve"><value>取消收藏</value></data>
+  <data name="Show advanced options" xml:space="preserve"><value>显示高级选项</value></data>
+  <data name="Automatic reading speed" xml:space="preserve"><value>自动阅读速度</value></data>
+  <data name="Target reading speed (BPM × multiplier)" xml:space="preserve"><value>目标阅读速度（BPM × 倍率）</value></data>
+  <data name="Uses the main BPM. Tempo changes are preserved; cover and lift adjust the initial speed. This is not a skin-calibrated green number." xml:space="preserve"><value>以主要 BPM 为基准，保留谱面变速；遮挡和 Lift 会调整初始速度。此数值不是按皮肤校准的绿数。</value></data>
+  <data name="Assisted and modified plays may not count toward personal bests or IR. Some modifiers are not recorded in LR2 replays." xml:space="preserve"><value>辅助和扩展演奏可能不计入个人最佳或 IR，部分扩展参数不记录在 LR2 回放中。</value></data>
+  <data name="Use single play (disable classic battle)" xml:space="preserve"><value>使用单人模式（关闭经典 BATTLE）</value></data>
+  <data name="Battle and DP conversions are available in classic LR2 only. Disable classic battle in play options." xml:space="preserve"><value>BATTLE 和 DP 转换仅供经典 LR2 使用，请在演奏选项中关闭经典 BATTLE。</value></data>
+  <data name="Apply settings" xml:space="preserve"><value>应用设置</value></data>
+  <data name="Rescan library" xml:space="preserve"><value>重新扫描曲库</value></data>
+  <data name="Gameplay and controls" xml:space="preserve"><value>游戏与操作</value></data>
+  <data name="Display and skins" xml:space="preserve"><value>显示与皮肤</value></data>
+  <data name="Audio" xml:space="preserve"><value>音频</value></data>
+  <data name="Gameplay audio" xml:space="preserve"><value>演奏音频</value></data>
+  <data name="Gameplay display" xml:space="preserve"><value>演奏显示</value></data>
+  <data name="Gameplay skins" xml:space="preserve"><value>演奏皮肤</value></data>
+  <data name="Rendering and chart compatibility" xml:space="preserve"><value>渲染与谱面兼容</value></data>
+  <data name="Advanced and compatibility" xml:space="preserve"><value>高级与兼容</value></data>
+  <data name="Audio latency" xml:space="preserve"><value>音频延迟</value></data>
+  <data name="Classic compatibility" xml:space="preserve"><value>经典兼容</value></data>
+  <data name="Reset practice options" xml:space="preserve"><value>重置练习选项</value></data>
+  <data name="Menu and preview audio" xml:space="preserve"><value>菜单与预览音频</value></data>
+  <data name="Only affects menu music and song previews." xml:space="preserve"><value>仅影响菜单音乐和曲目预览。</value></data>
+  <data name="Normalize base BPM in frontend" xml:space="preserve"><value>前端统一基准 BPM</value></data>
+  <data name="Unified base BPM" xml:space="preserve"><value>统一基准 BPM</value></data>
+  <data name="Final multiplier = base BPM / note-dominant BPM × scroll speed. Calculated by the frontend, without LR2 speed fixing." xml:space="preserve"><value>最终倍率 = 统一基准 BPM ÷ note 最多的 BPM × 手动倍率。由前端计算，不使用 LR2 速度固定。</value></data>
+  <data name="Clear conflicting 2P keyboard bindings?" xml:space="preserve"><value>是否清空存在冲突的 2P 键盘绑定？</value></data>
+  <data name="LR2 merges 2P inputs into single play. Controller bindings are retained." xml:space="preserve"><value>LR2 会将 2P 输入合并到单人演奏。清空仅影响 2P 键盘绑定，控制器绑定保留；请保存键位后生效。</value></data>
+  <data name="2P bindings retained. Conflicts must be resolved before saving." xml:space="preserve"><value>已保留 2P 绑定，解决冲突后才能保存。</value></data>
 </root>

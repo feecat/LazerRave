@@ -9,15 +9,24 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        string? report = args.Length == 2 && args[0] == "--check" ? Path.GetFullPath(args[1]) : null;
+        bool experienceCheck = args.Length == 2 && args[0] == "--check-experience";
+        string? report = args.Length == 2 && args[0] is "--check" or "--check-experience" ? Path.GetFullPath(args[1]) : null;
         string? temporary = null;
         bool benchmarking = args.FirstOrDefault() == "--benchmark";
         try
         {
+            if (experienceCheck)
+            {
+                temporary = Path.Combine(Path.GetTempPath(), "lazerrave-check-" + Guid.NewGuid().ToString("N"));
+                AdapterChecks.RunExperience(temporary);
+                File.WriteAllText(report!, "PASS: 5K/7K support, virtual favorites and recent views, content identity, atomic library persistence, manual/automatic reading speed, per-key preferences, settings compatibility and key bindings.\nNo game host, engine or main window was started.\n");
+                Console.WriteLine("PASS: desktop experience checks. No game host, engine or main window was started.");
+                return 0;
+            }
             var benchmark = benchmarking ? PerformanceRun.Parse(args) : null;
             if (benchmark is not null && !File.Exists(Path.Combine(AppContext.BaseDirectory, "lazerrave-performance-runtime.txt")))
                 throw new InvalidOperationException("Run benchmarks through scripts/performance/run_comparison.py using an isolated runtime.");
-            if (args.Length > 0 && report is null && benchmark is null) throw new ArgumentException("Usage: LazerRave.exe [--check report.txt]");
+            if (args.Length > 0 && report is null && benchmark is null) throw new ArgumentException("Usage: LazerRave.exe [--check report.txt | --check-experience report.txt]");
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
             ApplicationPaths.Initialize(migrateLegacy: !benchmarking && report is null);
             var settings = FrontendSettings.Read(FrontendSettings.SharedPath);

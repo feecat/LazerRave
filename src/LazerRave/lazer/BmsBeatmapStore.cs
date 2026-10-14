@@ -17,8 +17,17 @@ using osu.Game.Skinning;
 
 namespace LazerRave.Lazer;
 
+internal enum LibraryView { Folders, Favorites, Recent }
+
 internal partial class BmsBeatmapStore : BeatmapStore
 {
+    public UserLibraryStore? UserLibrary { get; init; }
+    public LibraryView View { get; private set; }
+    public void SetView(LibraryView view)
+    {
+        lock (gate) { View = view; FilterCore(Directory, Keys); }
+    }
+    public void RefreshView() { lock (gate) FilterCore(Directory, Keys); }
     private readonly object gate = new();
     private bool initialized;
     private readonly BindableList<BeatmapSetInfo> visible = new();
@@ -42,7 +51,7 @@ internal partial class BmsBeatmapStore : BeatmapStore
             LevelMinimum = minimum; LevelMaximum = maximum; FilterCore(Directory, Keys);
         }
     }
-    private bool Matches(Chart chart) => (Keys == 0 || Keys == chart.Keys) &&
+    private bool Matches(Chart chart) => SupportedKeyModes.Contains(chart.Keys) && (Keys == 0 || Keys == chart.Keys) &&
         (DifficultyFilter == 0 || chart.Difficulty == DifficultyFilter) && (LevelFilter is null || chart.Level == LevelFilter) &&
         (LevelMinimum is null || chart.Level >= LevelMinimum) && (LevelMaximum is null || chart.Level <= LevelMaximum);
     public void SetSearch(string query)
@@ -107,7 +116,7 @@ internal partial class BmsBeatmapStore : BeatmapStore
     {
         get
         {
-            lock (gate) return (Query.Length > 0 ? Array.Empty<Entry>() : EntriesHere).Where(entry => entry.IsFolder)
+            lock (gate) return (Query.Length > 0 || View != LibraryView.Folders ? Array.Empty<Entry>() : EntriesHere).Where(entry => entry.IsFolder)
                 .Select(entry => Library.Folders.Single(folder => folder.Path.Equals(entry.Id, StringComparison.OrdinalIgnoreCase))).ToArray();
         }
     }
@@ -115,7 +124,7 @@ internal partial class BmsBeatmapStore : BeatmapStore
     /// The folder segments from the library root down to <see cref="Directory"/>, root first.
     /// Empty at the library overview.
     /// </summary>
-    public Folder[] Ancestry { get { lock (gate) return Library.Breadcrumbs(Directory); } }
+    public Folder[] Ancestry { get { lock (gate) return View == LibraryView.Folders ? Library.Breadcrumbs(Directory) : []; } }
     /// <summary>
     /// Songs in this directory and its immediate song folders. Deeper collections remain folders.
     /// </summary>
@@ -134,11 +143,19 @@ internal partial class BmsBeatmapStore : BeatmapStore
     private void FilterCore(string? directory, int keys)
     {
         Directory = string.IsNullOrEmpty(directory) ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)); Keys = keys;
-        var selected = (Query.Length > 0 ? Library.Songs.Where(song => song.Charts.Any(Matches)) : SongsHere).Select(song =>
+        IEnumerable<Song> sourceSongs = Query.Length > 0 ? Library.Browse(null, Query, keys == 0 ? null : keys, 0).Where(entry => entry.Song is not null).Select(entry => entry.Song!) : View != LibraryView.Folders ? Library.Songs : SongsHere;
+        if (View == LibraryView.Favorites) sourceSongs = sourceSongs.Where(song => song.Charts.Any(chart => SupportedKeyModes.Contains(chart.Keys) && UserLibrary?.IsFavorite(chart) == true));
+        if (View == LibraryView.Recent) sourceSongs = sourceSongs.Select(song => (Song: song, Last: song.Charts.Where(Matches).Select(chart => UserLibrary?.LastPlayed(chart)).Max()))
+            .Where(item => item.Last is not null).OrderByDescending(item => item.Last).Select(item => item.Song);
+        var selected = sourceSongs.Where(song => song.Charts.Any(Matches)).Select(song =>
         {
             var source = sets[song.Directory];
             var filtered = new BeatmapSetInfo { ID = source.ID, Hash = source.Hash, DateAdded = source.DateAdded };
-            foreach (var info in source.Beatmaps.Where(info => Matches(charts[info.ID]))) filtered.Beatmaps.Add(info);
+            foreach (var info in source.Beatmaps.Where(info => Matches(charts[info.ID])))
+            {
+                info.LastPlayed = UserLibrary?.LastPlayed(charts[info.ID]);
+                filtered.Beatmaps.Add(info);
+            }
             foreach (var file in source.Files) filtered.Files.Add(file);
             return filtered;
         }).ToArray();

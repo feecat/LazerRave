@@ -461,4 +461,40 @@
   <data name="Invalid LR2 key configuration." xml:space="preserve"><value>Invalid LR2 key configuration.</value></data>
   <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>Duplicate LR2 key configuration element.</value></data>
   <data name="Configure gameplay key bindings" xml:space="preserve"><value>Configure gameplay key bindings</value></data>
+  <data name="Common" xml:space="preserve"><value>Common</value></data>
+  <data name="Advanced" xml:space="preserve"><value>Advanced</value></data>
+  <data name="Favorites" xml:space="preserve"><value>Favorites</value></data>
+  <data name="Recently played" xml:space="preserve"><value>Recently played</value></data>
+  <data name="Favorite" xml:space="preserve"><value>Favorite</value></data>
+  <data name="Favorited" xml:space="preserve"><value>Favorited</value></data>
+  <data name="Add to favorites" xml:space="preserve"><value>Add to favorites</value></data>
+  <data name="Remove from favorites" xml:space="preserve"><value>Remove from favorites</value></data>
+  <data name="Show advanced options" xml:space="preserve"><value>Show advanced options</value></data>
+  <data name="Automatic reading speed" xml:space="preserve"><value>Automatic reading speed</value></data>
+  <data name="Target reading speed (BPM × multiplier)" xml:space="preserve"><value>Target reading speed (BPM × multiplier)</value></data>
+  <data name="Uses the main BPM. Tempo changes are preserved; cover and lift adjust the initial speed. This is not a skin-calibrated green number." xml:space="preserve"><value>Uses the main BPM. Tempo changes are preserved; cover and lift adjust the initial speed. This is not a skin-calibrated green number.</value></data>
+  <data name="Assisted and modified plays may not count toward personal bests or IR. Some modifiers are not recorded in LR2 replays." xml:space="preserve"><value>Assisted and modified plays may not count toward personal bests or IR. Some modifiers are not recorded in LR2 replays.</value></data>
+  <data name="Use single play (disable classic battle)" xml:space="preserve"><value>Use single play (disable classic battle)</value></data>
+  <data name="Battle and DP conversions are available in classic LR2 only. Disable classic battle in play options." xml:space="preserve"><value>Battle and DP conversions are available in classic LR2 only. Disable classic battle in play options.</value></data>
+  <data name="Apply settings" xml:space="preserve"><value>Apply settings</value></data>
+  <data name="Rescan library" xml:space="preserve"><value>Rescan library</value></data>
+  <data name="Gameplay and controls" xml:space="preserve"><value>Gameplay and controls</value></data>
+  <data name="Display and skins" xml:space="preserve"><value>Display and skins</value></data>
+  <data name="Audio" xml:space="preserve"><value>Audio</value></data>
+  <data name="Gameplay audio" xml:space="preserve"><value>Gameplay audio</value></data>
+  <data name="Gameplay display" xml:space="preserve"><value>Gameplay display</value></data>
+  <data name="Gameplay skins" xml:space="preserve"><value>Gameplay skins</value></data>
+  <data name="Rendering and chart compatibility" xml:space="preserve"><value>Rendering and chart compatibility</value></data>
+  <data name="Advanced and compatibility" xml:space="preserve"><value>Advanced and compatibility</value></data>
+  <data name="Audio latency" xml:space="preserve"><value>Audio latency</value></data>
+  <data name="Classic compatibility" xml:space="preserve"><value>Classic compatibility</value></data>
+  <data name="Reset practice options" xml:space="preserve"><value>Reset practice options</value></data>
+  <data name="Menu and preview audio" xml:space="preserve"><value>Menu and preview audio</value></data>
+  <data name="Only affects menu music and song previews." xml:space="preserve"><value>Only affects menu music and song previews.</value></data>
+  <data name="Normalize base BPM in frontend" xml:space="preserve"><value>Normalize base BPM in frontend</value></data>
+  <data name="Unified base BPM" xml:space="preserve"><value>Unified base BPM</value></data>
+  <data name="Final multiplier = base BPM / note-dominant BPM × scroll speed. Calculated by the frontend, without LR2 speed fixing." xml:space="preserve"><value>Final multiplier = base BPM / note-dominant BPM × scroll speed. Calculated by the frontend, without LR2 speed fixing.</value></data>
+  <data name="Clear conflicting 2P keyboard bindings?" xml:space="preserve"><value>Clear conflicting 2P keyboard bindings?</value></data>
+  <data name="LR2 merges 2P inputs into single play. Controller bindings are retained." xml:space="preserve"><value>LR2 merges 2P inputs into single play. Only 2P keyboard bindings are cleared; controller bindings are retained. Save bindings to apply.</value></data>
+  <data name="2P bindings retained. Conflicts must be resolved before saving." xml:space="preserve"><value>2P bindings retained. Conflicts must be resolved before saving.</value></data>
 </root>

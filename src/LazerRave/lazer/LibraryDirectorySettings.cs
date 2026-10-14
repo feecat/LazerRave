@@ -52,6 +52,7 @@ internal partial class LibraryDirectorySettings(DesktopSettings settings) : Sett
             },
             rows,
             new RoundedButton { Text = D("Browse song packs"), RelativeSizeAxes = Axes.X, Height = 40, Action = game.OpenSongPacks },
+            new RoundedButton { Text = D("Rescan library"), RelativeSizeAxes = Axes.X, Height = 40, Action = game.Rescan },
             new RoundedButton
             {
                 Text = D("Add folder"), RelativeSizeAxes = Axes.X, Height = 40,

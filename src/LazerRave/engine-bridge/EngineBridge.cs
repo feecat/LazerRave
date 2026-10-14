@@ -46,6 +46,9 @@ internal sealed class EngineBridge(string runtime)
         {
             if (chart is null || !File.Exists(chart.Path) || !new[] { ".bms", ".bme", ".bml", ".pms" }.Contains(Path.GetExtension(chart.Path).ToLowerInvariant()))
                 throw new FileNotFoundException("Select an available BMS chart.");
+            SupportedKeyModes.Require(chart.Keys);
+            if (PlayOptionCatalog.Get(settings, PlayOptionCatalog.All.Single(option => option.Name == "battle")) != 0)
+                throw new ArgumentException("Battle and DP conversions are available in classic LR2 only.");
             root.Add(new XElement("chart", chart.Path), new XElement("speed", Math.Round(settings.Speed * 100).ToString(CultureInfo.InvariantCulture)),
                 new XElement("offset", settings.Offset), new XElement("arrangement", Array.IndexOf(PlayOptionCatalog.Arrangements, settings.Arrangement)));
             PlayOptionCatalog.Validate(settings.PlayOptions);

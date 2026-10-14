@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<keyconfig>
+	<key01>
+		<id>32</id>
+		<id>263</id>
+		<id>555</id>
+		<id>567</id>
+	</key01>
+	<key02>
+		<id>33</id>
+		<id>266</id>
+		<id>556</id>
+		<id>568</id>
+	</key02>
+	<key03>
+		<id>57</id>
+		<id>262</id>
+		<id>557</id>
+		<id>569</id>
+	</key03>
+	<key04>
+		<id>36</id>
+		<id>267</id>
+		<id>558</id>
+		<id>570</id>
+	</key04>
+	<key05>
+		<id>37</id>
+		<id>261</id>
+		<id>559</id>
+		<id>571</id>
+	</key05>
+	<key10>
+		<id>30</id>
+		<id>256</id>
+		<id>560</id>
+		<id>572</id>
+		<id>768</id>
+	</key10>
+	<key11>
+		<id>39</id>
+		<id>259</id>
+		<id>562</id>
+		<id>574</id>
+		<id>564</id>
+		<id>576</id>
+		<id>769</id>
+	</key11>
+	<key12>
+		<id>16</id>
+		<id>561</id>
+		<id>268</id>
+		<id>573</id>
+	</key12>
+	<key13>
+		<id>17</id>
+		<id>269</id>
+		<id>563</id>
+		<id>575</id>
+	</key13>
+	<key21 />
+	<key22 />
+	<key23 />
+	<key24 />
+	<key25 />
+	<key26 />
+	<key27 />
+	<key30 />
+	<key31 />
+	<key32 />
+	<key33 />
+</keyconfig>

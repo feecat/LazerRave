@@ -14,6 +14,7 @@ using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Input.Bindings;
 using osu.Game.Overlays;
+using osu.Game.Overlays.Dialog;
 using osuTK;
 using osuTK.Graphics;
 using osuTK.Input;
@@ -25,26 +26,31 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
 {
     [Cached] private readonly OverlayColourProvider colours = new(OverlayColourScheme.Blue);
     private readonly Dictionary<int, KeyBindingDraft> drafts = new();
-    private readonly Bindable<string> mode = new("7Key / 14Key");
+    private readonly Bindable<string> mode = new("7Key");
     private FillFlowContainer rows = null!;
     private OsuSpriteText status = null!;
-    private RoundedButton firstPlayer = null!, secondPlayer = null!;
-    private int keys = 7, player;
+    private int keys = 7;
     private int? captureRow;
     private bool append;
+    private bool conflictPromptPending;
+    [Resolved] private IDialogOverlay dialogs { get; set; } = null!;
     private KeyBindingDraft Current => drafts[keys];
     protected override bool DimMainContent => false;
 
     public void Open()
     {
-        drafts.Clear(); captureRow = null; player = 0;
-        keys = mode.Value.StartsWith("5") ? 5 : mode.Value.StartsWith("9") ? 9 : 7;
+        drafts.Clear(); captureRow = null;
+        keys = mode.Value.StartsWith("5") ? 5 : 7;
         TryLoad();
         Show();
     }
 
+    internal OsuDropdown<string> CreateModeDropdown() => new() { Y = 46, RelativeSizeAxes = Axes.X, Depth = -10, Items = new[] { "7Key", "5Key" }, Current = mode };
+
     [BackgroundDependencyLoader]
-    private void load()
+    private void load() => BuildLayout();
+
+    internal void BuildLayout()
     {
         RelativeSizeAxes = Axes.Both;
         InternalChildren = new Drawable[]
@@ -64,16 +70,7 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
                         Children = new Drawable[]
                         {
                             Label(D("LR2 key bindings"), 26),
-                            new GridContainer
-                            {
-                                Y = 46, RelativeSizeAxes = Axes.X, Height = 38, Depth = -10,
-                                ColumnDimensions = [new Dimension(), new Dimension(GridSizeMode.Absolute, 100), new Dimension(GridSizeMode.Absolute, 100)],
-                                Content = new Drawable?[][] { [
-                                    new OsuDropdown<string> { RelativeSizeAxes = Axes.X, Items = new[] { "7Key / 14Key", "5Key / 10Key", "9Key" }, Current = mode },
-                                    firstPlayer = new BindingButton { Text = "1P", Action = () => SetPlayer(0) },
-                                    secondPlayer = new BindingButton { Text = "2P", Action = () => SetPlayer(1) },
-                                ] },
-                            },
+                            CreateModeDropdown(),
                             new Container
                             {
                                 RelativeSizeAxes = Axes.Both, Padding = new MarginPadding { Top = 100, Bottom = 96 },
@@ -120,8 +117,8 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
         };
         mode.BindValueChanged(change =>
         {
-            keys = change.NewValue.StartsWith("5") ? 5 : change.NewValue.StartsWith("9") ? 9 : 7;
-            player = 0; TryLoad();
+            keys = change.NewValue.StartsWith("5") ? 5 : 7;
+            TryLoad();
         });
     }
 
@@ -133,6 +130,7 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
             if (!drafts.ContainsKey(keys)) drafts[keys] = bindings.Read(keys);
             Status(D("Existing LR2 bindings are loaded. Changes take effect on the next game launch."));
             RefreshRows();
+            PromptSecondPlayerConflicts([Current], saveAfter: false);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Xml.XmlException or ArgumentException or FormatException or OverflowException)
         {
@@ -140,18 +138,13 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
         }
     }
 
-    private void SetPlayer(int value) { if (keys == 9 && value != 0) return; player = value; captureRow = null; RefreshRows(); }
     private void RefreshRows()
     {
         if (!drafts.ContainsKey(keys)) return;
         rows.Clear();
-        firstPlayer.BackgroundColour = player == 0 ? colours.Colour3 : colours.Background3;
-        secondPlayer.BackgroundColour = player == 1 ? colours.Colour3 : colours.Background3;
-        secondPlayer.Enabled.Value = keys != 9;
-        int offset = player * 20;
-        foreach (int row in NativeKeyBindings.Rows(keys).Where(row => player == 0 ? row < 20 : row >= 20))
+        foreach (int row in NativeKeyBindings.Rows(keys).Where(row => row < 20))
         {
-            int local = row - offset;
+            int local = row;
             var title = local switch
             {
                 10 => D("Scratch up"), 11 => D("Scratch down"), 12 => D("START"), 13 => D("SELECT"),
@@ -176,10 +169,40 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
     {
         captureRow = row; append = add; RefreshRows(); Status(D("Press a key. Esc cancels; Delete clears keyboard bindings."));
     }
-    private void RestoreDefaults() { if (!drafts.ContainsKey(keys)) return; Current.RestoreDefaults(); captureRow = null; RefreshRows(); Status(D("Unsaved changes")); }
+    private void RestoreDefaults()
+    {
+        if (!drafts.ContainsKey(keys)) return;
+        Current.RestoreDefaults(firstPlayerOnly: true); captureRow = null; RefreshRows(); Status(D("Unsaved changes"));
+        PromptSecondPlayerConflicts([Current], saveAfter: false);
+    }
     private void Save()
     {
         captureRow = null;
+        if (!PromptSecondPlayerConflicts(drafts.Values.ToArray(), saveAfter: true)) SaveConfirmed();
+    }
+    private bool PromptSecondPlayerConflicts(KeyBindingDraft[] candidates, bool saveAfter)
+    {
+        var conflicting = candidates.Where(draft => draft.SinglePlayConflicts.Length > 0).ToArray();
+        if (conflicting.Length == 0) return false;
+        if (conflictPromptPending) return true;
+        conflictPromptPending = true;
+        string names = string.Join(" / ", conflicting.SelectMany(draft => draft.SinglePlayConflicts).Distinct().Order().Select(NativeKeyboard.Name));
+        dialogs.Push(new ConfirmDialog(D("Clear conflicting 2P keyboard bindings?"), () =>
+        {
+            conflictPromptPending = false;
+            if (IsDisposed) return;
+            foreach (var draft in conflicting) draft.ClearSecondPlayerKeyboardBindings();
+            RefreshRows(); Status(D("Unsaved changes"));
+            if (saveAfter) SaveConfirmed();
+        }, () =>
+        {
+            conflictPromptPending = false;
+            if (!IsDisposed) Status(D("2P bindings retained. Conflicts must be resolved before saving."), true);
+        }) { BodyText = LocalisableString.Interpolate($"{D("LR2 merges 2P inputs into single play. Controller bindings are retained.")}\n{names}") });
+        return true;
+    }
+    private void SaveConfirmed()
+    {
         try
         {
             bindings.Save(drafts.Values);
@@ -202,7 +225,7 @@ internal partial class LazerRaveKeyBindingWindow(NativeKeyBindings bindings) : O
         if (key == Key.Escape) { CancelCapture(); return; }
         if (key == Key.Delete) { Current.Bindings[row] = []; CancelCapture(); return; }
         if (!NativeKeyboard.TryCode(key.ToString(), out int code)) { Status(D("This key is reserved by LR2 or is not supported."), true); return; }
-        try { Current.Assign(row, code, append); captureRow = null; RefreshRows(); Status(D("Unsaved changes")); }
+        try { Current.Assign(row, code, append, firstPlayerOnly: true); captureRow = null; RefreshRows(); Status(D("Unsaved changes")); PromptSecondPlayerConflicts([Current], saveAfter: false); }
         catch (ArgumentException error) { Status(D(error.Message), true); }
     }
     public override bool OnPressed(KeyBindingPressEvent<GlobalAction> e)

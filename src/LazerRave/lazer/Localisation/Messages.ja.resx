@@ -436,4 +436,41 @@
   <data name="Invalid LR2 key configuration." xml:space="preserve"><value>LR2 キー設定の形式が不正です。</value></data>
   <data name="Duplicate LR2 key configuration element." xml:space="preserve"><value>LR2 キー設定に重複した項目があります。</value></data>
   <data name="Configure gameplay key bindings" xml:space="preserve"><value>演奏キー設定を開く</value></data>
+  <data name="Common" xml:space="preserve"><value>基本</value></data>
+  <data name="Practice" xml:space="preserve"><value>練習</value></data>
+  <data name="Advanced" xml:space="preserve"><value>詳細</value></data>
+  <data name="Favorites" xml:space="preserve"><value>お気に入り</value></data>
+  <data name="Recently played" xml:space="preserve"><value>最近プレイ</value></data>
+  <data name="Favorite" xml:space="preserve"><value>お気に入り</value></data>
+  <data name="Favorited" xml:space="preserve"><value>登録済み</value></data>
+  <data name="Add to favorites" xml:space="preserve"><value>お気に入りに追加</value></data>
+  <data name="Remove from favorites" xml:space="preserve"><value>お気に入りから削除</value></data>
+  <data name="Show advanced options" xml:space="preserve"><value>詳細設定を表示</value></data>
+  <data name="Automatic reading speed" xml:space="preserve"><value>自動スクロール速度</value></data>
+  <data name="Target reading speed (BPM × multiplier)" xml:space="preserve"><value>目標速度（BPM × 倍率）</value></data>
+  <data name="Uses the main BPM. Tempo changes are preserved; cover and lift adjust the initial speed. This is not a skin-calibrated green number." xml:space="preserve"><value>メイン BPM を基準に、変速を維持します。カバーと Lift に応じて初期速度を調整します。スキンに合わせた緑数字ではありません。</value></data>
+  <data name="Assisted and modified plays may not count toward personal bests or IR. Some modifiers are not recorded in LR2 replays." xml:space="preserve"><value>アシストや拡張プレイは自己ベストや IR の対象外になる場合があります。一部の拡張設定は LR2 リプレイに記録されません。</value></data>
+  <data name="Use single play (disable classic battle)" xml:space="preserve"><value>シングルプレイを使用（BATTLE を解除）</value></data>
+  <data name="Battle and DP conversions are available in classic LR2 only. Disable classic battle in play options." xml:space="preserve"><value>BATTLE と DP 変換はクラシック LR2 専用です。プレイ設定で BATTLE を解除してください。</value></data>
+  <data name="Apply settings" xml:space="preserve"><value>設定を適用</value></data>
+  <data name="Rescan library" xml:space="preserve"><value>ライブラリを再スキャン</value></data>
+  <data name="Gameplay and controls" xml:space="preserve"><value>ゲームと操作</value></data>
+  <data name="Display and skins" xml:space="preserve"><value>画面とスキン</value></data>
+  <data name="Audio" xml:space="preserve"><value>オーディオ</value></data>
+  <data name="Gameplay audio" xml:space="preserve"><value>演奏オーディオ</value></data>
+  <data name="Gameplay display" xml:space="preserve"><value>演奏画面</value></data>
+  <data name="Gameplay skins" xml:space="preserve"><value>演奏スキン</value></data>
+  <data name="Rendering and chart compatibility" xml:space="preserve"><value>描画と譜面互換性</value></data>
+  <data name="Advanced and compatibility" xml:space="preserve"><value>詳細と互換性</value></data>
+  <data name="Audio latency" xml:space="preserve"><value>音声遅延</value></data>
+  <data name="Classic compatibility" xml:space="preserve"><value>クラシック互換性</value></data>
+  <data name="Reset practice options" xml:space="preserve"><value>練習設定をリセット</value></data>
+  <data name="Menu and preview audio" xml:space="preserve"><value>メニューとプレビューの音声</value></data>
+  <data name="Only affects menu music and song previews." xml:space="preserve"><value>メニューの音楽と曲のプレビューのみに適用されます。</value></data>
+  <data name="Normalize base BPM in frontend" xml:space="preserve"><value>フロントエンドで基準 BPM を統一</value></data>
+  <data name="Unified base BPM" xml:space="preserve"><value>統一基準 BPM</value></data>
+  <data name="Final multiplier = base BPM / note-dominant BPM × scroll speed. Calculated by the frontend, without LR2 speed fixing." xml:space="preserve"><value>最終倍率 = 基準 BPM ÷ ノート数が最も多い BPM × 手動倍率。LR2 の速度固定を使わず、フロントエンドで計算します。</value></data>
+  <data name="Clear conflicting 2P keyboard bindings?" xml:space="preserve"><value>競合する 2P キーボード割り当てを解除しますか？</value></data>
+  <data name="LR2 merges 2P inputs into single play. Controller bindings are retained." xml:space="preserve"><value>LR2 は 2P 入力をシングルプレイに統合します。2P キーボード割り当てのみを解除し、コントローラー設定は保持します。保存後に適用されます。</value></data>
+  <data name="2P bindings retained. Conflicts must be resolved before saving." xml:space="preserve"><value>2P 設定を保持しました。競合を解消してから保存してください。</value></data>
 </root>

@@ -15,12 +15,13 @@ internal partial class LazerRaveFolderBar : CompositeDrawable
 {
     private readonly BmsBeatmapStore catalog;
     private readonly Action<string?> navigate;
+    private readonly Action<LibraryView> changeView;
     private FillFlowContainer trail = null!;
 
-    public LazerRaveFolderBar(BmsBeatmapStore catalog, Action<string?> navigate)
+    public LazerRaveFolderBar(BmsBeatmapStore catalog, Action<string?> navigate, Action<LibraryView> changeView)
     {
         this.catalog = catalog;
-        this.navigate = navigate;
+        this.navigate = navigate; this.changeView = changeView;
         Width = 420;
         Height = 50;
     }
@@ -53,7 +54,9 @@ internal partial class LazerRaveFolderBar : CompositeDrawable
     {
         if (!IsLoaded) return;
         trail.Clear();
-        trail.Add(Chip(D("Library"), catalog.Directory is null, () => navigate(null)));
+        trail.Add(Chip(D("Library"), catalog.View == LibraryView.Folders && catalog.Directory is null, () => navigate(null)));
+        trail.Add(Chip(D("Favorites"), catalog.View == LibraryView.Favorites, () => changeView(LibraryView.Favorites)));
+        trail.Add(Chip(D("Recently played"), catalog.View == LibraryView.Recent, () => changeView(LibraryView.Recent)));
         foreach (var level in catalog.Ancestry)
         {
             trail.Add(new OsuSpriteText
@@ -75,7 +78,7 @@ internal partial class LazerRaveFolderBar : CompositeDrawable
         Child = new OsuSpriteText
         {
             Text = label,
-            Font = OsuFont.GetFont(size: 22, weight: current ? FontWeight.Bold : FontWeight.SemiBold),
+            Font = OsuFont.GetFont(size: 18, weight: current ? FontWeight.Bold : FontWeight.SemiBold),
             Alpha = current ? 1f : 0.82f,
             Margin = new MarginPadding { Horizontal = 10, Vertical = 12 },
         },

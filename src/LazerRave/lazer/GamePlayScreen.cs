@@ -84,6 +84,11 @@ internal partial class GamePlayScreen(EngineBridge bridge, FrontendSettings sett
         Action<GameplaySnapshot> report = Score;
         try
         {
+            if (ReplaySource is null)
+            {
+                var requestedSettings = settings;
+                settings = await Task.Run(() => requestedSettings.ForChart(chart), session.Token);
+            }
             hash = await PlayRecordStore.HashChart(chart.Path, session.Token);
             if ((ReplayRecord?.ChartHash ?? ExpectedChartHash) is { } expected && !string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The BMS chart has changed or does not match this replay or round.");
