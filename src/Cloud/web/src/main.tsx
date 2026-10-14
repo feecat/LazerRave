@@ -2,7 +2,7 @@ import { LanguageSelect, LocaleProvider, useI18n } from './i18n';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './state';
-import { Avatar, Empty } from './components';
+import { Avatar, Empty, useAmbientEffects } from './components';
 import { api } from './api';
 import { Home, Authentication, ChangePassword, Profile, Packs, PackDetail, Admin } from './pages';
 import { Rankings, SongRanking, MyRankings, ScorePage } from './RankingPages';
@@ -24,6 +24,7 @@ function Shell() {
   const { t } = useI18n();
   const { user, loaded, setUser } = useAuth();
   const navigate = useNavigate();
+  useAmbientEffects();
   async function logout() {
     try { await api('/auth/logout', { method: 'POST' }); setUser(null); navigate('/'); }
     catch (error) { window.alert(t(error instanceof Error ? error.message : 'Sign out failed.')); }

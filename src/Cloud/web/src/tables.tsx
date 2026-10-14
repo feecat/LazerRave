@@ -13,7 +13,7 @@ export function Tables() {
   const { t } = useI18n();
   const { data, error, loading } = useQuery<DifficultyTable[]>('/tables');
   return <><Heading eyebrow={t("DIFFICULTY TABLES")} title={t("Find your next challenge")}>{t("Browse charts by difficulty level.")}</Heading><Alert message={error} />
-    {loading ? <Empty>{t("Loading difficulty tables…")}</Empty> : data?.length ? <div className="pack-grid">{data.map(table => <Link className="panel difficulty-card" key={table.id} to={'/tables/' + table.id}>
+    {loading ? <Empty>{t("Loading difficulty tables…")}</Empty> : data?.length ? <div className="pack-grid">{data.map(table => <Link className="panel difficulty-card spotlight" key={table.id} to={'/tables/' + table.id}>
       <span className="table-symbol">{table.symbol}</span><h2>{table.name}</h2><p className="muted">{table.description}</p><small>{table.chartCount} {t(" charts · ")}{table.levelCount} {t(" levels")}</small>
     </Link>)}</div> : <Empty>{t("No published difficulty tables.")}</Empty>}
   </>;

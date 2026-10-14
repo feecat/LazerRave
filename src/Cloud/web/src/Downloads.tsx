@@ -33,7 +33,7 @@ export function Downloads() {
   return <>
     <Heading eyebrow={t('THE DESKTOP CLIENT')} title={t('Download LazerRave')}><p>{t('Your next session starts here.')}</p></Heading>
     <div className="download-layout">
-      <section className="panel download-card" aria-busy={status === 'loading'}>
+      <section className="panel download-card spotlight" aria-busy={status === 'loading'}>
         <div className="download-platform"><Icon name="windows" size={30} /><span>Windows 10 / 11<small>{t('64-bit · Portable ZIP')}</small></span><span className="release-badge">{latest ? latest.prerelease ? /-rc\./.test(latest.version) ? 'RC' : 'BETA' : t('Stable') : 'BETA'}</span></div>
         <div className="release-status" aria-live="polite">
           {status === 'loading' ? <><h2>{t('Checking releases…')}</h2><p>{t('Getting the latest build from GitHub.')}</p></>

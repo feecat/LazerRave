@@ -25,7 +25,11 @@ export function Home() {
       </div>
       <RhythmVisual />
     </section>
-    <section className="feature-grid"><Link to="/rankings" className="feature"><span className="feature-symbol">01</span><h2>{t("Every point counts")}</h2><p>{t("Chart rankings, clear records, and your next personal best.")}</p><span>{t("See the rankings ↗")}</span></Link><Link to="/packs" className="feature"><span className="feature-symbol">02</span><h2>{t("A new discovery")}</h2><p>{t("Browse the catalog and download a pack for your next session.")}</p><span>{t("Browse song packs ↗")}</span></Link><Link to="/tables" className="feature"><span className="feature-symbol">03</span><h2>{t("Find your next challenge")}</h2><p>{t("Browse charts by difficulty level.")}</p><span>{t("Explore difficulty tables ↗")}</span></Link></section>
+    <section className="feature-grid">
+      <Link to="/rankings" className="feature spotlight"><span className="feature-symbol" aria-hidden="true">01</span><span className="feature-icon"><Icon name="ranking" size={24} /></span><h2>{t("Every point counts")}</h2><p>{t("Chart rankings, clear records, and your next personal best.")}</p><span className="feature-link">{t("See the rankings ↗")}</span></Link>
+      <Link to="/packs" className="feature spotlight"><span className="feature-symbol" aria-hidden="true">02</span><span className="feature-icon"><Icon name="pack" size={24} /></span><h2>{t("A new discovery")}</h2><p>{t("Browse the catalog and download a pack for your next session.")}</p><span className="feature-link">{t("Browse song packs ↗")}</span></Link>
+      <Link to="/tables" className="feature spotlight"><span className="feature-symbol" aria-hidden="true">03</span><span className="feature-icon"><Icon name="table" size={24} /></span><h2>{t("Find your next challenge")}</h2><p>{t("Browse charts by difficulty level.")}</p><span className="feature-link">{t("Explore difficulty tables ↗")}</span></Link>
+    </section>
     <section className="recent-scores"><div className="section-title"><h2>{t('Latest scores')}</h2><Link to="/rankings">{t('View rankings →')}</Link></div><Alert message={error} />
       {loading ? <Empty>{t('Loading scores…')}</Empty> : scores?.length ? <div className="panel table-wrap"><table className="recent-score-table"><thead><tr>
         <th>{t('Player')}</th><th>{t('Chart')}</th><th>EX SCORE</th><th>{t('Clear')}</th><th>{t('Uploaded at')}</th>

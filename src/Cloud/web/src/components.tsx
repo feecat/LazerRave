@@ -4,6 +4,34 @@ import { Link } from 'react-router-dom';
 import { api } from './api';
 import type { User } from './types';
 
+export function useAmbientEffects() {
+  useEffect(() => {
+    const header = document.querySelector('.site-header');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    const scroll = () => header?.classList.toggle('scrolled', window.scrollY > 8);
+    const move = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse' || reducedMotion.matches || !(event.target instanceof Element)) return;
+      const card = event.target.closest<HTMLElement>('.spotlight');
+      if (!card) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty('--spotlight-x', `${event.clientX - rect.left}px`);
+        card.style.setProperty('--spotlight-y', `${event.clientY - rect.top}px`);
+      });
+    };
+    scroll();
+    window.addEventListener('scroll', scroll, { passive: true });
+    window.addEventListener('pointermove', move, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', scroll);
+      window.removeEventListener('pointermove', move);
+    };
+  }, []);
+}
+
 export function Avatar({ user, large = false }: { user: Pick<User, 'displayName' | 'avatarUrl'>; large?: boolean }) {
   const { t } = useI18n();
   return <span className={'avatar' + (large ? ' avatar-large' : '')}>{user.avatarUrl ? <img src={user.avatarUrl} alt={`${user.displayName} · ${t('avatar')}`} /> : user.displayName.slice(0, 1).toUpperCase()}</span>;
