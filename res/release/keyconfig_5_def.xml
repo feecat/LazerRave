@@ -1,31 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <keyconfig>
 	<key01>
-		<id>32</id>
+		<id>31</id>
 		<id>263</id>
 		<id>555</id>
 		<id>567</id>
 	</key01>
 	<key02>
-		<id>33</id>
+		<id>32</id>
 		<id>266</id>
 		<id>556</id>
 		<id>568</id>
 	</key02>
 	<key03>
-		<id>57</id>
+		<id>33</id>
 		<id>262</id>
 		<id>557</id>
 		<id>569</id>
 	</key03>
 	<key04>
-		<id>36</id>
+		<id>57</id>
 		<id>267</id>
 		<id>558</id>
 		<id>570</id>
 	</key04>
 	<key05>
-		<id>37</id>
+		<id>36</id>
 		<id>261</id>
 		<id>559</id>
 		<id>571</id>

@@ -120,7 +120,7 @@ internal sealed class KeyBindingDraft(int keys, Dictionary<int, int[]> original)
     public void RestoreDefaults(bool firstPlayerOnly = false) { foreach (var pair in Defaults(Keys).Where(pair => !firstPlayerOnly || pair.Key < 20)) Bindings[pair.Key] = pair.Value; }
     public static Dictionary<int, int[]> Defaults(int keys)
     {
-        int[] first = keys switch { 9 => [30, 31, 32, 33, 57, 36, 37, 38, 39], 5 => [32, 33, 57, 36, 37], _ => [31, 32, 33, 57, 36, 37, 38] };
+        int[] first = keys switch { 9 => [30, 31, 32, 33, 57, 36, 37, 38, 39], 5 => [31, 32, 33, 57, 36], _ => [31, 32, 33, 57, 36, 37, 38] };
         var result = Enumerable.Range(1, keys).ToDictionary(row => row, row => new[] { first[row - 1] });
         result[12] = [16]; result[13] = [17];
         if (keys != 9)
